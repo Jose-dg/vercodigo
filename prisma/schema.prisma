@@ -1,0 +1,298 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============= USUARIOS Y ROLES =============
+enum UserRole {
+  SUPER_ADMIN
+  SYSTEM_ADMIN
+  COMPANY_ADMIN
+  STORE_OPERATOR
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  role          UserRole
+  isActive      Boolean  @default(true)
+  
+  companyId     String?
+  company       Company? @relation(fields: [companyId], references: [id])
+  
+  storeId       String?
+  store         Store?   @relation(fields: [storeId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([companyId])
+  @@index([storeId])
+}
+
+// ============= COMPAÑÍAS =============
+model Company {
+  id                String   @id @default(cuid())
+  name              String
+  taxId             String   @unique // RUC/NIT
+  email             String
+  phone             String
+  address           String?
+  isActive          Boolean  @default(true)
+  
+  // Configuración de facturación
+  billingFrequency  BillingFrequency @default(DAILY)
+  commissionRate    Float    @default(0.05) // 5% por defecto
+  
+  stores            Store[]
+  users             User[]
+  invoices          Invoice[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+enum BillingFrequency {
+  DAILY
+  THREE_DAYS
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+// ============= TIENDAS =============
+model Store {
+  id                String   @id @default(cuid())
+  name              String
+  code              String   @unique // Código identificador
+  address           String
+  phone             String
+  isActive          Boolean  @default(true)
+  
+  companyId         String
+  company           Company  @relation(fields: [companyId], references: [id])
+  
+  // Números de WhatsApp autorizados para activar
+  authorizedPhones  AuthorizedPhone[]
+  
+  cards             Card[]
+  users             User[]
+  activations       CardActivation[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@index([companyId])
+}
+
+model AuthorizedPhone {
+  id        String   @id @default(cuid())
+  phone     String   // Formato: +573001234567
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  isActive  Boolean  @default(true)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([phone, storeId])
+  @@index([storeId])
+}
+
+// ============= PRODUCTOS =============
+model Product {
+  id              String   @id @default(cuid())
+  name            String   // Netflix, Xbox, Nike
+  sku             String   @unique
+  brand           String
+  category        String?
+  imageUrl        String?
+  isActive        Boolean  @default(true)
+  
+  // Para tarjetas de regalo variables
+  isGiftCard      Boolean  @default(false)
+  minAmount       Float?
+  maxAmount       Float?
+  
+  denominations   ProductDenomination[]
+  cards           Card[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ProductDenomination {
+  id          String   @id @default(cuid())
+  amount      Float    // 10, 20, 50, 100
+  currency    String   @default("USD")
+  
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  cards       Card[]
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([productId, amount])
+  @@index([productId])
+}
+
+// ============= TARJETAS/QR =============
+model Card {
+  id              String   @id @default(cuid())
+  uuid            String   @unique // UUID de 8 caracteres impreso
+  qrData          String   // Datos codificados en el QR
+  
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  
+  denominationId  String?
+  denomination    ProductDenomination? @relation(fields: [denominationId], references: [id])
+  
+  // Para gift cards variables
+  customAmount    Float?
+  
+  storeId         String
+  store           Store    @relation(fields: [storeId], references: [id])
+  
+  // Estado de la tarjeta
+  isActivated     Boolean  @default(false)
+  isRedeemed      Boolean  @default(false)
+  activatedAt     DateTime?
+  redeemedAt      DateTime?
+  
+  // PIN obtenido
+  pin             String?
+  transactionId   String?  // ID de la empresa matriz
+  
+  // Límite de escaneos
+  scanCount       Int      @default(0)
+  maxScans        Int      @default(5)
+  
+  activation      CardActivation?
+  scanLogs        ScanLog[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([storeId])
+  @@index([productId])
+  @@index([isActivated])
+  @@index([uuid])
+}
+
+// ============= ACTIVACIONES =============
+model CardActivation {
+  id              String   @id @default(cuid())
+  
+  cardId          String   @unique
+  card            Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  storeId         String
+  store           Store    @relation(fields: [storeId], references: [id])
+  
+  activatedBy     String   // Número de teléfono que activó
+  activatedAt     DateTime @default(now())
+  
+  // Respuesta de la empresa matriz
+  matrixResponse  Json?
+  
+  @@index([storeId])
+  @@index([activatedAt])
+}
+
+// ============= LOGS DE ESCANEO =============
+model ScanLog {
+  id          String   @id @default(cuid())
+  
+  cardId      String
+  card        Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  wasSuccess  Boolean  // true si mostró el PIN, false si no
+  reason      String?  // "not_activated", "max_scans_reached", "success"
+  
+  // Datos del escaneo
+  ipAddress   String?
+  userAgent   String?
+  
+  scannedAt   DateTime @default(now())
+  
+  @@index([cardId])
+  @@index([scannedAt])
+  @@index([wasSuccess])
+}
+
+// ============= FACTURACIÓN =============
+model Invoice {
+  id              String   @id @default(cuid())
+  invoiceNumber   String   @unique
+  
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id])
+  
+  // Período de facturación
+  periodStart     DateTime
+  periodEnd       DateTime
+  
+  // Totales
+  totalSales      Float    // Total vendido
+  commissionRate  Float    // % de comisión aplicado
+  commissionAmount Float   // Monto de comisión
+  totalAmount     Float    // Monto a pagar
+  
+  // Items de factura
+  items           InvoiceItem[]
+  
+  // Estado
+  status          InvoiceStatus @default(PENDING)
+  paidAt          DateTime?
+  
+  // Archivo PDF
+  pdfUrl          String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([companyId])
+  @@index([status])
+  @@index([periodStart, periodEnd])
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model InvoiceItem {
+  id            String   @id @default(cuid())
+  
+  invoiceId     String
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  
+  description   String   // "Netflix $10 - 50 unidades"
+  quantity      Int
+  unitPrice     Float
+  totalPrice    Float
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([invoiceId])
+}
+
+// ============= CONFIGURACIÓN SISTEMA =============
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  
+  updatedAt DateTime @updatedAt
+}

@@ -17,6 +17,7 @@ export async function toggleQRStatus(id: string, currentStatus: boolean) {
         console.error("Error toggling QR status:", error);
         return { success: false, error: "Failed to toggle status" };
     }
+
 }
 
 export async function deleteQR(id: string) {

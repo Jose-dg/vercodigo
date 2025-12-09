@@ -1,12 +1,18 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from './auth-options';
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'default-secret-change-me';
 
 export interface TokenPayload {
-    userId: string;
+    id: string;
+    userId?: string;
+    email: string;
     role: string;
+    companyId: string | null;
+    storeId: string | null;
 }
 
 export function hashPassword(password: string): string {
@@ -30,11 +36,30 @@ export function verifyToken(token: string): TokenPayload | null {
 }
 
 export async function verifyAuth(req: NextRequest): Promise<TokenPayload | null> {
-    const token = req.cookies.get('auth-token')?.value ||
-        req.headers.get('authorization')?.replace('Bearer ', '');
+    console.log('🔍 [AUTH] verifyAuth called');
 
-    if (!token) return null;
-    return verifyToken(token);
+    try {
+        const session = await getServerSession(authOptions);
+        console.log('📋 [AUTH] Session:', session ? 'exists' : 'null');
+        console.log('👤 [AUTH] Session user:', session?.user);
+
+        if (!session?.user) {
+            console.log('❌ [AUTH] No session or user found');
+            return null;
+        }
+
+        console.log('✅ [AUTH] User authenticated:', session.user.email);
+        return {
+            id: session.user.id,
+            email: session.user.email!,
+            role: session.user.role,
+            companyId: session.user.companyId ?? null,
+            storeId: session.user.storeId ?? null,
+        };
+    } catch (error) {
+        console.error('❌ [AUTH] Error in verifyAuth:', error);
+        return null;
+    }
 }
 
 export function hasPermission(userRole: string, permission: string): boolean {

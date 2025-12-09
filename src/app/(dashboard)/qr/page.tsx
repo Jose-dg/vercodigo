@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { QRStatusToggle } from "@/components/qr/QRStatusToggle";
 import { QRDeleteButton } from "@/components/qr/QRDeleteButton";
+import { QRUpdatePinButton } from "@/components/qr/QRUpdatePinButton";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,7 @@ export default async function QRPage() {
                                                         isActivated={qr.isActivated}
                                                         isRedeemed={qr.isRedeemed}
                                                     />
+                                                    <QRUpdatePinButton id={qr.id} uuid={qr.uuid} currentPin={qr.pin} />
                                                     <Button variant="ghost" size="icon" asChild>
                                                         <Link href={`/qr/${qr.uuid}`}>
                                                             <QrCode className="h-4 w-4 text-gray-500" />

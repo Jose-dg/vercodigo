@@ -7,10 +7,14 @@ interface QRDataInput {
 
 export function generateQRData(input: QRDataInput): string {
     // Generar URL que apunta al endpoint público
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
     console.log('🔗 [QR-GEN] Base URL from env:', baseUrl);
     console.log('🔗 [QR-GEN] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
     console.log('🔗 [QR-GEN] APP_URL:', process.env.APP_URL);
+
+    if (!baseUrl.startsWith('http')) {
+        baseUrl = `https://` + baseUrl;
+    }
 
     const qrUrl = `${baseUrl}/scan/${input.uuid}`;
     console.log('🔗 [QR-GEN] Generated QR URL:', qrUrl);

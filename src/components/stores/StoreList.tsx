@@ -1,51 +1,25 @@
-'use client';
+"use client";
 
-import { Store } from 'lucide-react';
+import { deleteStore } from "@/services/store.service";
+import { Trash2 } from "lucide-react";
 
-interface StoreData {
-    id: string;
-    name: string;
-    code: string;
-    address: string;
-    phone: string;
-    isActive: boolean;
-}
+export default function StoreList({ stores }: { stores: any[] }) {
+    const handleDelete = async (id: string) => {
+        await deleteStore(id);
+        window.location.reload();
+    };
 
-export function StoreList({ stores }: { stores: StoreData[] }) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-4">
             {stores.map((store) => (
-                <div key={store.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 bg-blue-50 rounded-lg">
-                            <Store className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${store.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                            {store.isActive ? 'Activa' : 'Inactiva'}
-                        </span>
+                <div key={store.id} className="flex items-center justify-between bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <div>
+                        <h4 className="font-semibold">{store.name}</h4>
+                        <p className="text-sm text-gray-500">{store.address}</p>
                     </div>
-
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">{store.name}</h3>
-                    <p className="text-sm text-gray-500 mb-4">Código: {store.code}</p>
-
-                    <div className="space-y-2 text-sm text-gray-600">
-                        <p className="flex items-center gap-2">
-                            <span className="font-medium">Dirección:</span> {store.address}
-                        </p>
-                        <p className="flex items-center gap-2">
-                            <span className="font-medium">Teléfono:</span> {store.phone}
-                        </p>
-                    </div>
-
-                    <div className="mt-6 pt-4 border-t flex justify-end gap-2">
-                        <button className="text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-2">
-                            Editar
-                        </button>
-                        <button className="text-sm font-medium text-blue-600 hover:text-blue-700 px-3 py-2 bg-blue-50 rounded-lg">
-                            Ver Detalles
-                        </button>
-                    </div>
+                    <button onClick={() => handleDelete(store.id)} className="p-2 rounded-md hover:bg-gray-100">
+                        <Trash2 className="w-5 h-5 text-red-500" />
+                    </button>
                 </div>
             ))}
         </div>

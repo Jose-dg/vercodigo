@@ -60,13 +60,13 @@ export default function ScanPage({ params }: { params: Promise<{ uuid: string }>
                     {data.message && (
                         <p className="text-gray-600 mb-4">{data.message}</p>
                     )}
-                    {data.store && (
+                    {/* {data.store && (
                         <div className="bg-gray-50 p-4 rounded-lg mt-4 text-left">
                             <p className="text-sm text-gray-500 mb-1">Tienda:</p>
                             <p className="font-semibold">{data.store.name}</p>
                             <p className="text-sm text-gray-600">{data.store.phone}</p>
                         </div>
-                    )}
+                    )} */}
                 </div>
             </div>
         );

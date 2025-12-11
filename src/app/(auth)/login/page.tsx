@@ -22,9 +22,9 @@ export default function LoginPage() {
 
         try {
             const result = await signIn("credentials", {
-                redirect: false,
                 email,
                 password,
+                callbackUrl: "/store",
             });
 
             if (result?.error) {
@@ -33,8 +33,6 @@ export default function LoginPage() {
                     title: "Error de inicio de sesión",
                     description: "Credenciales inválidas. Por favor intenta de nuevo.",
                 });
-            } else {
-                router.push("/store");
             }
         } catch (error) {
             toast({

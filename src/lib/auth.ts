@@ -1,10 +1,7 @@
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth-options';
-
-const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'default-secret-change-me';
 
 export interface TokenPayload {
     id: string;
@@ -21,18 +18,6 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, hash: string): boolean {
     return bcrypt.compareSync(password, hash);
-}
-
-export function generateToken(userId: string, role: string): string {
-    return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '7d' });
-}
-
-export function verifyToken(token: string): TokenPayload | null {
-    try {
-        return jwt.verify(token, JWT_SECRET) as TokenPayload;
-    } catch {
-        return null;
-    }
 }
 
 export async function verifyAuth(req: NextRequest): Promise<TokenPayload | null> {

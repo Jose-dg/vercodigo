@@ -1,9 +1,19 @@
+// import { withAuth } from "next-auth/middleware"; // Temporalmente deshabilitado
+import { NextResponse, type NextRequest } from "next/server";
+
+// Autenticación deshabilitada temporalmente para el deploy.
+// El código original está comentado debajo para futura restauración.
+export function middleware(req: NextRequest) {
+    return NextResponse.next();
+}
+
+/*
+// --- Código de Autenticación Original ---
 import { withAuth } from "next-auth/middleware";
-import { NextResponse } from "next/server";
 
 export default withAuth(
     function middleware(req) {
-        // Custom logic if needed, e.g. role based redirection
+        // Lógica personalizada si es necesario, ej: redirección por rol
         return NextResponse.next();
     },
     {
@@ -15,6 +25,7 @@ export default withAuth(
         },
     }
 );
+*/
 
 export const config = {
     matcher: [
@@ -26,6 +37,6 @@ export const config = {
         "/qr/:path*",
         "/store",
         "/store/:path*",
-        "/api/qr/generate", // Protect sensitive API routes
+        "/api/qr/generate", // Proteger rutas de API sensibles
     ],
 };

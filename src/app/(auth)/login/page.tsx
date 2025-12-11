@@ -35,7 +35,6 @@ export default function LoginPage() {
                 });
             } else {
                 router.push("/store");
-                router.refresh();
             }
         } catch (error) {
             toast({

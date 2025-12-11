@@ -42,21 +42,6 @@ export async function getStores() {
     return prisma.store.findMany();
 }
 
-export async function createStore(data: any) {
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const companyId = "clvya1q5100001y6g26y2k89d"; // Hardcoded for now, you should get this from the logged in user.
-    const phone = "1234567890"; // Hardcoded for now.
-
-    return prisma.store.create({
-        data: {
-            ...data,
-            code,
-            companyId,
-            phone,
-        },
-    });
-}
-
 export async function deleteStore(id: string) {
     return prisma.store.delete({ where: { id } });
 }

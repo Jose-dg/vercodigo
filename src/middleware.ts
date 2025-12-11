@@ -18,9 +18,14 @@ export default withAuth(
 
 export const config = {
     matcher: [
-        "/dashboard/:path*",
+        "/admin",
+        "/admin/:path*",
+        "/products",
+        "/products/:path*",
+        "/qr",
+        "/qr/:path*",
+        "/store",
         "/store/:path*",
-        "/super-admin/:path*",
         "/api/qr/generate", // Protect sensitive API routes
     ],
 };

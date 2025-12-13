@@ -29,24 +29,50 @@ import { Prisma } from "@prisma/client";
 
 
 export default async function QRPage() {
-    const qrs: Prisma.CardGetPayload<{
+    let qrs: Prisma.CardGetPayload<{
         include: {
             product: true;
             store: true;
             denomination: true;
             key: true;
         };
-    }>[] = await prisma.card.findMany({
-        include: {
-            product: true,
-            store: true,
-            denomination: true,
-            key: true,
-        },
-        orderBy: {
-            createdAt: "desc",
-        },
-    });
+    }>[] = [];
+
+    let error = null;
+
+    try {
+        qrs = await prisma.card.findMany({
+            include: {
+                product: true,
+                store: true,
+                denomination: true,
+                key: true,
+            },
+            orderBy: {
+                createdAt: "desc",
+            },
+        });
+    } catch (e) {
+        console.error("Error fetching QRs:", e);
+        error = "No se pudieron cargar los códigos QR. Por favor, intenta de nuevo más tarde.";
+    }
+
+    if (error) {
+        return (
+            <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+                <div className="rounded-md bg-red-50 p-4">
+                    <div className="flex">
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-red-800">Error</h3>
+                            <div className="mt-2 text-sm text-red-700">
+                                <p>{error}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -119,8 +145,12 @@ export default async function QRPage() {
                                             qrs.map((qr) => (
                                                 <TableRow key={qr.id}>
                                                     <TableCell className="font-mono text-xs">{qr.uuid}</TableCell>
-                                                    <TableCell className="font-medium">{qr.product.name}</TableCell>
-                                                    <TableCell>{qr.store.name}</TableCell>
+                                                    <TableCell className="font-medium">
+                                                        {qr.product?.name || <span className="text-red-500">Producto desconocido</span>}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {qr.store?.name || <span className="text-red-500">Tienda desconocida</span>}
+                                                    </TableCell>
                                                     <TableCell>
                                                         ${(qr.customAmount ?? qr.denomination?.amount ?? 0).toFixed(2)}
                                                     </TableCell>

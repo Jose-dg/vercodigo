@@ -35,6 +35,12 @@ export async function deleteQR(id: string) {
 
 export async function updateQRKey(id: string, keyCode: string) {
     try {
+        const trimmedKey = keyCode.trim();
+
+        if (!trimmedKey) {
+            return { success: false, error: "Key code cannot be empty" };
+        }
+
         const card = await prisma.card.findUnique({
             where: { id },
             select: { uuid: true, productId: true },
@@ -44,14 +50,29 @@ export async function updateQRKey(id: string, keyCode: string) {
             return { success: false, error: "Card not found" };
         }
 
-        // Create or update key and link to card
+        // Check if key exists and is assigned to another card
+        const existingKey = await prisma.key.findUnique({
+            where: { code: trimmedKey },
+            include: { card: true }
+        });
+
+        if (existingKey && existingKey.card && existingKey.card.id !== id) {
+            // Optional: Decide if we want to allow stealing. For now, let's error or steal.
+            // Let's steal it (unassign from old card) to allow easy corrections.
+            await prisma.card.update({
+                where: { id: existingKey.card.id },
+                data: { keyId: null }
+            });
+        }
+
+        // Create or update key
         const key = await prisma.key.upsert({
-            where: { code: keyCode },
+            where: { code: trimmedKey },
             update: {
                 isVerified: true,
             },
             create: {
-                code: keyCode,
+                code: trimmedKey,
                 productId: card.productId,
                 isVerified: true,
             },

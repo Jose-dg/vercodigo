@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,6 +28,11 @@ export function QRUpdateKeyButton({ id, uuid, currentKey }: QRUpdateKeyButtonPro
   const [keyCode, setKeyCode] = useState(currentKey || "");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  // Sync state with prop when it changes
+  useEffect(() => {
+    setKeyCode(currentKey || "");
+  }, [currentKey]);
 
   const handleSubmit = async () => {
     setLoading(true);

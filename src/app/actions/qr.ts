@@ -78,7 +78,7 @@ export async function updateQRKey(id: string, keyCode: string) {
             },
         });
 
-        await prisma.card.update({
+        const updatedCard = await prisma.card.update({
             where: { id },
             data: {
                 keyId: key.id,
@@ -90,7 +90,7 @@ export async function updateQRKey(id: string, keyCode: string) {
 
         return { success: true };
     } catch (error) {
-        console.error("Error updating QR key:", error);
+        console.error("[updateQRKey] Error updating QR key:", error);
         return { success: false, error: "Failed to update key" };
     }
 }

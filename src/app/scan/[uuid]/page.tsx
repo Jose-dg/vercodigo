@@ -85,7 +85,7 @@ export default function ScanPage({ params }: { params: Promise<{ uuid: string }>
                     </p>
                 </div>
 
-                <KeyDisplay key={data?.key || ''} />
+                <KeyDisplay code={data?.key || ''} />
 
                 <div className="bg-gray-50 p-4 text-center border-t">
                     <p className="text-xs text-gray-500">

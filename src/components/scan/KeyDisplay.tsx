@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { CheckCircle2, Copy, Check } from 'lucide-react';
 
-export function KeyDisplay({ key: keyCode }: { key: string }) {
+export function KeyDisplay({ code: keyCode }: { code: string }) {
     const [copied, setCopied] = useState(false);
 
     const copyToClipboard = () => {

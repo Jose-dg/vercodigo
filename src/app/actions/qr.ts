@@ -73,3 +73,28 @@ export async function updateQRKey(id: string, keyCode: string) {
         return { success: false, error: "Failed to update key" };
     }
 }
+
+export async function updateQRStore(id: string, storeId: string) {
+    try {
+        const store = await prisma.store.findUnique({
+            where: { id: storeId },
+        });
+
+        if (!store) {
+            return { success: false, error: "Store not found" };
+        }
+
+        await prisma.card.update({
+            where: { id },
+            data: {
+                storeId,
+            },
+        });
+
+        revalidatePath("/qr");
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating QR store:", error);
+        return { success: false, error: "Failed to update store" };
+    }
+}

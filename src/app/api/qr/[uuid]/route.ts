@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requestPinFromMatrix } from '@/lib/matrix-api';
+import { requestKeyFromMatrix } from '@/lib/matrix-api';
 
 export async function GET(
     req: NextRequest,
@@ -18,6 +18,7 @@ export async function GET(
                 product: true,
                 denomination: true,
                 store: { include: { company: true } },
+                key: true,
             },
         });
 
@@ -54,14 +55,14 @@ export async function GET(
             );
         }
 
-        // Si ya tiene PIN, devolverlo
-        if (card.pin) {
+        // If already has key, return it
+        if (card.key) {
             await incrementScanCount(card.id);
             await logScan(card.id, true, 'success', ipAddress, userAgent);
 
             return NextResponse.json({
                 success: true,
-                pin: card.pin,
+                key: card.key.code,
                 product: card.product.name,
                 amount: card.denomination?.amount || card.customAmount,
                 currency: card.denomination?.currency || 'USD',
@@ -69,28 +70,42 @@ export async function GET(
             });
         }
 
-        // Solicitar PIN a la empresa matriz
-        const matrixResponse = await requestPinFromMatrix({
+        // Request key from parent company
+        const matrixResponse = await requestKeyFromMatrix({
             productName: card.product.name,
             sku: card.product.sku,
             denomination: card.denomination?.amount || card.customAmount || 0,
             storeCode: card.store.code,
         });
 
-        if (!matrixResponse.success || !matrixResponse.pin) {
+        if (!matrixResponse.success || !matrixResponse.key) {
             await logScan(card.id, false, 'matrix_error', ipAddress, userAgent);
             return NextResponse.json(
-                { error: 'Error al obtener el PIN. Intenta de nuevo.' },
+                { error: 'Error al obtener la clave. Intenta de nuevo.' },
                 { status: 500 }
             );
         }
 
-        // Guardar PIN en la base de datos
+        // Create or update key in database and link to card
+        const key = await prisma.key.upsert({
+            where: { code: matrixResponse.key },
+            update: {
+                isVerified: true,
+                transactionId: matrixResponse.transactionId,
+            },
+            create: {
+                code: matrixResponse.key,
+                productId: card.productId,
+                isVerified: true,
+                transactionId: matrixResponse.transactionId,
+            },
+        });
+
+        // Link key to card
         await prisma.card.update({
             where: { id: card.id },
             data: {
-                pin: matrixResponse.pin,
-                transactionId: matrixResponse.transactionId,
+                keyId: key.id,
                 isRedeemed: true,
                 redeemedAt: new Date(),
                 scanCount: 1,
@@ -101,7 +116,7 @@ export async function GET(
 
         return NextResponse.json({
             success: true,
-            pin: matrixResponse.pin,
+            key: matrixResponse.key,
             product: card.product.name,
             amount: card.denomination?.amount || card.customAmount,
             currency: card.denomination?.currency || 'USD',

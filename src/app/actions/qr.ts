@@ -33,21 +33,34 @@ export async function deleteQR(id: string) {
     }
 }
 
-export async function updateQRPin(id: string, pin: string) {
+export async function updateQRKey(id: string, keyCode: string) {
     try {
         const card = await prisma.card.findUnique({
             where: { id },
-            select: { uuid: true },
+            select: { uuid: true, productId: true },
         });
 
         if (!card) {
             return { success: false, error: "Card not found" };
         }
 
+        // Create or update key and link to card
+        const key = await prisma.key.upsert({
+            where: { code: keyCode },
+            update: {
+                isVerified: true,
+            },
+            create: {
+                code: keyCode,
+                productId: card.productId,
+                isVerified: true,
+            },
+        });
+
         await prisma.card.update({
             where: { id },
             data: {
-                pin: pin,
+                keyId: key.id,
             },
         });
 
@@ -56,7 +69,7 @@ export async function updateQRPin(id: string, pin: string) {
 
         return { success: true };
     } catch (error) {
-        console.error("Error updating QR pin:", error);
-        return { success: false, error: "Failed to update pin" };
+        console.error("Error updating QR key:", error);
+        return { success: false, error: "Failed to update key" };
     }
 }

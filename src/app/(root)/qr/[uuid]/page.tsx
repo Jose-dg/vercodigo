@@ -9,6 +9,18 @@ import { es } from "date-fns/locale";
 import { notFound } from "next/navigation";
 import { QRDownloadButton } from "@/components/qr/QRDownloadButton";
 import { QRCodeDisplay } from "@/components/qr/QRCodeDisplay";
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import {
+    SidebarTrigger,
+} from "@/components/ui/sidebar";
 
 export const dynamic = "force-dynamic";
 
@@ -33,19 +45,49 @@ export default async function QRDetailPage({ params }: PageProps) {
     }
 
     return (
-        <div className="space-y-8 max-w-4xl mx-auto">
-            <div className="flex items-center gap-4">
-                <Button variant="outline" asChild>
-                    <Link href="/qr">
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Volver
-                    </Link>
-                </Button>
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Detalle del QR</h1>
-                    <p className="text-gray-500 mt-2">Información completa del código QR</p>
+        <>
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+                <div className="flex items-center gap-2 px-4">
+                    <SidebarTrigger className="-ml-1" />
+                    <Separator
+                        orientation="vertical"
+                        className="mr-2 data-[orientation=vertical]:h-4"
+                    />
+                    <Breadcrumb>
+                        <BreadcrumbList>
+                            <BreadcrumbItem className="hidden md:block">
+                                <BreadcrumbLink href="/">
+                                    Inicio
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator className="hidden md:block" />
+                            <BreadcrumbItem className="hidden md:block">
+                                <BreadcrumbLink href="/qr">
+                                    Códigos QR
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator className="hidden md:block" />
+                            <BreadcrumbItem>
+                                <BreadcrumbPage>Detalle</BreadcrumbPage>
+                            </BreadcrumbItem>
+                        </BreadcrumbList>
+                    </Breadcrumb>
                 </div>
-            </div>
+            </header>
+            <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+                <div className="space-y-8 max-w-4xl mx-auto">
+                    <div className="flex items-center gap-4">
+                        <Button variant="outline" asChild>
+                            <Link href="/qr">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Volver
+                            </Link>
+                        </Button>
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Detalle del QR</h1>
+                            <p className="text-gray-500 mt-2">Información completa del código QR</p>
+                        </div>
+                    </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* QR Code Display */}
@@ -150,6 +192,8 @@ export default async function QRDetailPage({ params }: PageProps) {
                     </CardContent>
                 </Card>
             </div>
-        </div>
+                </div>
+            </div>
+        </>
     );
 }

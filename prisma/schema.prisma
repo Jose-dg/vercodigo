@@ -9,7 +9,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============= USUARIOS Y ROLES =============
+// ============= USERS AND ROLES =============
 enum UserRole {
   SUPER_ADMIN
   SYSTEM_ADMIN
@@ -18,46 +18,46 @@ enum UserRole {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String
-  name          String
-  role          UserRole
-  isActive      Boolean  @default(true)
-  
-  companyId     String?
-  company       Company? @relation(fields: [companyId], references: [id])
-  
-  storeId       String?
-  store         Store?   @relation(fields: [storeId], references: [id])
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole
+  isActive     Boolean  @default(true)
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  storeId String?
+  store   Store?  @relation(fields: [storeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([companyId])
   @@index([storeId])
 }
 
-// ============= COMPAÑÍAS =============
+// ============= COMPANIES =============
 model Company {
-  id                String   @id @default(cuid())
-  name              String
-  taxId             String   @unique // RUC/NIT
-  email             String
-  phone             String
-  address           String?
-  isActive          Boolean  @default(true)
-  
-  // Configuración de facturación
-  billingFrequency  BillingFrequency @default(DAILY)
-  commissionRate    Float    @default(0.05) // 5% por defecto
-  
-  stores            Store[]
-  users             User[]
-  invoices          Invoice[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id       String  @id @default(cuid())
+  name     String
+  taxId    String  @unique // Tax ID (RUC/NIT)
+  email    String
+  phone    String
+  address  String?
+  isActive Boolean @default(true)
+
+  // Billing configuration
+  billingFrequency BillingFrequency @default(DAILY)
+  commissionRate   Float            @default(0.05) // 5% default
+
+  stores   Store[]
+  users    User[]
+  invoices Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum BillingFrequency {
@@ -68,198 +68,275 @@ enum BillingFrequency {
   MONTHLY
 }
 
-// ============= TIENDAS =============
+// ============= STORES =============
 model Store {
-  id                String   @id @default(cuid())
-  name              String
-  code              String   @unique // Código identificador
-  address           String
-  phone             String
-  isActive          Boolean  @default(true)
-  
-  companyId         String
-  company           Company  @relation(fields: [companyId], references: [id])
-  
-  // Números de WhatsApp autorizados para activar
-  authorizedPhones  AuthorizedPhone[]
-  
-  cards             Card[]
-  users             User[]
-  activations       CardActivation[]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  id       String  @id @default(cuid())
+  name     String
+  code     String  @unique // Identifier code
+  address  String
+  phone    String
+  isActive Boolean @default(true)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  // Authorized WhatsApp numbers for activation
+  authorizedPhones AuthorizedPhone[]
+
+  cards       Card[]
+  users       User[]
+  activations CardActivation[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  InvoiceItem InvoiceItem[]
+
   @@index([companyId])
 }
 
 model AuthorizedPhone {
-  id        String   @id @default(cuid())
-  phone     String   // Formato: +573001234567
-  storeId   String
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  isActive  Boolean  @default(true)
-  
+  id       String  @id @default(cuid())
+  phone    String // Format: +573001234567
+  storeId  String
+  store    Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  isActive Boolean @default(true)
+
   createdAt DateTime @default(now())
-  
+
   @@unique([phone, storeId])
   @@index([storeId])
 }
 
-// ============= PRODUCTOS =============
+// ============= PRODUCTS =============
 model Product {
-  id              String   @id @default(cuid())
-  name            String   // Netflix, Xbox, Nike
-  sku             String   @unique
-  brand           String
-  category        String?
-  imageUrl        String?
-  isActive        Boolean  @default(true)
-  
-  // Para tarjetas de regalo variables
-  isGiftCard      Boolean  @default(false)
-  minAmount       Float?
-  maxAmount       Float?
-  
-  denominations   ProductDenomination[]
-  cards           Card[]
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id       String  @id @default(cuid())
+  name     String // Netflix, Xbox, Nike
+  sku      String  @unique
+  brand    String
+  category String?
+  imageUrl String?
+  isActive Boolean @default(true)
+
+  // For variable gift cards
+  isGiftCard Boolean @default(false)
+  minAmount  Float?
+  maxAmount  Float?
+
+  denominations ProductDenomination[]
+  cards         Card[]
+  keys          Key[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ProductDenomination {
-  id          String   @id @default(cuid())
-  amount      Float    // 10, 20, 50, 100
-  currency    String   @default("USD")
-  
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  
-  cards       Card[]
-  
-  createdAt   DateTime @default(now())
-  
+  id       String @id @default(cuid())
+  amount   Float // 10, 20, 50, 100
+  currency String @default("USD")
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  cards Card[]
+
+  createdAt DateTime @default(now())
+
   @@unique([productId, amount])
   @@index([productId])
 }
 
-// ============= TARJETAS/QR =============
+// ============= MANUFACTURING BATCHES =============
+model CardBatch {
+  id           String  @id @default(cuid())
+  code         String  @unique // Readable code, e.g.: "BATCH-2025-001"
+  description  String?
+  manufacturer String? // Printing house or supplier name
+  currency     String  @default("COP") // Cost currency
+
+  totalCards Int // Number of cards manufactured in batch
+  totalCost  Float // Total batch cost (printing, design, logistics, etc.)
+
+  producedAt DateTime @default(now())
+  notes      String?
+
+  cards Card[] // Cards generated from this batch
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============= DIGITAL KEYS =============
+model Key {
+  id            String    @id @default(cuid())
+  code          String    @unique // Actual key code
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id])
+  isVerified    Boolean   @default(false) // Verified with provider
+  transactionId String? // Transaction ID from parent company
+  expiresAt     DateTime? // Expiration date if applicable
+  notes         String? // For debugging / audit
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Optional 1-1 relation to Card (key can exist without physical card)
+  card Card?
+
+  @@index([productId])
+}
+
+// ============= CARDS/QR (PHYSICAL WORLD) =============
 model Card {
-  id              String   @id @default(cuid())
-  uuid            String   @unique // UUID de 8 caracteres impreso
-  qrData          String   // Datos codificados en el QR
-  
-  productId       String
-  product         Product  @relation(fields: [productId], references: [id])
-  
-  denominationId  String?
-  denomination    ProductDenomination? @relation(fields: [denominationId], references: [id])
-  
-  // Para gift cards variables
-  customAmount    Float?
-  
-  storeId         String
-  store           Store    @relation(fields: [storeId], references: [id])
-  
-  // Estado de la tarjeta
-  isActivated     Boolean  @default(false)
-  isRedeemed      Boolean  @default(false)
-  activatedAt     DateTime?
-  redeemedAt      DateTime?
-  
-  // PIN obtenido
-  pin             String?
-  transactionId   String?  // ID de la empresa matriz
-  
-  // Límite de escaneos
-  scanCount       Int      @default(0)
-  maxScans        Int      @default(5)
-  
-  activation      CardActivation?
-  scanLogs        ScanLog[]
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  id     String @id @default(cuid())
+  uuid   String @unique // 8-character UUID printed on card
+  qrData String // Data encoded in QR code
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  denominationId String?
+  denomination   ProductDenomination? @relation(fields: [denominationId], references: [id])
+
+  // For variable gift cards
+  customAmount Float?
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  // Manufacturing batch
+  batchId String?
+  batch   CardBatch? @relation(fields: [batchId], references: [id])
+
+  // Unit fabrication cost (snapshot from batch)
+  fabricationUnitCost Float?
+
+  // Associated digital key (optional)
+  keyId String? @unique
+  key   Key?    @relation(fields: [keyId], references: [id])
+
+  // Card status
+  isActivated Boolean   @default(false)
+  isRedeemed  Boolean   @default(false)
+  activatedAt DateTime?
+  redeemedAt  DateTime?
+
+  // Scan limit
+  scanCount Int @default(0)
+  maxScans  Int @default(5)
+
+  activation CardActivation?
+  scanLogs   ScanLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([storeId])
   @@index([productId])
   @@index([isActivated])
   @@index([uuid])
+  @@index([batchId])
+  @@index([keyId])
 }
 
-// ============= ACTIVACIONES =============
+// ============= ACTIVATIONS (ECONOMIC EVENT) =============
+
+// Billing status of an activation (accounts receivable)
+enum ActivationBillingStatus {
+  PENDING // Activated but not yet included in any invoice
+  INVOICED // Included in an invoice, but invoice is not paid
+  PAID // Invoice paid (card fully charged)
+  CANCELLED // Cancelled / reversed
+}
+
 model CardActivation {
-  id              String   @id @default(cuid())
-  
-  cardId          String   @unique
-  card            Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
-  storeId         String
-  store           Store    @relation(fields: [storeId], references: [id])
-  
-  activatedBy     String   // Número de teléfono que activó
-  activatedAt     DateTime @default(now())
-  
-  // Respuesta de la empresa matriz
-  matrixResponse  Json?
-  
+  id String @id @default(cuid())
+
+  cardId String @unique
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  activatedBy String // Phone number that activated
+  activatedAt DateTime @default(now())
+
+  // Response from parent company (for technical/commercial traceability)
+  matrixResponse Json?
+
+  // Economic information per QR (revenue and variable costs)
+  activationAmount      Float // Amount charged to company/store for this activation
+  commissionRateApplied Float? // Commission rate applied (snapshot, e.g.: 0.05 = 5%)
+  commissionAmount      Float? // Calculated commission amount
+  otherCosts            Float? // Other variable costs (gateway, logistics, etc.)
+
+  // Profit per QR (optional, can be calculated or stored)
+  grossProfit Float? // activationAmount - commissionAmount - otherCosts - card.fabricationUnitCost
+
+  // Billing status / accounts receivable
+  billingStatus ActivationBillingStatus @default(PENDING)
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
   @@index([storeId])
   @@index([activatedAt])
+  @@index([billingStatus])
+  @@index([invoiceId])
 }
 
-// ============= LOGS DE ESCANEO =============
+// ============= SCAN LOGS =============
 model ScanLog {
-  id          String   @id @default(cuid())
-  
-  cardId      String
-  card        Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
-  wasSuccess  Boolean  // true si mostró el PIN, false si no
-  reason      String?  // "not_activated", "max_scans_reached", "success"
-  
-  // Datos del escaneo
-  ipAddress   String?
-  userAgent   String?
-  
-  scannedAt   DateTime @default(now())
-  
+  id String @id @default(cuid())
+
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  wasSuccess Boolean // true if key was shown, false otherwise
+  reason     String? // "not_activated", "max_scans_reached", "success"
+
+  // Scan data
+  ipAddress String?
+  userAgent String?
+
+  scannedAt DateTime @default(now())
+
   @@index([cardId])
   @@index([scannedAt])
   @@index([wasSuccess])
 }
 
-// ============= FACTURACIÓN =============
+// ============= INVOICING =============
 model Invoice {
-  id              String   @id @default(cuid())
-  invoiceNumber   String   @unique
-  
-  companyId       String
-  company         Company  @relation(fields: [companyId], references: [id])
-  
-  // Período de facturación
-  periodStart     DateTime
-  periodEnd       DateTime
-  
-  // Totales
-  totalSales      Float    // Total vendido
-  commissionRate  Float    // % de comisión aplicado
-  commissionAmount Float   // Monto de comisión
-  totalAmount     Float    // Monto a pagar
-  
-  // Items de factura
-  items           InvoiceItem[]
-  
-  // Estado
-  status          InvoiceStatus @default(PENDING)
-  paidAt          DateTime?
-  
-  // Archivo PDF
-  pdfUrl          String?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  id            String @id @default(cuid())
+  invoiceNumber String @unique
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  // Billing period
+  periodStart DateTime
+  periodEnd   DateTime
+
+  // Totals
+  totalSales       Float // Total sales
+  commissionRate   Float // Commission rate applied
+  commissionAmount Float // Commission amount
+  totalAmount      Float // Amount to pay
+
+  // Invoice items
+  items InvoiceItem[]
+
+  // Status
+  status InvoiceStatus @default(PENDING)
+  paidAt DateTime?
+
+  // PDF file
+  pdfUrl String?
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  CardActivation CardActivation[]
+
   @@index([companyId])
   @@index([status])
   @@index([periodStart, periodEnd])
@@ -273,26 +350,31 @@ enum InvoiceStatus {
 }
 
 model InvoiceItem {
-  id            String   @id @default(cuid())
-  
-  invoiceId     String
-  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  
-  description   String   // "Netflix $10 - 50 unidades"
-  quantity      Int
-  unitPrice     Float
-  totalPrice    Float
-  
-  createdAt     DateTime @default(now())
-  
+  id String @id @default(cuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  // (Optional) store associated with this invoice line
+  storeId String?
+  store   Store?  @relation(fields: [storeId], references: [id])
+
+  description String // "Netflix $10 - 50 unidades - Tienda Monterrey"
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+
+  createdAt DateTime @default(now())
+
   @@index([invoiceId])
+  @@index([storeId])
 }
 
-// ============= CONFIGURACIÓN SISTEMA =============
+// ============= SYSTEM CONFIGURATION =============
 model SystemConfig {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String
-  
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+
   updatedAt DateTime @updatedAt
 }

@@ -94,6 +94,8 @@ export async function POST(req: NextRequest) {
                 storeId: card.storeId,
                 activatedBy: phone,
                 matrixResponse: { timestamp },
+                activationAmount: 0,
+                activatedAt: updatedCard.activatedAt ?? new Date(),
             },
         });
 

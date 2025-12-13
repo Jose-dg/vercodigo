@@ -89,36 +89,36 @@ export function ProductForm() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="name" className="text-gray-700">Nombre del Producto</Label>
+                                <Label htmlFor="name" className="text-gray-700 font-medium">Nombre del Producto</Label>
                                 <Input
                                     id="name"
                                     placeholder="Ej: Netflix Gift Card"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     required
-                                    className="border-gray-300 focus:bg-white transition-colors text-gray-900"
+                                    className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="brand" className="text-gray-700">Marca</Label>
+                                    <Label htmlFor="brand" className="text-gray-700 font-medium">Marca</Label>
                                     <Input
                                         id="brand"
                                         placeholder="Ej: Netflix"
                                         value={brand}
                                         onChange={(e) => setBrand(e.target.value)}
                                         required
-                                        className="border-gray-300 focus:bg-white transition-colors text-gray-900"
+                                        className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="category" className="text-gray-700">Categoría</Label>
+                                    <Label htmlFor="category" className="text-gray-700 font-medium">Categoría</Label>
                                     <Input
                                         id="category"
                                         placeholder="Ej: Entretenimiento"
                                         value={category}
                                         onChange={(e) => setCategory(e.target.value)}
-                                        className="border-gray-300 focus:bg-white transition-colors text-gray-900"
+                                        className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
                                     />
                                 </div>
                             </div>
@@ -186,24 +186,24 @@ export function ProductForm() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="sku" className="text-gray-700">SKU (Stock Keeping Unit)</Label>
+                                <Label htmlFor="sku" className="text-gray-700 font-medium">SKU (Stock Keeping Unit)</Label>
                                 <Input
                                     id="sku"
                                     placeholder="Ej: NFLX-USD"
                                     value={sku}
                                     onChange={(e) => setSku(e.target.value)}
                                     required
-                                    className="border-gray-300 focus:bg-white transition-colors font-mono text-gray-900"
+                                    className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors font-mono"
                                 />
                             </div>
                         </CardContent>
                     </Card>
 
                     <div className="flex flex-col gap-4">
-                        <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md py-6 text-lg" disabled={loading}>
+                        <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm py-6 text-lg" disabled={loading}>
                             {loading ? "Creando..." : "Crear Producto"}
                         </Button>
-                        <Button type="button" variant="outline" className="w-full" onClick={() => router.back()}>
+                        <Button type="button" variant="outline" className="w-full border-gray-300" onClick={() => router.back()}>
                             Cancelar
                         </Button>
                     </div>

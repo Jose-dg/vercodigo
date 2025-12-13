@@ -1,20 +1,20 @@
-interface MatrixPinRequest {
+interface MatrixKeyRequest {
     productName: string;
     sku: string;
     denomination: number;
     storeCode: string;
 }
 
-interface MatrixPinResponse {
+interface MatrixKeyResponse {
     success: boolean;
-    pin?: string;
+    key?: string;
     transactionId?: string;
     error?: string;
 }
 
-export async function requestPinFromMatrix(
-    data: MatrixPinRequest
-): Promise<MatrixPinResponse> {
+export async function requestKeyFromMatrix(
+    data: MatrixKeyRequest
+): Promise<MatrixKeyResponse> {
     try {
         const apiUrl = process.env.MATRIX_API_URL;
         const apiKey = process.env.MATRIX_API_KEY;
@@ -25,7 +25,7 @@ export async function requestPinFromMatrix(
             if (process.env.NODE_ENV === 'development') {
                 return {
                     success: true,
-                    pin: 'MOCK-PIN-12345',
+                    key: 'MOCK-KEY-12345',
                     transactionId: `MOCK-TX-${Date.now()}`,
                 };
             }
@@ -54,12 +54,12 @@ export async function requestPinFromMatrix(
 
         return {
             success: true,
-            pin: result.pin,
+            key: result.key || result.pin, // Support both key and pin for backward compatibility
             transactionId: result.transaction_id,
         };
 
     } catch (error) {
-        console.error('Error requesting PIN from matrix:', error);
+        console.error('Error requesting key from matrix:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',

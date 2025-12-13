@@ -2,16 +2,18 @@
 
 import * as React from "react"
 import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
+  Building2,
+  Store,
+  Package,
+  QrCode,
+  Key,
+  Zap,
+  FileText,
+  Layers,
   Settings2,
-  SquareTerminal,
+  GalleryVerticalEnd,
+  AudioWaveform,
+  Command,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -52,106 +54,65 @@ const data = {
   ],
   navMain: [
     {
-      title: "Playground",
+      title: "Gestión",
       url: "#",
-      icon: SquareTerminal,
+      icon: Settings2,
       isActive: true,
       items: [
         {
-          title: "History",
-          url: "#",
+          title: "Compañías",
+          url: "/companies",
         },
         {
-          title: "Starred",
-          url: "#",
+          title: "Tiendas",
+          url: "/store",
         },
         {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
+          title: "Productos",
+          url: "/products",
         },
       ],
     },
     {
-      title: "Documentation",
+      title: "Tarjetas y QR",
       url: "#",
-      icon: BookOpen,
+      icon: QrCode,
       items: [
         {
-          title: "Introduction",
-          url: "#",
+          title: "Códigos QR",
+          url: "/qr",
         },
         {
-          title: "Get Started",
-          url: "#",
+          title: "Lotes de Fabricación",
+          url: "/batches",
         },
         {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
+          title: "Claves Digitales",
+          url: "/keys",
         },
       ],
     },
     {
-      title: "Settings",
+      title: "Operaciones",
       url: "#",
-      icon: Settings2,
+      icon: Zap,
       items: [
         {
-          title: "General",
-          url: "#",
+          title: "Activaciones",
+          url: "/activations",
         },
         {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
+          title: "Facturas",
+          url: "/invoices",
         },
       ],
     },
   ],
   projects: [
     {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
+      name: "Administración",
+      url: "/admin",
+      icon: GalleryVerticalEnd,
     },
   ],
 }

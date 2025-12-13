@@ -1,5 +1,5 @@
 // create_store_cli.ts
-import prisma from './src/lib/prisma.ts';
+import prisma from './src/lib/prisma';
 
 async function createStoreCli(name: string, address: string) {
   try {
@@ -11,7 +11,7 @@ async function createStoreCli(name: string, address: string) {
       process.exit(1);
     }
     const companyId = company.id;
-    const phone = "1234567890";
+    const phone = "1234567790";
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     const newStore = await prisma.store.create({
@@ -32,7 +32,7 @@ async function createStoreCli(name: string, address: string) {
   }
 }
 
-const storeName = "Palacio Nacional 192";
-const storeAddress = "Carrera 52 #48-45";
+const storeName = "Puerta del norte";
+const storeAddress = "Diagonal 55 #34-67, en Bello, Antioquia, Colombia";
 
 createStoreCli(storeName, storeAddress);

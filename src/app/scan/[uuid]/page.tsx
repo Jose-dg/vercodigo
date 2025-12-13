@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
-import { PinDisplay } from '@/components/scan/PinDisplay';
+import { KeyDisplay } from '@/components/scan/KeyDisplay';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 interface ScanResponse {
     success?: boolean;
-    pin?: string;
+    key?: string;
     product?: string;
     amount?: number;
     currency?: string;
@@ -25,7 +25,7 @@ export default function ScanPage({ params }: { params: Promise<{ uuid: string }>
     const [data, setData] = useState<ScanResponse | null>(null);
 
     useEffect(() => {
-        const fetchPin = async () => {
+        const fetchKey = async () => {
             try {
                 const res = await fetch(`/api/qr/${uuid}`);
                 const json = await res.json();
@@ -37,7 +37,7 @@ export default function ScanPage({ params }: { params: Promise<{ uuid: string }>
             }
         };
 
-        fetchPin();
+        fetchKey();
     }, [uuid]);
 
     if (loading) {
@@ -85,7 +85,7 @@ export default function ScanPage({ params }: { params: Promise<{ uuid: string }>
                     </p>
                 </div>
 
-                <PinDisplay pin={data?.pin || ''} />
+                <KeyDisplay key={data?.key || ''} />
 
                 <div className="bg-gray-50 p-4 text-center border-t">
                     <p className="text-xs text-gray-500">

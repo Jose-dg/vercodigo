@@ -1,48 +1,121 @@
 'use client';
 
-import { Package, MoreVertical } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface ProductData {
     id: string;
     name: string;
     sku: string;
     brand: string;
+    category?: string | null;
     isActive: boolean;
     denominations: { amount: number; currency: string }[];
+    createdAt?: Date | string;
 }
 
 export function ProductList({ products }: { products: ProductData[] }) {
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="grid grid-cols-1 divide-y">
-                {products.map((product) => (
-                    <div key={product.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                                <Package className="w-6 h-6 text-gray-500" />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">{product.name}</h3>
-                                <p className="text-sm text-gray-500">{product.brand} • SKU: {product.sku}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-8">
-                            <div className="text-right">
-                                <p className="text-sm font-medium text-gray-900">Denominaciones</p>
-                                <p className="text-sm text-gray-500">
-                                    {product.denominations.map(d => formatCurrency(d.amount, d.currency)).join(', ')}
-                                </p>
-                            </div>
-
-                            <button className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
-                                <MoreVertical className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
+        <Card className="bg-white shadow-sm border-gray-200">
+            <CardHeader>
+                <CardTitle>Listado de Productos</CardTitle>
+                <CardDescription>
+                    Total de productos: {products.length}
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Producto</TableHead>
+                                <TableHead>Marca</TableHead>
+                                <TableHead>Categoría</TableHead>
+                                <TableHead>SKU</TableHead>
+                                <TableHead>Denominaciones</TableHead>
+                                <TableHead>Estado</TableHead>
+                                {products.length > 0 && products[0].createdAt && (
+                                    <TableHead>Creado</TableHead>
+                                )}
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {products.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                                        No hay productos registrados.
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                products.map((product) => (
+                                    <TableRow key={product.id}>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                                                    <Package className="w-5 h-5 text-gray-500" />
+                                                </div>
+                                                <span className="font-medium text-gray-900">{product.name}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-gray-600">{product.brand}</TableCell>
+                                        <TableCell>
+                                            {product.category ? (
+                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                    {product.category}
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-gray-400">-</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className="font-mono text-xs">
+                                                {product.sku}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-wrap gap-1">
+                                                {product.denominations.length > 0 ? (
+                                                    product.denominations.map((d, idx) => (
+                                                        <Badge
+                                                            key={idx}
+                                                            className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200"
+                                                        >
+                                                            {formatCurrency(d.amount, d.currency)}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-gray-400 text-sm">Sin denominaciones</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {product.isActive ? (
+                                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
+                                                    Activo
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                    Inactivo
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                        {product.createdAt && (
+                                            <TableCell className="text-gray-500 text-sm">
+                                                {format(new Date(product.createdAt), "PPP", { locale: es })}
+                                            </TableCell>
+                                        )}
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
     );
 }

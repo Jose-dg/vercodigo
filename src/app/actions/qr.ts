@@ -9,6 +9,7 @@ export async function toggleQRStatus(id: string, currentStatus: boolean) {
             where: { id },
             data: {
                 isActivated: !currentStatus,
+                scanCount: 0,
             },
         });
         revalidatePath("/qr");

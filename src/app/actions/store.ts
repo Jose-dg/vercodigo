@@ -30,10 +30,24 @@ export async function createStore(
   }
 
   try {
-    // TODO: These values should not be hardcoded.
-    // The companyId should come from the authenticated user's session.
-    // The phone number might be part of the store data or company data.
-    const companyId = "clvya1q5100001y6g26y2k89d";
+    // Get the first available company or create a default one
+    let company = await prisma.company.findFirst({
+      where: { isActive: true },
+    });
+
+    if (!company) {
+      // Create a default company if none exists
+      company = await prisma.company.create({
+        data: {
+          name: "Empresa Principal",
+          taxId: "000000000-0",
+          email: "contacto@empresa.com",
+          phone: "0000000000",
+          isActive: true,
+        },
+      });
+    }
+
     const phone = "1234567890";
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -41,7 +55,7 @@ export async function createStore(
       data: {
         ...validatedFields.data,
         code: code,
-        companyId: companyId,
+        companyId: company.id,
         phone: phone,
       },
     });

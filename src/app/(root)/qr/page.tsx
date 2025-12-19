@@ -10,7 +10,7 @@ import { es } from "date-fns/locale";
 import { QRStatusToggle } from "@/components/qr/QRStatusToggle";
 import { QRDeleteButton } from "@/components/qr/QRDeleteButton";
 import { QRUpdateKeyButton } from "@/components/qr/QRUpdateKeyButton";
-import { QREditStoreButton } from "@/components/qr/QREditStoreButton";
+
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -27,6 +27,7 @@ import {
 export const dynamic = "force-dynamic";
 
 import { Prisma } from "@prisma/client";
+import { QREditButton } from "@/components/qr/QREditButton";
 
 
 export default async function QRPage() {
@@ -40,11 +41,12 @@ export default async function QRPage() {
     }>[] = [];
 
     let stores: { id: string; name: string }[] = [];
+    let products: { id: string; name: string }[] = [];
 
     let error = null;
 
     try {
-        const [qrsData, storesData] = await Promise.all([
+        const [qrsData, storesData, productsData] = await Promise.all([
             prisma.card.findMany({
                 include: {
                     product: true,
@@ -61,9 +63,15 @@ export default async function QRPage() {
                 select: { id: true, name: true },
                 orderBy: { name: "asc" },
             }),
+            prisma.product.findMany({
+                where: { isActive: true },
+                select: { id: true, name: true },
+                orderBy: { name: "asc" },
+            }),
         ]);
         qrs = qrsData;
         stores = storesData;
+        products = productsData;
     } catch (e) {
         console.error("Error fetching data:", e);
         error = "No se pudieron cargar los datos. Por favor, intenta de nuevo más tarde.";
@@ -195,11 +203,18 @@ export default async function QRPage() {
                                                                 isActivated={qr.isActivated}
                                                                 isRedeemed={qr.isRedeemed}
                                                             />
-                                                            <QREditStoreButton
+                                                            <QREditButton
                                                                 id={qr.id}
                                                                 uuid={qr.uuid}
-                                                                currentStoreId={qr.storeId}
+                                                                initialData={{
+                                                                    productId: qr.productId,
+                                                                    storeId: qr.storeId,
+                                                                    fabricationUnitCost: qr.fabricationUnitCost || 0,
+                                                                    scanCount: qr.scanCount,
+                                                                    maxScans: qr.maxScans,
+                                                                }}
                                                                 stores={stores}
+                                                                products={products}
                                                             />
                                                             <QRUpdateKeyButton id={qr.id} uuid={qr.uuid} currentKey={qr.key?.code || null} />
                                                             <Button variant="ghost" size="icon" asChild>

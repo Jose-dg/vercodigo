@@ -101,6 +101,30 @@ export default function Page() {
 }
 
 
+// import { KeyDisplay } from "@/components/scan/KeyDisplay";
+
+// export default function TestPage() {
+//     return (
+//         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+//             <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden">
+//                 <div className="bg-blue-600 p-6 text-white text-center">
+//                     <h1 className="text-xl font-bold mb-1">Producto de Prueba</h1>
+//                 </div>
+
+//                 <KeyDisplay code="AAAA-AAAA-AAAA" />
+
+//                 <div className="bg-gray-50 p-4 text-center border-t">
+//                     <p className="text-xs text-gray-500">
+//                         Escaneos restantes: 3
+//                     </p>
+//                 </div>
+//             </div>
+//         </div>
+//     );
+// }
+
+
+
 
 
 

@@ -120,3 +120,32 @@ export async function updateQRStore(id: string, storeId: string) {
         return { success: false, error: "Failed to update store" };
     }
 }
+
+interface UpdateQRData {
+    productId: string;
+    storeId: string;
+    fabricationUnitCost: number;
+    scanCount: number;
+    maxScans: number;
+}
+
+export async function updateQR(id: string, data: UpdateQRData) {
+    try {
+        await prisma.card.update({
+            where: { id },
+            data: {
+                productId: data.productId,
+                storeId: data.storeId,
+                fabricationUnitCost: data.fabricationUnitCost,
+                scanCount: data.scanCount,
+                maxScans: data.maxScans,
+            },
+        });
+
+        revalidatePath("/qr");
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating QR:", error);
+        return { success: false, error: "Failed to update QR" };
+    }
+}

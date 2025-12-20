@@ -17,15 +17,19 @@ import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { CurrencyDisplay } from "../shared/CurrencyDisplay";
 import { CompanySelect } from "../shared/CompanySelect";
-import type { Company } from "@prisma/client";
+import { CardSelector } from "./CardSelector";
+import type { Company, Product, ProductDenomination } from "@prisma/client";
 
 interface InvoiceFormProps {
     companies: Company[];
+    products: (Product & { denominations: ProductDenomination[] })[];
     onSubmit: (data: CreateInvoiceInput) => Promise<void>;
     isSubmitting: boolean;
 }
 
-export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormProps) {
+const CARD_PHYSICAL_COST = 1000; // 1,000 COP fixed cost
+
+export function InvoiceForm({ companies, products, onSubmit, isSubmitting }: InvoiceFormProps) {
     const form = useForm<Omit<CreateInvoiceInput, 'commissionRate'> & { commissionRate: number }>({
         resolver: zodResolver(createInvoiceSchema) as any,
         defaultValues: {
@@ -37,9 +41,11 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                     description: "",
                     quantity: 1,
                     unitPrice: 0,
+                    cardId: "",
                 },
             ],
             commissionRate: 0.05,
+            exchangeRate: 3600, // Default exchange rate
         },
     });
 
@@ -50,6 +56,7 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
 
     const watchItems = form.watch("items");
     const watchCommissionRate = form.watch("commissionRate");
+    const watchExchangeRate = form.watch("exchangeRate") || 3600;
 
     const totalSales = watchItems?.reduce(
         (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
@@ -62,8 +69,8 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* Company and Period */}
-                <div className="grid gap-4 md:grid-cols-3">
+                {/* Company, Period and Exchange Rate */}
+                <div className="grid gap-4 md:grid-cols-4">
                     <FormField
                         control={form.control}
                         name="companyId"
@@ -117,6 +124,25 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                             </FormItem>
                         )}
                     />
+
+                    <FormField
+                        control={form.control}
+                        name="exchangeRate"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Tasa de Cambio (COP/USD) *</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        {...field}
+                                        onChange={(e) => field.onChange(Number(e.target.value))}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
                 </div>
 
                 <Separator />
@@ -134,6 +160,7 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                                     description: "",
                                     quantity: 1,
                                     unitPrice: 0,
+                                    cardId: "",
                                 })
                             }
                         >
@@ -145,9 +172,34 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                     {fields.map((field, index) => (
                         <div
                             key={field.id}
-                            className="grid gap-4 md:grid-cols-12 items-start border p-4 rounded-lg"
+                            className="grid gap-4 md:grid-cols-12 items-start border p-4 rounded-lg bg-white"
                         >
-                            <div className="md:col-span-5">
+                            <div className="md:col-span-5 space-y-4">
+                                <FormField
+                                    control={form.control}
+                                    name={`items.${index}.cardId`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Seleccionar QR/Card *</FormLabel>
+                                            <FormControl>
+                                                <CardSelector
+                                                    products={products}
+                                                    selectedCardId={field.value}
+                                                    onSelect={(card, denominationAmount) => {
+                                                        const exchangeRate = form.getValues("exchangeRate") || 3600;
+                                                        const unitPrice = (denominationAmount * exchangeRate) + CARD_PHYSICAL_COST;
+
+                                                        form.setValue(`items.${index}.cardId`, card.id);
+                                                        form.setValue(`items.${index}.unitPrice`, unitPrice);
+                                                        form.setValue(`items.${index}.description`, `${card.product.name} - $${denominationAmount} - QR: ${card.uuid}`);
+                                                    }}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
                                 <FormField
                                     control={form.control}
                                     name={`items.${index}.description`}
@@ -155,7 +207,7 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                                         <FormItem>
                                             <FormLabel>Descripción</FormLabel>
                                             <FormControl>
-                                                <Input placeholder="Ej: Netflix $10 - Tienda X" {...field} />
+                                                <Input readOnly placeholder="Se generará al seleccionar un QR" {...field} className="bg-slate-50" />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -190,16 +242,18 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                                     name={`items.${index}.unitPrice`}
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Precio Unit.</FormLabel>
+                                            <FormLabel>Precio Unit. (COP)</FormLabel>
                                             <FormControl>
                                                 <Input
                                                     type="number"
                                                     min="0"
-                                                    step="0.01"
                                                     {...field}
                                                     onChange={(e) => field.onChange(Number(e.target.value))}
                                                 />
                                             </FormControl>
+                                            <p className="text-[10px] text-muted-foreground mt-1">
+                                                Auto-calculado: (Denom × Tasa) + 1,000
+                                            </p>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -207,9 +261,9 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                             </div>
 
                             <div className="md:col-span-2 flex items-end">
-                                <div className="text-sm">
-                                    <div className="text-muted-foreground mb-1">Total</div>
-                                    <div className="font-semibold">
+                                <div className="text-sm pb-2">
+                                    <div className="text-muted-foreground mb-1">Total Item</div>
+                                    <div className="font-semibold text-lg">
                                         <CurrencyDisplay
                                             amount={
                                                 (Number(watchItems?.[index]?.quantity) || 0) *
@@ -220,15 +274,16 @@ export function InvoiceForm({ companies, onSubmit, isSubmitting }: InvoiceFormPr
                                 </div>
                             </div>
 
-                            <div className="md:col-span-1 flex items-end justify-end">
+                            <div className="md:col-span-1 flex items-start justify-end pt-8">
                                 {fields.length > 1 && (
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => remove(index)}
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                     >
-                                        <Trash2 className="h-4 w-4 text-red-600" />
+                                        <Trash2 className="h-4 w-4" />
                                     </Button>
                                 )}
                             </div>

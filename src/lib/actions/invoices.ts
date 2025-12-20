@@ -150,6 +150,40 @@ export async function generateInvoice(input: GenerateInvoiceInput) {
     }
 }
 
+export async function getAvailableCardsAction(filters: {
+    productId?: string;
+    denominationId?: string;
+    storeId?: string;
+}) {
+    try {
+        const cards = await prisma.card.findMany({
+            where: {
+                isActivated: false,
+                ...(filters.productId && { productId: filters.productId }),
+                // If denominationId is provided and not "all", try to filter by it.
+                // But since many cards have null denominationId, we might need to be careful.
+                ...(filters.denominationId && filters.denominationId !== "all" && filters.denominationId !== "" && {
+                    OR: [
+                        { denominationId: filters.denominationId },
+                        { denominationId: null } // Fallback to show cards without denomination if they match the product
+                    ]
+                }),
+                ...(filters.storeId && { storeId: filters.storeId }),
+            },
+            include: {
+                product: true,
+                denomination: true,
+            },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+        });
+        return { success: true, cards };
+    } catch (error) {
+        console.error("Error fetching available cards:", error);
+        return { success: false, error: "Failed to fetch cards" };
+    }
+}
+
 export async function createInvoice(input: CreateInvoiceInput) {
     try {
         const validated = createInvoiceSchema.parse(input);
@@ -180,10 +214,12 @@ export async function createInvoice(input: CreateInvoiceInput) {
                 commissionRate: validated.commissionRate,
                 commissionAmount,
                 totalAmount: totalSales - commissionAmount,
+                exchangeRate: validated.exchangeRate,
                 status: InvoiceStatus.PENDING,
                 items: {
                     create: validated.items.map((item) => ({
                         storeId: item.storeId,
+                        cardId: item.cardId,
                         description: item.description,
                         quantity: item.quantity,
                         unitPrice: item.unitPrice,

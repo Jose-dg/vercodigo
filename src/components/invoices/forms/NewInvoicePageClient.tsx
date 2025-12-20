@@ -8,14 +8,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import type { Company } from "@prisma/client";
+import type { Company, Product, ProductDenomination } from "@prisma/client";
 import type { CreateInvoiceInput } from "@/lib/validations/invoice-schema";
 
 interface NewInvoicePageProps {
     companies: Company[];
+    products: (Product & { denominations: ProductDenomination[] })[];
 }
 
-export function NewInvoicePageClient({ companies }: NewInvoicePageProps) {
+export function NewInvoicePageClient({ companies, products }: NewInvoicePageProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const router = useRouter();
 
@@ -58,6 +59,7 @@ export function NewInvoicePageClient({ companies }: NewInvoicePageProps) {
 
             <InvoiceForm
                 companies={companies}
+                products={products}
                 onSubmit={handleSubmit}
                 isSubmitting={isSubmitting}
             />

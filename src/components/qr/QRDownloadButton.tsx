@@ -24,7 +24,7 @@ export function QRDownloadButton({ uuid }: QRDownloadButtonProps) {
     return (
         <Button onClick={handleDownload} className="w-full">
             <Download className="mr-2 h-4 w-4" />
-            Descargar QR
+            Descargar PNG
         </Button>
     );
 }

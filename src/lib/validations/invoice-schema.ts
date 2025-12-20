@@ -5,6 +5,7 @@ export const invoiceItemSchema = z.object({
     quantity: z.number().int().positive("Quantity must be positive"),
     unitPrice: z.number().min(0, "Unit price must be non-negative"),
     storeId: z.string().optional(),
+    cardId: z.string().optional(), // NEW: Link to specific card
 });
 
 export const createInvoiceSchema = z.object({
@@ -13,6 +14,7 @@ export const createInvoiceSchema = z.object({
     periodEnd: z.coerce.date({ message: "End date is required" }),
     items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
     commissionRate: z.number().min(0).max(1).optional().default(0.05),
+    exchangeRate: z.number().positive("Exchange rate must be positive").optional(), // NEW: COP per USD
 });
 
 export const generateInvoiceSchema = z.object({

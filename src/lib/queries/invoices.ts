@@ -159,3 +159,40 @@ export async function getAllProducts() {
         orderBy: { name: "asc" },
     });
 }
+
+// Get available cards for invoicing (not yet activated or invoiced)
+export async function getAvailableCardsForInvoicing(filters?: {
+    productId?: string;
+    denominationId?: string;
+    storeId?: string;
+}) {
+    return prisma.card.findMany({
+        where: {
+            isActivated: false, // Only non-activated cards
+            ...(filters?.productId && { productId: filters.productId }),
+            ...(filters?.denominationId && { denominationId: filters.denominationId }),
+            ...(filters?.storeId && { storeId: filters.storeId }),
+        },
+        include: {
+            product: true,
+            denomination: true,
+            store: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100, // Limit for performance
+    });
+}
+
+// Get card count by product and denomination
+export async function getCardInventoryCount(filters: {
+    productId: string;
+    denominationId?: string;
+}) {
+    return prisma.card.count({
+        where: {
+            productId: filters.productId,
+            isActivated: false,
+            ...(filters.denominationId && { denominationId: filters.denominationId }),
+        },
+    });
+}

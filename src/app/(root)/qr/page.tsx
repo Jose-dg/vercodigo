@@ -10,6 +10,7 @@ import { es } from "date-fns/locale";
 import { QRStatusToggle } from "@/components/qr/QRStatusToggle";
 import { QRDeleteButton } from "@/components/qr/QRDeleteButton";
 import { QRUpdateKeyButton } from "@/components/qr/QRUpdateKeyButton";
+import { QRDownloadSVGButton } from "@/components/qr/QRDownloadSVGButton";
 
 import {
     Breadcrumb,
@@ -217,6 +218,7 @@ export default async function QRPage() {
                                                                 products={products}
                                                             />
                                                             <QRUpdateKeyButton id={qr.id} uuid={qr.uuid} currentKey={qr.key?.code || null} />
+                                                            <QRDownloadSVGButton uuid={qr.uuid} qrData={qr.qrData} />
                                                             <Button variant="ghost" size="icon" asChild>
                                                                 <Link href={`/qr/${qr.uuid}`}>
                                                                     <QrCode className="h-4 w-4 text-gray-500" />

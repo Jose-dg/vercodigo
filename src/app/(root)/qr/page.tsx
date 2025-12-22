@@ -31,6 +31,8 @@ import { Prisma } from "@prisma/client";
 import { QREditButton } from "@/components/qr/QREditButton";
 
 
+import { QRTable } from "@/components/qr/QRTable";
+
 export default async function QRPage() {
     let qrs: Prisma.CardGetPayload<{
         include: {
@@ -142,98 +144,7 @@ export default async function QRPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>UUID</TableHead>
-                                            <TableHead>Producto</TableHead>
-                                            <TableHead>Tienda</TableHead>
-                                            <TableHead>Monto</TableHead>
-                                            <TableHead>Estado</TableHead>
-                                            <TableHead>Creado</TableHead>
-                                            <TableHead className="text-right">Acciones</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {qrs.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={7} className="h-24 text-center text-gray-500">
-                                                    No hay códigos QR generados.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            qrs.map((qr) => (
-                                                <TableRow key={qr.id}>
-                                                    <TableCell className="font-mono text-xs">{qr.uuid}</TableCell>
-                                                    <TableCell className="font-medium">
-                                                        {qr.product?.name || <span className="text-red-500">Producto desconocido</span>}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {qr.store?.name || <span className="text-red-500">Tienda desconocida</span>}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        ${(qr.customAmount ?? qr.denomination?.amount ?? 0).toFixed(2)}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex gap-2">
-                                                            {qr.isActivated ? (
-                                                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
-                                                                    Activado
-                                                                </Badge>
-                                                            ) : (
-                                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
-                                                                    Inactivo
-                                                                </Badge>
-                                                            )}
-                                                            {qr.isRedeemed && (
-                                                                <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border-blue-200">
-                                                                    Canjeado
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-gray-500 text-sm">
-                                                        {format(new Date(qr.createdAt), "PPP p", { locale: es })}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end items-center gap-2">
-                                                            <QRStatusToggle
-                                                                id={qr.id}
-                                                                isActivated={qr.isActivated}
-                                                                isRedeemed={qr.isRedeemed}
-                                                            />
-                                                            <QREditButton
-                                                                id={qr.id}
-                                                                uuid={qr.uuid}
-                                                                initialData={{
-                                                                    productId: qr.productId,
-                                                                    storeId: qr.storeId,
-                                                                    fabricationUnitCost: qr.fabricationUnitCost || 0,
-                                                                    scanCount: qr.scanCount,
-                                                                    maxScans: qr.maxScans,
-                                                                }}
-                                                                stores={stores}
-                                                                products={products}
-                                                            />
-                                                            <QRUpdateKeyButton id={qr.id} uuid={qr.uuid} currentKey={qr.key?.code || null} />
-                                                            <QRDownloadSVGButton uuid={qr.uuid} qrData={qr.qrData} />
-                                                            <Button variant="ghost" size="icon" asChild>
-                                                                <Link href={`/qr/${qr.uuid}`}>
-                                                                    <QrCode className="h-4 w-4 text-gray-500" />
-                                                                    <span className="sr-only">Ver detalles</span>
-                                                                </Link>
-                                                            </Button>
-                                                            <QRDeleteButton id={qr.id} uuid={qr.uuid} />
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                            <QRTable qrs={qrs} stores={stores} products={products} />
                         </CardContent>
                     </Card>
                 </div>

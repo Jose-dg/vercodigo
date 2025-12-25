@@ -55,7 +55,7 @@ export default function LoginPage() {
                         </div>
                     </div>
                     <CardTitle className="text-2xl font-bold tracking-tight text-gray-900">
-                        Bienvenido a Diem SAS
+                        Bienvenido a Maverick
                     </CardTitle>
                     <CardDescription className="text-gray-500">
                         Ingresa tus credenciales para acceder al sistema

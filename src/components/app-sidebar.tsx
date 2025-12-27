@@ -105,6 +105,21 @@ const data = {
           title: "Facturas",
           url: "/invoices",
         },
+                {
+          title: "Draft",
+          url: "/draft",
+        },
+      ],
+    },
+    {
+      title: "Análisis",
+      url: "#",
+      icon: Layers,
+      items: [
+        {
+          title: "Dashboard",
+          url: "/analytics",
+        },
       ],
     },
   ],

@@ -3,7 +3,16 @@ import { NextResponse } from "next/server";
 
 export default withAuth(
     function middleware(req) {
-        // Custom logic if needed, e.g. role based redirection
+        const token = req.nextauth.token;
+        const path = req.nextUrl.pathname;
+
+        // Role-based access control for analytics
+        if (path.startsWith("/analytics") || path.startsWith("/api/analytics")) {
+            if (!token || !["SUPER_ADMIN", "SYSTEM_ADMIN"].includes(token.role as string)) {
+                return NextResponse.redirect(new URL("/login", req.url));
+            }
+        }
+
         return NextResponse.next();
     },
     {
@@ -26,6 +35,8 @@ export const config = {
         "/qr/:path*",
         "/store",
         "/store/:path*",
-        "/api/qr/generate", // Protect sensitive API routes
+        "/dashboard/analytics/:path*",
+        "/api/analytics/:path*",
+        "/api/qr/generate",
     ],
 };

@@ -73,12 +73,12 @@ export default function InvoiceGenerator() {
   return (
     <div className="max-w-5xl mx-auto p-6 md:p-12">
       {/* Print Button */}
-      <div className="mb-6 print:hidden">
+      {/* <div className="mb-6 print:hidden">
         <Button onClick={handlePrint} variant="outline" className="gap-2 bg-transparent">
           <Printer className="h-4 w-4" />
           Print Invoice
         </Button>
-      </div>
+      </div> */}
 
       {/* Invoice Container */}
       <div className="bg-white rounded-lg shadow-lg border border-border overflow-hidden">

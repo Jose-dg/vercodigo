@@ -42,29 +42,20 @@ const data = {
       logo: GalleryVerticalEnd,
       plan: "Enterprise",
     }
-    // {
-    //   name: "Acme Corp.",
-    //   logo: AudioWaveform,
-    //   plan: "Startup",
-    // },
-    // {
-    //   name: "Evil Corp.",
-    //   logo: Command,
-    //   plan: "Free",
-    // },
   ],
   navMain: [
     {
       title: "Home",
       url: "/",
       icon: Home,
-      isActive: true,
+      // isActive: true,
+      // Sin items para que no sea colapsible
     },
     {
       title: "Gestión",
       url: "#",
       icon: Settings2,
-      isActive: true,
+      // isActive: true,
       items: [
         {
           title: "Compañías",
@@ -112,7 +103,7 @@ const data = {
           title: "Facturas",
           url: "/invoices",
         },
-                {
+        {
           title: "Draft",
           url: "/draft",
         },
@@ -193,7 +184,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />

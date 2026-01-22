@@ -143,6 +143,7 @@ export function QRTable({ qrs, stores, products }: QRTableProps) {
                                                 id={qr.id}
                                                 isActivated={qr.isActivated}
                                                 isRedeemed={qr.isRedeemed}
+                                                qr={qr}
                                             />
                                             <QREditButton
                                                 id={qr.id}

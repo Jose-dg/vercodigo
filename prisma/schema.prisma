@@ -26,20 +26,81 @@ model User {
 }
 
 model Company {
-  id               String           @id @default(cuid())
+  id               String                @id @default(cuid())
   name             String
-  taxId            String           @unique
+  taxId            String                @unique
   email            String
   phone            String
   address          String?
-  isActive         Boolean          @default(true)
-  billingFrequency BillingFrequency @default(DAILY)
-  commissionRate   Float            @default(0.05)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  isActive         Boolean               @default(true)
+  billingFrequency BillingFrequency      @default(DAILY)
+  commissionRate   Float                 @default(0.05)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   invoices         Invoice[]
   stores           Store[]
   users            User[]
+  authorizedPhones AuthorizedPhone[]
+  wallet           Wallet?
+  productPrices    CompanyProductPrice[]
+  productCosts     ProductCost[]
+}
+
+model Wallet {
+  id           String              @id @default(cuid())
+  companyId    String              @unique
+  currency     String              @default("COP")
+  balance      Float               @default(0) // negativo = deuda de la compañía
+  creditLimit  Float? // null = sin límite (enforcement en fase futura)
+  isActive     Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  company      Company             @relation(fields: [companyId], references: [id])
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id                   String                  @id @default(cuid())
+  walletId             String
+  type                 WalletTransactionType
+  status               WalletTransactionStatus @default(CONFIRMED)
+  method               WalletRechargeMethod? // solo aplica a RECHARGE; hoy siempre MANUAL
+  amount               Float // positivo, en moneda de la wallet; type define la dirección
+  balanceAfter         Float? // null si PENDING (no afectó el balance)
+  originalAmount       Float? // monto origen (ej. USD) para trazabilidad
+  originalCurrency     String?
+  exchangeRate         Float? // tasa aplicada; null si PENDING sin tasa configurada
+  description          String?
+  externalReference    String? // # de transferencia bancaria en recargas manuales
+  gatewayTransactionId String? // lo llenará la integración PSE/tarjeta futura
+  createdById          String? // userId que originó el movimiento
+  cardActivationId     String?                 @unique
+  codePurchaseId       String?
+  createdAt            DateTime                @default(now())
+  wallet               Wallet                  @relation(fields: [walletId], references: [id])
+
+  @@index([walletId, createdAt])
+  @@index([status])
+  @@index([codePurchaseId])
+}
+
+enum WalletTransactionType {
+  RECHARGE
+  CONSUMPTION
+  ADJUSTMENT
+  REFUND
+}
+
+enum WalletTransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum WalletRechargeMethod {
+  MANUAL
+  PSE
+  CREDIT_CARD
 }
 
 model Store {
@@ -65,43 +126,98 @@ model Store {
 model AuthorizedPhone {
   id        String   @id @default(cuid())
   phone     String
-  storeId   String
+  companyId String
+  storeId   String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  store     Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
-  @@unique([phone, storeId])
+  @@unique([phone, companyId, storeId])
+  @@index([companyId])
   @@index([storeId])
 }
 
 model Product {
-  id            String                @id @default(cuid())
-  name          String
-  sku           String                @unique
-  brand         String
-  category      String?
-  imageUrl      String?
-  isActive      Boolean               @default(true)
-  isGiftCard    Boolean               @default(false)
-  minAmount     Float?
-  maxAmount     Float?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  cards         Card[]
-  keys          Key[]
-  denominations ProductDenomination[]
+  id               String                @id @default(cuid())
+  name             String
+  sku              String                @unique
+  brand            String
+  category         String?
+  imageUrl         String?
+  isActive         Boolean               @default(true)
+  isGiftCard       Boolean               @default(false)
+  minAmount        Float?
+  maxAmount        Float?
+  devDiemProductId String?               @unique
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  cards            Card[]
+  keys             Key[]
+  denominations    ProductDenomination[]
+  companyPrices    CompanyProductPrice[]
+  costs            ProductCost[]
 }
 
 model ProductDenomination {
-  id        String   @id @default(cuid())
-  amount    Float
-  currency  String   @default("USD")
-  productId String
-  createdAt DateTime @default(now())
-  cards     Card[]
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id               String                @id @default(cuid())
+  amount           Float
+  currency         String                @default("USD")
+  devDiemProductId String?               @unique
+  productId        String
+  createdAt        DateTime              @default(now())
+  cards            Card[]
+  product          Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  companyPrices    CompanyProductPrice[]
+  codePurchases    CodePurchase[]
+  costs            ProductCost[]
 
   @@unique([productId, amount])
+  @@index([productId])
+}
+
+// Costo que la plataforma cobra a las compañías por producto/denominación —
+// es lo que se debita de la wallet. companyId null = costo global (default);
+// con companyId = tarifa negociada de esa compañía (en la moneda de su wallet).
+// Resolución al debitar: override compañía → global → valor nominal denominación.
+model ProductCost {
+  id             String               @id @default(cuid())
+  companyId      String? // null = costo global (default para todas)
+  productId      String
+  denominationId String?
+  cost           Float
+  currency       String               @default("COP")
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  company        Company?             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product        Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  denomination   ProductDenomination? @relation(fields: [denominationId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, productId, denominationId])
+  @@index([productId])
+  @@index([companyId])
+}
+
+// Precio de venta al cliente final que cada compañía configura por producto/
+// denominación. Distinto del costo mayorista (denominación en USD) que se
+// debita de la wallet — este precio es operativo para la compañía (su margen).
+model CompanyProductPrice {
+  id             String               @id @default(cuid())
+  companyId      String
+  productId      String
+  denominationId String? // null = producto con denominación única / sin denominaciones
+  salePrice      Float
+  currency       String               @default("COP")
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product        Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  denomination   ProductDenomination? @relation(fields: [denominationId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, productId, denominationId])
+  @@index([companyId])
   @@index([productId])
 }
 
@@ -121,48 +237,99 @@ model CardBatch {
 }
 
 model Key {
-  id            String    @id @default(cuid())
-  code          String    @unique
+  id            String        @id @default(cuid())
+  code          String        @unique
   productId     String
-  isVerified    Boolean   @default(false)
+  isVerified    Boolean       @default(false)
   transactionId String?
   expiresAt     DateTime?
   notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  status        KeyStatus     @default(AVAILABLE)
+  purchaseId    String?
   card          Card?
-  product       Product   @relation(fields: [productId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+  purchase      CodePurchase? @relation(fields: [purchaseId], references: [id])
 
   @@index([productId])
+  @@index([status])
+  @@index([purchaseId])
+}
+
+model CodePurchase {
+  id                String               @id @default(cuid())
+  companyId         String
+  storeId           String?
+  userId            String
+  productId         String
+  denominationId    String?
+  count             Int
+  totalAmount       Float
+  currency          String               @default("USD")
+  status            String               @default("PENDING") // PENDING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
+  idempotencyKey    String               @unique
+  diemRequestId     String?              @unique
+  fulfillmentStatus String?
+  deliveredCodes    Json?
+  lastError         String?
+  attempts          Int                  @default(0)
+  nextRetryAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime             @default(now())
+  denomination      ProductDenomination? @relation(fields: [denominationId], references: [id])
+
+  keys Key[]
+
+  @@index([companyId])
+  @@index([storeId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([denominationId])
+  @@index([status, nextRetryAt])
+}
+
+enum KeyStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
 }
 
 model Card {
-  id                  String               @id @default(cuid())
-  uuid                String               @unique
-  qrData              String
-  productId           String
-  denominationId      String?
-  customAmount        Float?
-  storeId             String
-  isActivated         Boolean              @default(false)
-  isRedeemed          Boolean              @default(false)
-  activatedAt         DateTime?
-  redeemedAt          DateTime?
-  scanCount           Int                  @default(0)
-  maxScans            Int                  @default(5)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  batchId             String?
-  fabricationUnitCost Float?
-  keyId               String?              @unique
-  batch               CardBatch?           @relation(fields: [batchId], references: [id])
-  denomination        ProductDenomination? @relation(fields: [denominationId], references: [id])
-  key                 Key?                 @relation(fields: [keyId], references: [id])
-  product             Product              @relation(fields: [productId], references: [id])
-  store               Store                @relation(fields: [storeId], references: [id])
-  activation          CardActivation?
-  invoiceItems        InvoiceItem[]
-  scanLogs            ScanLog[]
+  id                    String               @id @default(cuid())
+  uuid                  String               @unique
+  qrData                String
+  productId             String
+  denominationId        String?
+  customAmount          Float?
+  storeId               String
+  isActivated           Boolean              @default(false)
+  isRedeemed            Boolean              @default(false)
+  activatedAt           DateTime?
+  redeemedAt            DateTime?
+  scanCount             Int                  @default(0)
+  maxScans              Int                  @default(5)
+  activationLock        Boolean              @default(false)
+  activationLockBy      String?
+  activationLockAt      DateTime?
+  version               Int                  @default(0)
+  activationAttempts    Int                  @default(0)
+  lastActivationAttempt DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  batchId               String?
+  fabricationUnitCost   Float?
+  keyId                 String?              @unique
+  batch                 CardBatch?           @relation(fields: [batchId], references: [id])
+  denomination          ProductDenomination? @relation(fields: [denominationId], references: [id])
+  key                   Key?                 @relation(fields: [keyId], references: [id])
+  product               Product              @relation(fields: [productId], references: [id])
+  store                 Store                @relation(fields: [storeId], references: [id])
+  activation            CardActivation?
+  activationJobs        ActivationJob[]
+  activationAttemptLogs ActivationAttempt[]
+  invoiceItems          InvoiceItem[]
+  scanLogs              ScanLog[]
 
   @@index([storeId])
   @@index([productId])
@@ -170,6 +337,8 @@ model Card {
   @@index([uuid])
   @@index([batchId])
   @@index([keyId])
+  @@index([activationLock])
+  @@index([isActivated, storeId, productId])
 }
 
 model CardActivation {
@@ -265,8 +434,10 @@ model SystemConfig {
 enum UserRole {
   SUPER_ADMIN
   SYSTEM_ADMIN
-  COMPANY_ADMIN
-  STORE_OPERATOR
+  OWNER
+  GENERAL_ADMIN
+  ADMIN
+  OPERATOR
 }
 
 enum BillingFrequency {
@@ -289,4 +460,84 @@ enum InvoiceStatus {
   PAID
   OVERDUE
   CANCELLED
+}
+
+model ActivationAttempt {
+  id            String   @id @default(cuid())
+  cardId        String
+  userId        String
+  storeId       String
+  companyId     String?
+  success       Boolean
+  failureReason String?
+  ipAddress     String?
+  userAgent     String?
+  deviceId      String?
+  createdAt     DateTime @default(now())
+  card          Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@index([userId, createdAt])
+  @@index([storeId])
+}
+
+model RateLimitLog {
+  id          String   @id @default(cuid())
+  userId      String
+  storeId     String?
+  action      String
+  windowStart DateTime
+  count       Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, action, windowStart])
+  @@index([userId, action, windowStart])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  action       String
+  userId       String
+  companyId    String?
+  storeId      String?
+  entityType   String?
+  entityId     String?
+  ipAddress    String?
+  userAgent    String?
+  deviceId     String?
+  before       Json?
+  after        Json?
+  details      Json?
+  success      Boolean  @default(true)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([action])
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model ActivationJob {
+  id                String    @id @default(cuid())
+  cardId            String
+  userId            String?
+  storeId           String?
+  status            String    @default("PENDING") // PENDING, PROCESSING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
+  attempts          Int       @default(0)
+  lastError         String?
+  idempotencyKey    String    @unique
+  diemRequestId     String?   @unique
+  fulfillmentStatus String?
+  deliveredCodes    Json?
+  nextRetryAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  card Card @relation(fields: [cardId], references: [id])
+
+  @@index([status, attempts])
+  @@index([cardId])
+  @@index([createdAt])
+  @@index([status, nextRetryAt])
 }

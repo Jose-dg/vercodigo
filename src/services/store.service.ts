@@ -32,8 +32,15 @@ export async function getStoreDetails(storeId: string) {
     return prisma.store.findUnique({
         where: { id: storeId },
         include: {
-            company: true,
+            // Numbers scoped to this store only.
             authorizedPhones: true,
+            // Company info plus numbers authorized company-wide (storeId: null),
+            // which also apply to this store.
+            company: {
+                include: {
+                    authorizedPhones: { where: { storeId: null } },
+                },
+            },
         },
     });
 }

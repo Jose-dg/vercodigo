@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { toggleQRStatus } from "@/app/actions/qr";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Power, PowerOff } from "lucide-react";
-import { createOrder, OrderPayload } from "@/lib/api/orders";
+import { Loader2, Power, CheckCircle2 } from "lucide-react";
 import { Prisma } from "@prisma/client";
 
 type QRWithRelations = Prisma.CardGetPayload<{
@@ -24,7 +22,7 @@ interface QRStatusToggleProps {
     qr: QRWithRelations;
 }
 
-export function QRStatusToggle({ id, isActivated, isRedeemed, qr }: QRStatusToggleProps) {
+export function QRStatusToggle({ isActivated, isRedeemed, qr }: QRStatusToggleProps) {
     const [loading, setLoading] = useState(false);
     const { toast } = useToast();
 
@@ -33,76 +31,34 @@ export function QRStatusToggle({ id, isActivated, isRedeemed, qr }: QRStatusTogg
 
         setLoading(true);
         try {
-            // If we are activating (current status is false), create order first
-            if (!isActivated) {
-                const amount = (qr.customAmount ?? qr.denomination?.amount ?? 0).toFixed(2);
-                const payload: OrderPayload = {
-                    name: qr.uuid,
-                    store_id: qr.storeId || "",
-                    total_price: amount,
-                    customer: {
-                        first_name: "Juan",
-                        last_name: "Perez",
-                        email: "juan.perez@example.com",
-                        phone: "+573001234567"
-                    },
-                    billing_address: {
-                        company: "123456789", // CRITICAL: Document ID
-                        phone: "+573001234567",
-                        address_1: "Calle 123 # 45-67",
-                        address_2: "Apto 101",
-                        city: "Bogotá",
-                        state: "Cundinamarca",
-                        postcode: "110111",
-                        country: "Colombia"
-                    },
-                    line_items: [
-                        {
-                            sku: qr.product?.name || "UNKNOWN",
-                            quantity: 1,
-                            price: amount,
-                            _is_membership: false,
-                            _days_membership: 0
-                        }
-                    ]
-                };
-
-                try {
-                    await createOrder(payload);
-                    toast({
-                        title: "Orden Creada",
-                        description: "La orden se ha creado exitosamente en el sistema.",
-                    });
-                } catch (orderError: any) {
-                    console.error("Failed to create order:", orderError);
-                    toast({
-                        variant: "destructive",
-                        title: "Error al crear orden",
-                        description: orderError.message || "No se pudo crear la orden, pero se intentará activar el QR.",
-                    });
-                    // Decide if we should stop here or continue to activate.
-                    // The user said "Respuestas Esperadas... 400 Bad Request... Mostrar mensaje de error".
-                    // If order creation fails, maybe we shouldn't activate?
-                    // But the prompt says "Implementa fielmente...".
-                    // I'll throw to stop activation if order creation fails, to be safe and consistent.
-                    throw new Error("No se pudo crear la orden. La activación ha sido cancelada.");
-                }
+            if (isActivated) {
+                return;
             }
 
-            const result = await toggleQRStatus(id, isActivated);
-            if (result.success) {
+            const response = await fetch("/api/cards/activate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ qr: qr.uuid }),
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
                 toast({
-                    title: isActivated ? "QR Desactivado" : "QR Activado",
-                    description: `El código QR ha sido ${isActivated ? "desactivado" : "activado"} exitosamente.`,
+                    title: result.processing ? "Activación recibida" : "QR activado",
+                    description:
+                        result.message ??
+                        "La tarjeta se activará cuando Diem confirme la asignación del código.",
                 });
             } else {
-                throw new Error(result.error);
+                throw new Error(result.message || result.error);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: error.message || "No se pudo cambiar el estado del QR.",
+                description:
+                    error instanceof Error
+                        ? error.message
+                        : "No se pudo cambiar el estado del QR.",
             });
         } finally {
             setLoading(false);
@@ -115,18 +71,18 @@ export function QRStatusToggle({ id, isActivated, isRedeemed, qr }: QRStatusTogg
 
     return (
         <Button
-            variant={isActivated ? "destructive" : "default"}
+            variant={isActivated ? "outline" : "default"}
             size="sm"
             onClick={handleToggle}
-            disabled={loading}
+            disabled={loading || isActivated}
             className="h-8 px-2 lg:px-3"
         >
             {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
             ) : isActivated ? (
                 <>
-                    <PowerOff className="mr-2 h-4 w-4" />
-                    Desactivar
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Activado
                 </>
             ) : (
                 <>

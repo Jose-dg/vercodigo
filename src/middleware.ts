@@ -38,5 +38,6 @@ export const config = {
         "/dashboard/analytics/:path*",
         "/api/analytics/:path*",
         "/api/qr/generate",
+        "/api/cards/activate",
     ],
 };

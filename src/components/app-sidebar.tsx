@@ -20,6 +20,8 @@ import {
   Bot,
 } from "lucide-react"
 
+import { useAbility } from "@/components/auth/ability-context"
+
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
@@ -110,6 +112,22 @@ const data = {
           title: "Products",
           url: "/products",
         },
+        {
+          title: "Users",
+          url: "/users",
+        },
+        {
+          title: "Wallets",
+          url: "/wallets",
+        },
+        {
+          title: "Precios",
+          url: "/prices",
+        },
+        {
+          title: "Costos",
+          url: "/costs",
+        },
       ],
     },
     {
@@ -137,6 +155,22 @@ const data = {
       icon: Zap,
       items: [
         {
+          title: "Activate Card",
+          url: "/activate",
+        },
+        {
+          title: "Scan QR",
+          url: "/scan",
+        },
+        {
+          title: "Buy Codes",
+          url: "/codes/purchase",
+        },
+        {
+          title: "Mi Wallet",
+          url: "/wallet",
+        },
+        {
           title: "Activations",
           url: "/activations",
         },
@@ -158,6 +192,10 @@ const data = {
         {
           title: "Dashboard",
           url: "/analytics",
+        },
+        {
+          title: "Mi Empresa",
+          url: "/overview",
         },
       ],
     },
@@ -218,13 +256,73 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const ability = useAbility();
+
+  const navMainWithError = React.useMemo(() => {
+    // Define permissions mapping
+    const PERMISSIONS: Record<string, [string, string]> = {
+      "/companies": ["read", "Company"],
+      "/store": ["read", "Store"],
+      "/products": ["read", "Product"],
+      "/qr": ["read", "Card"],
+      "/batches": ["read", "Card"],
+      "/keys": ["read", "Key"],
+      "/activate": ["activate", "Card"],
+      "/scan": ["activate", "Card"],
+      "/codes/purchase": ["create", "CodePurchase"],
+      "/activations": ["read", "CardActivation"],
+      "/invoices": ["read", "Invoice"],
+      "/draft": ["create", "Invoice"],
+      "/users": ["read", "User"],
+      "/wallets": ["manage", "Wallet"],
+      "/wallet": ["read", "Wallet"],
+      "/prices": ["read", "CompanyProductPrice"],
+      "/costs": ["manage", "ProductCost"],
+      "/overview": ["read", "Company"],
+      "/admin": ["manage", "all"],
+    };
+
+    return data.navMain
+      .map((group) => {
+        // Clone the group
+        const newGroup = { ...group };
+
+        // If it has sub-items, filter them
+        if (newGroup.items) {
+          newGroup.items = newGroup.items.filter((item) => {
+            const perm = PERMISSIONS[item.url];
+            if (!perm) return true; // Public by default if not listed? Or hide? Let's say public
+            return ability.can(perm[0] as any, perm[1] as any);
+          });
+        }
+
+        // If it's a direct link (no items), check its permission
+        if (!newGroup.items && newGroup.url !== "#") {
+          const perm = PERMISSIONS[newGroup.url];
+          if (perm && !ability.can(perm[0] as any, perm[1] as any)) {
+            return null; // Remove this group
+          }
+        }
+
+        return newGroup;
+      })
+      .filter((group): group is typeof data.navMain[0] => {
+        if (!group) return false;
+        // If it was a group with items, and all items were removed, hide the group
+        // Exception: Maybe some groups like "Home" don't have items.
+        // Logic: If original had items, and now has 0, hide.
+        if (group.items && group.items.length === 0) return false;
+        return true;
+      });
+  }, [ability]);
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMainWithError} />
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>

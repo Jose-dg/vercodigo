@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import crypto from 'crypto';
+import { debit } from '@/services/wallet/wallet.service';
+import { resolveCost } from '@/services/costing/costing.service';
 
 function verifyWebhookSignature(payload: string, signature: string): boolean {
     const secret = process.env.N8N_WEBHOOK_SECRET;
@@ -37,13 +39,9 @@ export async function POST(req: NextRequest) {
         const card = await prisma.card.findUnique({
             where: { uuid },
             include: {
-                store: {
-                    include: {
-                        authorizedPhones: {
-                            where: { isActive: true },
-                        },
-                    },
-                },
+                store: true,
+                product: { select: { name: true } },
+                denomination: { select: { amount: true, currency: true } },
             },
         });
 
@@ -62,10 +60,17 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Verificar que el teléfono esté autorizado
-        const isAuthorized = card.store.authorizedPhones.some(
-            (ap: { phone: string }) => ap.phone === phone
-        );
+        // Verificar que el teléfono esté autorizado: puede estar autorizado para
+        // toda la compañía (storeId null) o solo para el local de esta tarjeta.
+        const authorizedPhones = await prisma.authorizedPhone.findMany({
+            where: {
+                companyId: card.store.companyId,
+                isActive: true,
+                OR: [{ storeId: card.storeId }, { storeId: null }],
+            },
+        });
+
+        const isAuthorized = authorizedPhones.some((ap) => ap.phone === phone);
 
         if (!isAuthorized) {
             return NextResponse.json(
@@ -78,25 +83,43 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Activar la tarjeta
-        const updatedCard = await prisma.card.update({
-            where: { id: card.id },
-            data: {
-                isActivated: true,
-                activatedAt: new Date(),
-            },
-        });
+        // Activar tarjeta + registro de activación + débito de wallet, atómico:
+        // si algo falla, la tarjeta no queda activada sin su registro/consumo.
+        const activationAmount = card.denomination?.amount ?? card.customAmount ?? 0;
 
-        // Crear registro de activación
-        await prisma.cardActivation.create({
-            data: {
-                cardId: card.id,
-                storeId: card.storeId,
-                activatedBy: phone,
-                matrixResponse: { timestamp },
-                activationAmount: 0,
-                activatedAt: updatedCard.activatedAt ?? new Date(),
-            },
+        const updatedCard = await prisma.$transaction(async (tx) => {
+            const updated = await tx.card.update({
+                where: { id: card.id },
+                data: {
+                    isActivated: true,
+                    activatedAt: new Date(),
+                },
+            });
+
+            const activation = await tx.cardActivation.create({
+                data: {
+                    cardId: card.id,
+                    storeId: card.storeId,
+                    activatedBy: phone,
+                    matrixResponse: { timestamp },
+                    activationAmount,
+                    activatedAt: updated.activatedAt ?? new Date(),
+                },
+            });
+
+            // Se debita el COSTO para la compañía (tarifa negociada → global →
+            // nominal); activationAmount conserva el valor nominal de la tarjeta.
+            const cost = await resolveCost(card.store.companyId, card.productId, card.denominationId, tx);
+            await debit({
+                companyId: card.store.companyId,
+                amount: cost?.amount ?? activationAmount,
+                currency: cost?.currency ?? card.denomination?.currency ?? 'USD',
+                description: `Activación ${card.product.name} (${card.uuid}) vía WhatsApp`,
+                cardActivationId: activation.id,
+                tx,
+            });
+
+            return updated;
         });
 
         return NextResponse.json({

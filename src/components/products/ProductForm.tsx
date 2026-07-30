@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
 
 interface Denomination {
     amount: number;
     currency: string;
+    devDiemProductId: string;
 }
 
 export function ProductForm() {
@@ -19,13 +20,16 @@ export function ProductForm() {
     const [sku, setSku] = useState("");
     const [brand, setBrand] = useState("");
     const [category, setCategory] = useState("");
-    const [denominations, setDenominations] = useState<Denomination[]>([{ amount: 0, currency: "USD" }]);
+    const [devDiemProductId, setDevDiemProductId] = useState("");
+    const [denominations, setDenominations] = useState<Denomination[]>([
+        { amount: 0, currency: "USD", devDiemProductId: "" },
+    ]);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
 
     const handleAddDenomination = () => {
-        setDenominations([...denominations, { amount: 0, currency: "USD" }]);
+        setDenominations([...denominations, { amount: 0, currency: "USD", devDiemProductId: "" }]);
     };
 
     const handleRemoveDenomination = (index: number) => {
@@ -51,6 +55,7 @@ export function ProductForm() {
                     sku,
                     brand,
                     category,
+                    devDiemProductId: devDiemProductId || null,
                     denominations: denominations.filter((d) => d.amount > 0),
                 }),
             });
@@ -67,11 +72,11 @@ export function ProductForm() {
 
             router.push("/store");
             router.refresh();
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: error.message,
+                description: error instanceof Error ? error.message : "Error desconocido",
             });
         } finally {
             setLoading(false);
@@ -160,6 +165,21 @@ export function ProductForm() {
                                             className="bg-white border-gray-200 text-gray-900"
                                         />
                                     </div>
+                                    <div className="flex-[1.5] space-y-1">
+                                        <Label className="text-xs text-gray-500">Product ID en Diem</Label>
+                                        <Input
+                                            placeholder="UUID del producto"
+                                            value={denom.devDiemProductId}
+                                            onChange={(e) =>
+                                                handleDenominationChange(
+                                                    index,
+                                                    "devDiemProductId",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            className="bg-white border-gray-200 font-mono text-xs"
+                                        />
+                                    </div>
                                     <div className="pt-5">
                                         <Button
                                             type="button"
@@ -194,6 +214,18 @@ export function ProductForm() {
                                     onChange={(e) => setSku(e.target.value)}
                                     required
                                     className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors font-mono"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="devdiem-product-id" className="text-gray-700 font-medium">
+                                    Product ID en Diem (fallback)
+                                </Label>
+                                <Input
+                                    id="devdiem-product-id"
+                                    placeholder="UUID para productos sin denominaciones"
+                                    value={devDiemProductId}
+                                    onChange={(e) => setDevDiemProductId(e.target.value)}
+                                    className="bg-gray-50 border-gray-300 font-mono text-xs"
                                 />
                             </div>
                         </CardContent>

@@ -7,8 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ShoppingCart, Check, AlertCircle, Copy, Download } from 'lucide-react';
+import { Loader2, ShoppingCart, Check, AlertCircle, Copy, History } from 'lucide-react';
 import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PurchaseHistoryPanel } from '@/components/codes/PurchaseHistoryPanel';
 
 interface Product {
     id: string;
@@ -61,6 +63,8 @@ export default function PurchaseCodesPage() {
     const [prices, setPrices] = useState<PriceRow[]>([]);
 
     const [purchaseResult, setPurchaseResult] = useState<PurchaseResponse | null>(null);
+    const [activeTab, setActiveTab] = useState('order');
+    const [historyTick, setHistoryTick] = useState(0);
     const purchaseAttemptId = useRef<string | null>(null);
     const pendingPurchaseId = purchaseResult?.purchase?.isPending
         ? purchaseResult.purchase.id
@@ -75,6 +79,7 @@ export default function PurchaseCodesPage() {
                 setPurchaseResult(data);
                 if (data.purchase.status === 'COMPLETED') {
                     toast.success("¡Códigos entregados!");
+                    setHistoryTick((tick) => tick + 1);
                     window.clearInterval(timer);
                 } else if (data.purchase.status === 'FAILED') {
                     toast.error("La entrega falló y no se debitó la wallet.");
@@ -226,11 +231,16 @@ export default function PurchaseCodesPage() {
             }
 
             setPurchaseResult(data);
-            toast.success(
-                data.purchase?.status === 'COMPLETED'
-                    ? "¡Compra exitosa!"
-                    : "Solicitud recibida. Estamos asignando tus códigos.",
-            );
+            setHistoryTick((tick) => tick + 1);
+            if (data.purchase?.isPending) {
+                setActiveTab('history');
+                toast.success("Solicitud recibida. Quedó en pendientes por entregar.");
+            } else if (data.purchase?.status === 'COMPLETED') {
+                setActiveTab('history');
+                toast.success("¡Compra exitosa!");
+            } else {
+                toast.error("La solicitud necesita revisión.");
+            }
         } catch (error) {
             console.error("Purchase error:", error);
             toast.error("Error de conexión");
@@ -262,85 +272,86 @@ export default function PurchaseCodesPage() {
         );
     }
 
-    if (purchaseResult) {
-        const pending = purchaseResult.purchase.isPending;
-        const successful = purchaseResult.purchase.isSuccessful;
-        const needsAction = purchaseResult.purchase.needsAction;
-        const pendingManualReview =
-            purchaseResult.purchase.fulfillmentStatus === 'pending_review';
-        return (
-            <div className="container max-w-2xl py-10">
-                <Card className="border-green-200 shadow-lg">
-                    <CardHeader className="bg-green-50 rounded-t-lg text-center pb-6">
-                        <div className="mx-auto bg-green-100 w-12 h-12 rounded-full flex items-center justify-center mb-4">
-                            {pending
-                                ? <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
-                                : successful
-                                    ? <Check className="h-6 w-6 text-green-600" />
-                                    : <AlertCircle className="h-6 w-6 text-red-600" />}
-                        </div>
-                        <CardTitle className="text-2xl text-green-800">
-                            {pending
-                                ? pendingManualReview
-                                    ? 'Confirmación operativa pendiente'
-                                    : 'Procesando entrega'
-                                : successful
-                                    ? '¡Compra Exitosa!'
-                                    : needsAction
-                                        ? 'Revisión requerida'
-                                        : 'Entrega fallida'}
-                        </CardTitle>
-                        <CardDescription>
-                            {pending
-                                ? pendingManualReview
-                                    ? 'La compra fue recibida. Un administrador confirmará la región o el valor antes de asignar el código.'
-                                    : 'Diem está reservando los códigos. Puedes mantener esta pantalla abierta.'
-                                : successful
-                                    ? `Has adquirido ${purchaseResult.purchase.count} código(s).`
-                                    : 'No se debitó la wallet. Un administrador debe revisar la solicitud.'}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6 space-y-6">
-                        {successful && <div className="bg-gray-50 p-4 rounded-md border max-h-60 overflow-y-auto font-mono text-sm">
-                            <ul className="space-y-1 divide-y divide-dashed">
-                                {purchaseResult.purchase.keys.map((k, i) => (
-                                    <li key={i} className="pt-1 flex justify-between">
-                                        <span className="text-gray-500 w-8">{i + 1}.</span>
-                                        <span className="font-bold text-gray-800 select-all">{k.code}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>}
-
-                        {successful && <div className="grid grid-cols-2 gap-4">
-                            <Button variant="outline" onClick={copyAllCodes} className="w-full">
-                                <Copy className="mr-2 h-4 w-4" />
-                                Copiar Todos
-                            </Button>
-                            <Button variant="outline" className="w-full" disabled title="Próximamente">
-                                <Download className="mr-2 h-4 w-4" />
-                                Descargar TXT
-                            </Button>
-                        </div>}
-                    </CardContent>
-                    <CardFooter className="bg-gray-50 rounded-b-lg flex justify-center py-6">
-                        <Button onClick={handleReset} size="lg" disabled={pending}>
-                            Realizar Nueva Compra
-                        </Button>
-                    </CardFooter>
-                </Card>
-            </div>
-        );
-    }
+    const pendingResult = purchaseResult?.purchase.isPending;
+    const successfulResult = purchaseResult?.purchase.isSuccessful;
+    const needsActionResult = purchaseResult?.purchase.needsAction;
+    const pendingManualReview =
+        purchaseResult?.purchase.fulfillmentStatus === 'pending_review';
 
     return (
-        <div className="container max-w-lg py-10">
+        <div className="container max-w-5xl py-10">
             <div className="mb-6">
                 <h1 className="text-3xl font-bold tracking-tight">Comprar Códigos</h1>
-                <p className="text-muted-foreground">Adquiere códigos digitales al instante.</p>
+                <p className="text-muted-foreground">
+                    Solicita códigos digitales y consulta entregas pendientes o completadas.
+                </p>
             </div>
 
-            <Card>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <TabsList>
+                    <TabsTrigger value="order">Nueva orden</TabsTrigger>
+                    <TabsTrigger value="history">Mis solicitudes</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="order" className="space-y-6">
+                    {purchaseResult && (
+                        <Card className="border-green-200 shadow-sm">
+                            <CardHeader className="bg-green-50 rounded-t-lg pb-4">
+                                <CardTitle className="text-lg text-green-800 flex items-center gap-2">
+                                    {pendingResult
+                                        ? <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                                        : successfulResult
+                                            ? <Check className="h-5 w-5 text-green-600" />
+                                            : <AlertCircle className="h-5 w-5 text-red-600" />}
+                                    {pendingResult
+                                        ? pendingManualReview
+                                            ? 'Confirmación operativa pendiente'
+                                            : 'Solicitud en cola'
+                                        : successfulResult
+                                            ? 'Compra entregada'
+                                            : needsActionResult
+                                                ? 'Revisión requerida'
+                                                : 'Entrega fallida'}
+                                </CardTitle>
+                                <CardDescription>
+                                    {pendingResult
+                                        ? 'Tu solicitud ya está registrada. Revísala en la pestaña Mis solicitudes; no necesitas pedirla otra vez.'
+                                        : successfulResult
+                                            ? `Se entregaron ${purchaseResult.purchase.count} código(s).`
+                                            : 'No se debitó la wallet.'}
+                                </CardDescription>
+                            </CardHeader>
+                            {successfulResult && (
+                                <CardContent className="pt-4 space-y-4">
+                                    <div className="bg-gray-50 p-4 rounded-md border max-h-48 overflow-y-auto font-mono text-sm">
+                                        <ul className="space-y-1 divide-y divide-dashed">
+                                            {purchaseResult.purchase.keys.map((k, i) => (
+                                                <li key={i} className="pt-1 flex justify-between">
+                                                    <span className="text-gray-500 w-8">{i + 1}.</span>
+                                                    <span className="font-bold text-gray-800 select-all">{k.code}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <Button variant="outline" onClick={copyAllCodes} className="w-full sm:w-auto">
+                                        <Copy className="mr-2 h-4 w-4" />
+                                        Copiar códigos
+                                    </Button>
+                                </CardContent>
+                            )}
+                            <CardFooter className="gap-2 flex-wrap">
+                                <Button variant="outline" onClick={() => setActiveTab('history')}>
+                                    <History className="mr-2 h-4 w-4" />
+                                    Ver mis solicitudes
+                                </Button>
+                                <Button onClick={handleReset} disabled={pendingResult}>
+                                    Nueva compra
+                                </Button>
+                            </CardFooter>
+                        </Card>
+                    )}
+
+                    <Card className="max-w-lg">
                 <CardHeader>
                     <CardTitle>Nueva Orden</CardTitle>
                     <CardDescription>Selecciona el producto y la cantidad.</CardDescription>
@@ -449,7 +460,13 @@ export default function PurchaseCodesPage() {
                         )}
                     </Button>
                 </CardFooter>
-            </Card>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="history">
+                    <PurchaseHistoryPanel refreshToken={historyTick} />
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

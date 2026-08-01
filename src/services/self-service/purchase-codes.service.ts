@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
+import type { TokenPayload } from "@/lib/auth";
 import {
     createCodeRequest,
     getCodeRequest,
@@ -12,21 +13,130 @@ import { resolveCost } from "@/services/costing/costing.service";
 
 const RETRY_DELAY_MS = 60_000;
 const TERMINAL_FAILURES = new Set(["failed", "cancelled"]);
+const PENDING_STATUSES = ["PENDING", "AWAITING_STOCK", "FINALIZING", "ACTION_REQUIRED"] as const;
+const PLATFORM_ROLES = new Set(["SUPER_ADMIN", "SYSTEM_ADMIN"]);
+
+type Actor = Pick<TokenPayload, "id" | "role" | "companyId" | "storeId">;
+
+function buildPurchaseVisibilityFilter(
+    user: Actor,
+    companyIdOverride?: string | null,
+): Prisma.CodePurchaseWhereInput {
+    if (PLATFORM_ROLES.has(user.role)) {
+        if (companyIdOverride) return { companyId: companyIdOverride };
+        return {};
+    }
+    if (user.role === "OWNER" || user.role === "GENERAL_ADMIN") {
+        if (!user.companyId) return { id: "__none__" };
+        return { companyId: user.companyId };
+    }
+    if (user.role === "ADMIN" || user.role === "OPERATOR") {
+        if (!user.storeId) return { id: "__none__" };
+        return { storeId: user.storeId };
+    }
+    return { userId: user.id };
+}
 
 function serializePurchase<T extends {
     deliveredCodes: Prisma.JsonValue | null;
     status: string;
-}>(purchase: T) {
+    productId?: string;
+    userId?: string;
+}>(
+    purchase: T,
+    extras?: { productName?: string; requesterLabel?: string },
+) {
     const codes = Array.isArray(purchase.deliveredCodes)
         ? purchase.deliveredCodes.filter((code): code is string => typeof code === "string")
         : [];
     return {
         ...purchase,
+        productName: extras?.productName,
+        requesterLabel: extras?.requesterLabel,
         keys: purchase.status === "COMPLETED" ? codes.map((code) => ({ code })) : [],
-        isPending: ["PENDING", "AWAITING_STOCK", "FINALIZING"].includes(purchase.status),
+        isPending: PENDING_STATUSES.includes(purchase.status as typeof PENDING_STATUSES[number]),
         isSuccessful: purchase.status === "COMPLETED",
         needsAction: purchase.status === "ACTION_REQUIRED",
     };
+}
+
+async function enrichPurchases<
+    T extends {
+        productId: string;
+        userId: string;
+        deliveredCodes: Prisma.JsonValue | null;
+        status: string;
+    },
+>(purchases: T[]) {
+    if (!purchases.length) {
+        return { pending: [], completed: [], failed: [] as ReturnType<typeof serializePurchase>[] };
+    }
+    const productIds = [...new Set(purchases.map((row) => row.productId))];
+    const userIds = [...new Set(purchases.map((row) => row.userId))];
+    const [products, users] = await Promise.all([
+        prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, name: true },
+        }),
+        prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true },
+        }),
+    ]);
+    const productNameById = new Map(products.map((row) => [row.id, row.name]));
+    const requesterById = new Map(
+        users.map((row) => [row.id, row.name?.trim() || row.email]),
+    );
+
+    const serialized = purchases.map((row) =>
+        serializePurchase(row, {
+            productName: productNameById.get(row.productId),
+            requesterLabel: requesterById.get(row.userId),
+        }),
+    );
+
+    return {
+        pending: serialized.filter((row) => row.isPending),
+        completed: serialized.filter((row) => row.isSuccessful),
+        failed: serialized.filter((row) =>
+            row.status === "FAILED" || row.needsAction,
+        ),
+    };
+}
+
+export async function listCodePurchasesForUser(
+    user: Actor,
+    params?: { limit?: number; companyId?: string | null },
+) {
+    const limit = Math.min(Math.max(params?.limit ?? 40, 1), 100);
+    const where = buildPurchaseVisibilityFilter(user, params?.companyId);
+    const purchases = await prisma.codePurchase.findMany({
+        where,
+        include: { denomination: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+    });
+    return enrichPurchases(purchases);
+}
+
+export async function refreshPendingCodePurchasesForUser(user: Actor) {
+    const pendingRows = await prisma.codePurchase.findMany({
+        where: {
+            ...buildPurchaseVisibilityFilter(user),
+            status: { in: [...PENDING_STATUSES] },
+        },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take: 25,
+    });
+    for (const row of pendingRows) {
+        try {
+            await processCodePurchase(row.id);
+        } catch {
+            // Keep durable state; list endpoint will surface lastError.
+        }
+    }
+    return listCodePurchasesForUser(user);
 }
 
 export async function processCodePurchase(purchaseId: string) {
@@ -339,11 +449,25 @@ export async function purchaseCodes(params: {
     }
 }
 
-export async function getCodePurchaseForUser(purchaseId: string, userId: string) {
+export async function getCodePurchaseForUser(purchaseId: string, user: Actor) {
     const purchase = await prisma.codePurchase.findFirst({
-        where: { id: purchaseId, userId },
+        where: {
+            id: purchaseId,
+            ...buildPurchaseVisibilityFilter(user),
+        },
         include: { denomination: true },
     });
     if (!purchase) throw notFound("Compra no encontrada");
-    return serializePurchase(purchase);
+    const product = await prisma.product.findUnique({
+        where: { id: purchase.productId },
+        select: { name: true },
+    });
+    const requester = await prisma.user.findUnique({
+        where: { id: purchase.userId },
+        select: { name: true, email: true },
+    });
+    return serializePurchase(purchase, {
+        productName: product?.name,
+        requesterLabel: requester?.name?.trim() || requester?.email,
+    });
 }

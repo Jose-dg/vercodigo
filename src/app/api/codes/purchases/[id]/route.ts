@@ -8,16 +8,16 @@ async function handler(
     _req: NextRequest,
     context: { params: Promise<{ id: string }> },
     _ability: unknown,
-    user: { id: string },
+    user: { id: string; role: string; companyId: string | null; storeId: string | null },
 ) {
     try {
         const { id } = await context.params;
-        let purchase = await getCodePurchaseForUser(id, user.id);
+        let purchase = await getCodePurchaseForUser(id, user);
         if (purchase.isPending) {
             try {
                 purchase = await processCodePurchase(id);
             } catch {
-                purchase = await getCodePurchaseForUser(id, user.id);
+                purchase = await getCodePurchaseForUser(id, user);
             }
         }
         return NextResponse.json({ success: true, purchase });

@@ -1,6 +1,7 @@
 type DenominationLike = {
     id: string;
     amount: number;
+    currency?: string | null;
     devDiemProductId: string | null;
 };
 

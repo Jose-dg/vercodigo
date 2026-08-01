@@ -6,35 +6,117 @@ interface PaginationParams {
     limit: number;
     storeId?: string;
     isActivated?: boolean;
+    search?: string;
+}
+
+const cardListInclude = {
+    product: { select: { id: true, name: true } },
+    store: {
+        select: {
+            id: true,
+            name: true,
+            companyId: true,
+            company: { select: { id: true, name: true } },
+        },
+    },
+    denomination: { select: { id: true, amount: true, currency: true } },
+} satisfies Prisma.CardInclude;
+
+export function normalizeCardUuids(values: string[]): string[] {
+    return [...new Set(
+        values
+            .flatMap((value) => value.split(/[\s,;]+/))
+            .map((value) => value.trim().toUpperCase())
+            .filter(Boolean),
+    )];
 }
 
 export async function getCardsPaginated(params: PaginationParams) {
-    const { page, limit, storeId, isActivated } = params;
+    const { page, limit, storeId, isActivated, search } = params;
     const skip = (page - 1) * limit;
 
     const where: Prisma.CardWhereInput = {};
     if (storeId) where.storeId = storeId;
     if (isActivated !== undefined) where.isActivated = isActivated;
+    if (search) {
+        where.uuid = { contains: search.trim().toUpperCase(), mode: 'insensitive' };
+    }
 
     const [cards, total] = await Promise.all([
         prisma.card.findMany({
             where,
             skip,
             take: limit,
-            include: { product: true, store: true },
+            include: cardListInclude,
             orderBy: { createdAt: 'desc' },
         }),
         prisma.card.count({ where }),
     ]);
 
     return {
-        data: cards,
+        data: cards.map(serializeCardForReassign),
         pagination: {
             page,
             limit,
             total,
             pages: Math.ceil(total / limit),
         },
+    };
+}
+
+function serializeCardForReassign(card: Prisma.CardGetPayload<{ include: typeof cardListInclude }>) {
+    const blockReason = card.isActivated
+        ? 'already_activated'
+        : card.activationLock
+            ? 'activation_lock'
+            : null;
+
+    return {
+        uuid: card.uuid,
+        product: card.product.name,
+        storeId: card.store.id,
+        storeName: card.store.name,
+        companyId: card.store.companyId,
+        companyName: card.store.company.name,
+        isActivated: card.isActivated,
+        activationLock: card.activationLock,
+        canReassign: blockReason === null,
+        blockReason,
+        denomination: card.denomination
+            ? { amount: card.denomination.amount, currency: card.denomination.currency }
+            : null,
+        createdAt: card.createdAt.toISOString(),
+    };
+}
+
+export async function lookupCardsForReassign(uuids: string[]) {
+    const normalizedUuids = normalizeCardUuids(uuids);
+    if (!normalizedUuids.length) {
+        throw new Error('Debes indicar al menos un UUID');
+    }
+    if (normalizedUuids.length > 500) {
+        throw new Error('Máximo 500 UUID por consulta');
+    }
+
+    const cards = await prisma.card.findMany({
+        where: { uuid: { in: normalizedUuids } },
+        include: cardListInclude,
+    });
+
+    const found = new Set(cards.map((card) => card.uuid));
+    const missing = normalizedUuids.filter((uuid) => !found.has(uuid));
+
+    const serialized = cards.map(serializeCardForReassign);
+    const eligible = serialized.filter((card) => card.canReassign);
+    const blocked = serialized.filter((card) => !card.canReassign);
+
+    return {
+        requested: normalizedUuids.length,
+        found: serialized.length,
+        missing,
+        eligible,
+        blocked,
+        cards: serialized,
     };
 }
 
@@ -69,9 +151,7 @@ export async function reassignCardsToStore(params: {
     targetStoreId: string;
     actorUserId: string;
 }) {
-    const normalizedUuids = [...new Set(
-        params.uuids.map((value) => value.trim().toUpperCase()).filter(Boolean),
-    )];
+    const normalizedUuids = normalizeCardUuids(params.uuids);
     if (!normalizedUuids.length) {
         throw new Error('Debes indicar al menos un UUID');
     }

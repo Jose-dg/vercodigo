@@ -20,7 +20,8 @@ import {
   Bot,
 } from "lucide-react"
 
-import { useAbility } from "@/components/auth/ability-context"
+import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
+import { isPlatformRole } from "@/lib/auth/abilities"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -140,6 +141,10 @@ const data = {
           url: "/qr",
         },
         {
+          title: "Remisión de tarjetas",
+          url: "/cards/reassign",
+        },
+        {
           title: "Manufacturing Batches",
           url: "/batches",
         },
@@ -257,8 +262,10 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const ability = useAbility();
+  const currentUser = useCurrentUser();
 
   const navMainWithError = React.useMemo(() => {
+    const PLATFORM_ONLY_URLS = new Set(["/cards/reassign"]);
     // Define permissions mapping
     const PERMISSIONS: Record<string, [string, string]> = {
       "/companies": ["read", "Company"],
@@ -290,6 +297,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         // If it has sub-items, filter them
         if (newGroup.items) {
           newGroup.items = newGroup.items.filter((item) => {
+            if (PLATFORM_ONLY_URLS.has(item.url)) {
+              return currentUser ? isPlatformRole(currentUser.role) : false;
+            }
             const perm = PERMISSIONS[item.url];
             if (!perm) return true; // Public by default if not listed? Or hide? Let's say public
             return ability.can(perm[0] as any, perm[1] as any);
@@ -314,7 +324,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         if (group.items && group.items.length === 0) return false;
         return true;
       });
-  }, [ability]);
+  }, [ability, currentUser]);
 
   return (
     <Sidebar collapsible="icon" {...props}>

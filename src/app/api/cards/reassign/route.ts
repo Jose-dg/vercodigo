@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AppError, badRequest, forbidden } from "@/lib/errors";
+import { isPlatformRole } from "@/lib/auth/abilities";
 import { reassignCardsToStore } from "@/services/card.service";
 import { writeAuditLog } from "@/services/self-service/audit.service";
 import { withAuth } from "@/lib/auth/guard";
@@ -16,7 +17,7 @@ async function handler(
     _ability: unknown,
     user: { id: string; role: string },
 ) {
-    if (user.role !== "SUPER_ADMIN" && user.role !== "SYSTEM_ADMIN") {
+    if (!isPlatformRole(user.role as any)) {
         throw forbidden("Solo la plataforma puede reasignar tarjetas entre tiendas");
     }
 

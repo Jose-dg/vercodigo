@@ -21,6 +21,12 @@ export type Subjects =
 
 export type AppAbility = MongoAbility<[Actions, Subjects]>;
 
+export const PLATFORM_ROLES: UserRole[] = ['SUPER_ADMIN', 'SYSTEM_ADMIN'];
+
+export function isPlatformRole(role: UserRole): boolean {
+    return PLATFORM_ROLES.includes(role);
+}
+
 export function defineAbilitiesFor(user: User) {
     const { can, cannot, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
 

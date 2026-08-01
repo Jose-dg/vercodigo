@@ -20,8 +20,8 @@ export async function assertCanActivateCard(params: {
     if (!user || !user.isActive)
         throw forbidden("Usuario inactivo o no existe.");
 
-    const sameCompany = user.companyId && user.companyId === params.companyId;
-    const sameStore = user.storeId && user.storeId === params.storeId;
+    const sameCompany = Boolean(user.companyId && user.companyId === params.companyId);
+    const sameStore = Boolean(user.storeId && user.storeId === params.storeId);
 
     const allowed =
         user.role === "SUPER_ADMIN" ||
@@ -29,8 +29,27 @@ export async function assertCanActivateCard(params: {
         ((user.role === "OWNER" || user.role === "GENERAL_ADMIN") && sameCompany) ||
         ((user.role === "ADMIN" || user.role === "OPERATOR") && sameStore);
 
-    if (!allowed)
+    if (!allowed) {
+        if (
+            (user.role === "OWNER" || user.role === "GENERAL_ADMIN")
+            && user.companyId
+            && !sameCompany
+        ) {
+            const storeCompany = await prisma.company.findUnique({
+                where: { id: params.companyId },
+                select: { name: true },
+            });
+            const userCompany = await prisma.company.findUnique({
+                where: { id: user.companyId },
+                select: { name: true },
+            });
+            throw forbidden(
+                `Esta tarjeta pertenece a ${storeCompany?.name ?? "otra compañía"}. `
+                + `Tu perfil está en ${userCompany?.name ?? "otra compañía"}.`,
+            );
+        }
         throw forbidden("No tienes permisos para operar en esta tienda.");
+    }
 
     return user;
 }

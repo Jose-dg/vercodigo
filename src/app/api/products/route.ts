@@ -13,10 +13,15 @@ export async function GET(req: NextRequest) {
                 return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
             }
 
-            // El catálogo de Diem es la fuente de verdad para encendido/apagado.
-            // Un mapeo local no basta: la oferta debe estar habilitada para la
-            // tienda y la cuenta de servicio que atienden a Diem-SAS.
-            const catalog = await checkDiemConnection();
+            let catalog;
+            try {
+                catalog = await checkDiemConnection();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'No se pudo consultar el catálogo de Diem';
+                console.error("[products/purchasable] Diem catalog error:", message);
+                return NextResponse.json({ error: message }, { status: 503 });
+            }
+
             const enabledIds = catalog.catalogProductIds;
             const products = await prisma.product.findMany({
                 where: {

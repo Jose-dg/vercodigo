@@ -58,6 +58,9 @@ export async function POST(req: NextRequest) {
         console.log('📦 [QR] Looking for product:', productId);
         const product = await prisma.product.findUnique({
             where: { id: productId },
+            include: {
+                denominations: { orderBy: { amount: 'asc' } },
+            },
         });
 
         if (!product) {
@@ -69,13 +72,27 @@ export async function POST(req: NextRequest) {
         }
         console.log('✅ [QR] Product found:', product.name);
 
-        // Si no es gift card, verificar denominación
+        // Si no es gift card, resolver denominación (requerida si hay varias)
         let denomination = null;
-        if (!product.isGiftCard && denominationId) {
-            console.log('💰 [QR] Looking for denomination:', denominationId);
-            denomination = await prisma.productDenomination.findUnique({
-                where: { id: denominationId },
-            });
+        if (!product.isGiftCard) {
+            if (denominationId) {
+                console.log('💰 [QR] Looking for denomination:', denominationId);
+                denomination = product.denominations.find((item) => item.id === denominationId) ?? null;
+                if (!denomination) {
+                    return NextResponse.json(
+                        { error: 'Denominación no pertenece al producto' },
+                        { status: 400 },
+                    );
+                }
+            } else if (product.denominations.length === 1) {
+                denomination = product.denominations[0];
+                console.log('💰 [QR] Auto-selected single denomination:', denomination.amount);
+            } else if (product.denominations.length > 1) {
+                return NextResponse.json(
+                    { error: 'Selecciona la denominación del producto' },
+                    { status: 400 },
+                );
+            }
             console.log('💰 [QR] Denomination:', denomination?.amount);
         }
 

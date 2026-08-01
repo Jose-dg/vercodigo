@@ -22,6 +22,11 @@ interface ConfirmActivationModalProps {
         uuid: string;
         product?: string;
         store?: string;
+        company?: string;
+        amount?: number | null;
+        currency?: string | null;
+        canActivate?: boolean;
+        blockReason?: string | null;
     } | null;
 }
 
@@ -35,9 +40,10 @@ export function ConfirmActivationModal({
     const [loading, setLoading] = useState(false);
 
     const isValid = confirmText.toUpperCase() === 'ACTIVAR';
+    const canActivate = cardInfo?.canActivate !== false;
 
     const handleConfirm = async () => {
-        if (!isValid) return;
+        if (!isValid || !canActivate) return;
         setLoading(true);
         try {
             await onConfirm();
@@ -83,6 +89,25 @@ export function ConfirmActivationModal({
                                 <span className="font-medium">{cardInfo.store}</span>
                             </div>
                         )}
+                        {cardInfo.company && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500">Compañía:</span>
+                                <span className="font-medium">{cardInfo.company}</span>
+                            </div>
+                        )}
+                        {cardInfo.amount != null && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500">Valor:</span>
+                                <span className="font-medium">
+                                    {cardInfo.amount} {cardInfo.currency ?? ''}
+                                </span>
+                            </div>
+                        )}
+                        {cardInfo.blockReason && (
+                            <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-md p-2">
+                                {cardInfo.blockReason}
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -121,7 +146,7 @@ export function ConfirmActivationModal({
                     <Button
                         variant="destructive"
                         onClick={handleConfirm}
-                        disabled={!isValid || loading}
+                        disabled={!isValid || !canActivate || loading}
                     >
                         {loading ? (
                             <>

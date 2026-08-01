@@ -12,10 +12,14 @@ import { checkRateLimit } from "./rate-limit.service";
 import { writeAuditLog } from "./audit.service";
 import { debit } from "@/services/wallet/wallet.service";
 import { resolveCost } from "@/services/costing/costing.service";
+import {
+    resolveCardDenomination,
+    resolveDevDiemProductId,
+} from "@/lib/devdiem/resolve-card-catalog";
 
 const RETRY_DELAY_MS = 60_000;
 
-function extractUuid(qr: string): string {
+export function extractCardUuid(qr: string): string {
     const value = qr?.trim();
     if (!value) throw badRequest("QR vacío");
     try {
@@ -32,7 +36,7 @@ export async function processActivationJob(jobId: string) {
         include: {
             card: {
                 include: {
-                    product: true,
+                    product: { include: { denominations: true } },
                     denomination: true,
                     store: { include: { company: true } },
                 },
@@ -43,8 +47,8 @@ export async function processActivationJob(jobId: string) {
     if (job.status === "COMPLETED") return { status: "COMPLETED", job };
     if (!job.userId) throw conflict("El trabajo no tiene usuario responsable");
 
-    const remoteProductId =
-        job.card.denomination?.devDiemProductId ?? job.card.product.devDiemProductId;
+    const effectiveDenomination = resolveCardDenomination(job.card);
+    const remoteProductId = resolveDevDiemProductId(job.card);
     if (!remoteProductId) throw conflict("El producto no está mapeado al catálogo de Diem");
     const actor = await prisma.user.findUnique({
         where: { id: job.userId },
@@ -86,7 +90,7 @@ export async function processActivationJob(jobId: string) {
                 include: {
                     card: {
                         include: {
-                            product: true,
+                            product: { include: { denominations: true } },
                             denomination: true,
                             store: { include: { company: true } },
                         },
@@ -167,7 +171,7 @@ export async function processActivationJob(jobId: string) {
                 include: {
                     card: {
                         include: {
-                            product: true,
+                            product: { include: { denominations: true } },
                             denomination: true,
                             store: { include: { company: true } },
                         },
@@ -225,7 +229,7 @@ export async function processActivationJob(jobId: string) {
                 },
             });
             const activationAmount =
-                job!.card.denomination?.amount ?? job!.card.customAmount ?? 0;
+                effectiveDenomination?.amount ?? job!.card.customAmount ?? 0;
             const activation = await tx.cardActivation.create({
                 data: {
                     cardId: card.id,
@@ -237,7 +241,7 @@ export async function processActivationJob(jobId: string) {
             const cost = await resolveCost(
                 job!.card.store.companyId,
                 job!.card.productId,
-                job!.card.denominationId,
+                effectiveDenomination?.id ?? job!.card.denominationId,
                 tx,
             );
             const debitAmount = cost?.amount ?? activationAmount;
@@ -247,7 +251,7 @@ export async function processActivationJob(jobId: string) {
             await debit({
                 companyId: job!.card.store.companyId,
                 amount: debitAmount,
-                currency: cost?.currency ?? job!.card.denomination?.currency ?? "USD",
+                currency: cost?.currency ?? effectiveDenomination?.currency ?? "USD",
                 description: `Activación ${job!.card.product.name} (${job!.card.uuid})`,
                 createdById: job!.userId,
                 cardActivationId: activation.id,
@@ -320,12 +324,12 @@ export async function activateCard(params: {
     deviceId?: string | null;
 }) {
     await checkRateLimit({ userId: params.userId, action: "ACTIVATION" });
-    const uuid = extractUuid(params.qr);
+    const uuid = extractCardUuid(params.qr);
     const card = await prisma.card.findUnique({
         where: { uuid },
         include: {
             store: true,
-            product: true,
+            product: { include: { denominations: true } },
             denomination: true,
         },
     });
@@ -333,7 +337,8 @@ export async function activateCard(params: {
     if (!card.store.isActive) throw forbidden("Tienda inactiva.");
     if (!card.product.isActive) throw forbidden("Producto inactivo.");
     if (card.isActivated) throw conflict("Esta tarjeta ya está activada.");
-    if (!(card.denomination?.devDiemProductId ?? card.product.devDiemProductId)) {
+    const effectiveDenomination = resolveCardDenomination(card);
+    if (!resolveDevDiemProductId(card)) {
         throw conflict("El producto no está mapeado al catálogo de Diem");
     }
     const user = await assertCanActivateCard({
@@ -344,9 +349,9 @@ export async function activateCard(params: {
     const configuredCost = await resolveCost(
         card.store.companyId,
         card.productId,
-        card.denominationId,
+        effectiveDenomination?.id ?? card.denominationId,
     );
-    const fallbackAmount = card.denomination?.amount ?? card.customAmount;
+    const fallbackAmount = effectiveDenomination?.amount ?? card.customAmount;
     if (!((configuredCost?.amount ?? fallbackAmount ?? 0) > 0)) {
         throw conflict("No existe un costo válido para esta activación");
     }
@@ -397,4 +402,62 @@ export async function activateCard(params: {
         message: "Activación recibida. Diem está asignando el código.",
         card: { uuid: card.uuid, product: card.product.name, store: card.store.name },
     };
+}
+
+export async function previewCardActivation(params: { qr: string; userId: string }) {
+    const uuid = extractCardUuid(params.qr);
+    const card = await prisma.card.findUnique({
+        where: { uuid },
+        include: {
+            store: { include: { company: true } },
+            product: { include: { denominations: true } },
+            denomination: true,
+        },
+    });
+    if (!card) throw notFound("Tarjeta no encontrada.");
+    if (!card.store.isActive) throw forbidden("Tienda inactiva.");
+    if (!card.product.isActive) throw forbidden("Producto inactivo.");
+    if (card.isActivated) throw conflict("Esta tarjeta ya está activada.");
+
+    const preview = {
+        uuid: card.uuid,
+        product: card.product.name,
+        store: card.store.name,
+        company: card.store.company.name,
+        amount: resolveCardDenomination(card)?.amount ?? card.customAmount,
+        currency: resolveCardDenomination(card)?.currency ?? card.denomination?.currency ?? null,
+        canActivate: true as boolean,
+        blockReason: null as string | null,
+    };
+
+    if (!resolveDevDiemProductId(card)) {
+        preview.canActivate = false;
+        preview.blockReason = "El producto no está mapeado al catálogo de Diem";
+        return preview;
+    }
+
+    const configuredCost = await resolveCost(
+        card.store.companyId,
+        card.productId,
+        resolveCardDenomination(card)?.id ?? card.denominationId,
+    );
+    const fallbackAmount = resolveCardDenomination(card)?.amount ?? card.customAmount;
+    if (!((configuredCost?.amount ?? fallbackAmount ?? 0) > 0)) {
+        preview.canActivate = false;
+        preview.blockReason = "No existe un costo válido para esta activación";
+        return preview;
+    }
+
+    try {
+        await assertCanActivateCard({
+            userId: params.userId,
+            storeId: card.storeId,
+            companyId: card.store.companyId,
+        });
+    } catch (error) {
+        preview.canActivate = false;
+        preview.blockReason = error instanceof Error ? error.message : "No tienes permisos para esta tarjeta";
+    }
+
+    return preview;
 }

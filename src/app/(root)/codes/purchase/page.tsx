@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,8 +49,10 @@ interface PurchaseResponse {
 }
 
 export default function PurchaseCodesPage() {
+    const { status: sessionStatus } = useSession();
     const [products, setProducts] = useState<Product[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
+    const [productsError, setProductsError] = useState<string | null>(null);
 
     const [selectedProductId, setSelectedProductId] = useState('');
     const [selectedDenominationId, setSelectedDenominationId] = useState('');
@@ -86,44 +89,91 @@ export default function PurchaseCodesPage() {
     }, [pendingPurchaseId]);
 
     useEffect(() => {
-        fetch('/api/products?purchasable=true')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) {
-                    // El catálogo administrativo contiene productos históricos
-                    // que todavía no están habilitados en Diem. En compra solo
-                    // se muestran productos/denominaciones con un mapeo real
-                    // para evitar solicitudes que nunca podrían entregarse.
-                    const purchasableProducts = (data as Product[])
-                        .filter(product => product.isActive)
-                        .map(product => ({
-                            ...product,
-                            denominations: product.denominations.filter(
-                                denomination =>
-                                    Boolean(denomination.devDiemProductId || product.devDiemProductId),
-                            ),
-                        }))
-                        .filter(product =>
-                            Boolean(product.devDiemProductId || product.denominations.length > 0),
-                        );
-                    setProducts(purchasableProducts);
-                }
-            })
-            .catch(err => {
-                toast.error("Error al cargar productos");
-                console.error(err);
-            })
-            .finally(() => setLoadingProducts(false));
+        if (sessionStatus === 'loading') return;
 
-        // Precios de venta de la compañía (referencia informativa; puede fallar
-        // sin bloquear la compra, ej. usuario de plataforma sin companyId)
-        fetch('/api/prices')
+        if (sessionStatus !== 'authenticated') {
+            setLoadingProducts(false);
+            setProductsError('Debes iniciar sesión para ver el catálogo de compra.');
+            return;
+        }
+
+        let cancelled = false;
+
+        async function loadCatalog() {
+            setLoadingProducts(true);
+            setProductsError(null);
+            try {
+                const res = await fetch('/api/products?purchasable=true', {
+                    credentials: 'include',
+                    cache: 'no-store',
+                });
+                const data = await res.json().catch(() => null);
+
+                if (cancelled) return;
+
+                if (!res.ok) {
+                    const rawMessage =
+                        (data && typeof data.error === 'string' && data.error)
+                        || (data && typeof data.detail === 'string' && data.detail)
+                        || 'No se pudieron cargar los productos disponibles.';
+                    const message = /invalid api key/i.test(rawMessage)
+                        ? 'Diem rechazó la API key. Para local usa DIEM_API_URL=http://localhost:8000 con una key generada en esa instancia; en producción genera una key nueva en diem-ai.onrender.com.'
+                        : rawMessage;
+                    setProducts([]);
+                    setProductsError(message);
+                    toast.error(message);
+                    return;
+                }
+
+                if (!Array.isArray(data)) {
+                    setProducts([]);
+                    setProductsError('Respuesta inválida del catálogo de productos.');
+                    return;
+                }
+
+                const purchasableProducts = (data as Product[])
+                    .filter(product => product.isActive)
+                    .map(product => ({
+                        ...product,
+                        denominations: product.denominations.filter(
+                            denomination =>
+                                Boolean(denomination.devDiemProductId || product.devDiemProductId),
+                        ),
+                    }))
+                    .filter(product =>
+                        Boolean(product.devDiemProductId || product.denominations.length > 0),
+                    );
+
+                setProducts(purchasableProducts);
+                if (purchasableProducts.length === 0) {
+                    setProductsError(
+                        'No hay productos habilitados para compra. Revisa el mapeo con Diem y que estén activos.',
+                    );
+                }
+            } catch (err) {
+                if (cancelled) return;
+                console.error(err);
+                setProducts([]);
+                setProductsError('Error al cargar productos.');
+                toast.error('Error al cargar productos');
+            } finally {
+                if (!cancelled) setLoadingProducts(false);
+            }
+        }
+
+        loadCatalog();
+
+        fetch('/api/prices', { credentials: 'include' })
             .then(res => (res.ok ? res.json() : null))
             .then(data => {
                 if (data?.rows) setPrices(data.rows);
             })
             .catch(() => { });
-    }, []);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [sessionStatus]);
 
     const selectedProduct = products.find(p => p.id === selectedProductId);
     const needsDenomination = (selectedProduct?.denominations.length ?? 0) > 1;
@@ -299,16 +349,17 @@ export default function PurchaseCodesPage() {
                     <div className="space-y-2">
                         <Label htmlFor="product">Producto</Label>
                         <Select
-                            value={selectedProductId}
+                            value={selectedProductId || undefined}
                             onValueChange={(v) => {
                                 setSelectedProductId(v);
                                 setSelectedDenominationId('');
                             }}
+                            disabled={products.length === 0}
                         >
-                            <SelectTrigger>
+                            <SelectTrigger id="product">
                                 <SelectValue placeholder="Seleccionar producto..." />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent position="popper" className="z-[100]">
                                 {products.map((p) => (
                                     <SelectItem key={p.id} value={p.id}>
                                         {p.name} - {p.brand}
@@ -316,16 +367,22 @@ export default function PurchaseCodesPage() {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {productsError && (
+                            <p className="text-sm text-amber-700">{productsError}</p>
+                        )}
                     </div>
 
                     {needsDenomination && (
                         <div className="space-y-2">
                             <Label htmlFor="denomination">Denominación</Label>
-                            <Select value={selectedDenominationId} onValueChange={setSelectedDenominationId}>
-                                <SelectTrigger>
+                            <Select
+                                value={selectedDenominationId || undefined}
+                                onValueChange={setSelectedDenominationId}
+                            >
+                                <SelectTrigger id="denomination">
                                     <SelectValue placeholder="Seleccionar denominación..." />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent position="popper" className="z-[100]">
                                     {selectedProduct?.denominations.map((d) => (
                                         <SelectItem key={d.id} value={d.id}>
                                             {d.amount} {d.currency}

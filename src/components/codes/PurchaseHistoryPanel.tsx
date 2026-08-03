@@ -11,6 +11,14 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
     Table,
     TableBody,
     TableCell,
@@ -18,7 +26,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { AlertCircle, Check, Copy, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, Check, Copy, Eye, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export interface PurchaseHistoryItem {
@@ -78,14 +86,75 @@ function formatWhen(value: string | null | undefined) {
     }).format(new Date(value));
 }
 
+function ViewCodesDialog({
+    purchase,
+    open,
+    onOpenChange,
+}: {
+    purchase: PurchaseHistoryItem | null;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    if (!purchase) return null;
+
+    const copyCodes = () => {
+        const text = purchase.keys.map((row) => row.code).join("\n");
+        navigator.clipboard.writeText(text);
+        toast.success("Códigos copiados");
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Códigos entregados</DialogTitle>
+                    <DialogDescription>
+                        {purchase.productName ?? "Producto"} · {purchase.count} unidad(es)
+                        {purchase.denomination
+                            ? ` · ${purchase.denomination.amount} ${purchase.denomination.currency}`
+                            : ""}
+                    </DialogDescription>
+                </DialogHeader>
+                {purchase.keys.length ? (
+                    <div className="rounded-md border bg-muted/40 p-4 font-mono text-sm max-h-60 overflow-y-auto">
+                        <ul className="space-y-2">
+                            {purchase.keys.map((row, index) => (
+                                <li key={`${row.code}-${index}`} className="flex gap-3">
+                                    <span className="text-muted-foreground w-6 shrink-0">{index + 1}.</span>
+                                    <span className="font-semibold break-all select-all">{row.code}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground">
+                        No hay códigos registrados para esta entrega. Pulsa Actualizar o contacta soporte.
+                    </p>
+                )}
+                <DialogFooter className="gap-2 sm:justify-between">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        Cerrar
+                    </Button>
+                    <Button onClick={copyCodes} disabled={!purchase.keys.length}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copiar todos
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function PurchaseTable({
     rows,
     emptyMessage,
     showCodes = false,
+    onViewCodes,
 }: {
     rows: PurchaseHistoryItem[];
     emptyMessage: string;
     showCodes?: boolean;
+    onViewCodes?: (purchase: PurchaseHistoryItem) => void;
 }) {
     if (!rows.length) {
         return (
@@ -137,15 +206,45 @@ function PurchaseTable({
                         </TableCell>
                         {showCodes && (
                             <TableCell className="text-right">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={!purchase.keys.length}
-                                    onClick={() => copyCodes(purchase)}
-                                >
-                                    <Copy className="mr-2 h-3 w-3" />
-                                    Copiar
-                                </Button>
+                                <div className="flex flex-col items-end gap-2">
+                                    {purchase.keys.length > 0 && (
+                                        <div className="font-mono text-xs text-left w-full max-w-[220px] space-y-1">
+                                            {purchase.keys.slice(0, 2).map((row, index) => (
+                                                <div
+                                                    key={`${purchase.id}-${row.code}-${index}`}
+                                                    className="rounded border bg-muted/30 px-2 py-1 break-all select-all"
+                                                >
+                                                    {row.code}
+                                                </div>
+                                            ))}
+                                            {purchase.keys.length > 2 && (
+                                                <p className="text-muted-foreground text-[11px]">
+                                                    +{purchase.keys.length - 2} más
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="flex flex-wrap justify-end gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={!purchase.keys.length}
+                                            onClick={() => onViewCodes?.(purchase)}
+                                        >
+                                            <Eye className="mr-2 h-3 w-3" />
+                                            Ver
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={!purchase.keys.length}
+                                            onClick={() => copyCodes(purchase)}
+                                        >
+                                            <Copy className="mr-2 h-3 w-3" />
+                                            Copiar
+                                        </Button>
+                                    </div>
+                                </div>
                             </TableCell>
                         )}
                     </TableRow>
@@ -161,6 +260,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
     const [pending, setPending] = useState<PurchaseHistoryItem[]>([]);
     const [completed, setCompleted] = useState<PurchaseHistoryItem[]>([]);
     const [failed, setFailed] = useState<PurchaseHistoryItem[]>([]);
+    const [viewingPurchase, setViewingPurchase] = useState<PurchaseHistoryItem | null>(null);
 
     const loadHistory = useCallback(async (refresh = false) => {
         if (refresh) setRefreshing(true);
@@ -203,6 +303,13 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
 
     return (
         <div className="space-y-6">
+            <ViewCodesDialog
+                purchase={viewingPurchase}
+                open={Boolean(viewingPurchase)}
+                onOpenChange={(open) => {
+                    if (!open) setViewingPurchase(null);
+                }}
+            />
             <div className="flex items-center justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-semibold">Mis solicitudes</h2>
@@ -260,6 +367,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                         rows={completed}
                         emptyMessage="Aún no hay entregas completadas."
                         showCodes
+                        onViewCodes={setViewingPurchase}
                     />
                 </CardContent>
             </Card>

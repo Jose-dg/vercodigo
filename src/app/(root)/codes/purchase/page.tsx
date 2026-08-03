@@ -65,7 +65,7 @@ export default function PurchaseCodesPage() {
     const [purchaseResult, setPurchaseResult] = useState<PurchaseResponse | null>(null);
     const [activeTab, setActiveTab] = useState('order');
     const [historyTick, setHistoryTick] = useState(0);
-    const purchaseAttemptId = useRef<string | null>(null);
+    const purchaseInFlightKey = useRef<string | null>(null);
     const pendingPurchaseId = purchaseResult?.purchase?.isPending
         ? purchaseResult.purchase.id
         : null;
@@ -122,7 +122,7 @@ export default function PurchaseCodesPage() {
                         || (data && typeof data.detail === 'string' && data.detail)
                         || 'No se pudieron cargar los productos disponibles.';
                     const message = /invalid api key/i.test(rawMessage)
-                        ? 'Diem rechazó la API key. Para local usa DIEM_API_URL=http://localhost:8000 con una key generada en esa instancia; en producción genera una key nueva en diem-ai.onrender.com.'
+                        ? 'Diem rechazó la API key. Verifica DIEM_SERVICE_API_KEY en .env.local (debe ser la misma que en Vercel).'
                         : rawMessage;
                     setProducts([]);
                     setProductsError(message);
@@ -204,13 +204,16 @@ export default function PurchaseCodesPage() {
         }
 
         setIsPurchasing(true);
+        if (!purchaseInFlightKey.current) {
+            purchaseInFlightKey.current = crypto.randomUUID();
+        }
+        const idempotencyKey = purchaseInFlightKey.current;
         try {
-            purchaseAttemptId.current ??= crypto.randomUUID();
             const res = await fetch('/api/codes/purchase', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Idempotency-Key': purchaseAttemptId.current,
+                    'Idempotency-Key': idempotencyKey,
                 },
                 body: JSON.stringify({
                     productId: selectedProductId,
@@ -222,10 +225,18 @@ export default function PurchaseCodesPage() {
             const data = await res.json();
 
             if (!res.ok) {
+                const apiMessage =
+                    (typeof data?.message === 'string' && data.message)
+                    || (typeof data?.error === 'string' && data.error)
+                    || null;
                 if (res.status === 409) {
-                    toast.error(data.message || "Stock insuficiente");
+                    toast.error(
+                        apiMessage?.includes('Idempotency-Key')
+                            ? 'Este intento de compra ya se usó con otra cantidad o producto. Vuelve a confirmar la compra.'
+                            : apiMessage || 'Stock insuficiente',
+                    );
                 } else {
-                    toast.error(data.message || "Error al realizar la compra");
+                    toast.error(apiMessage || 'Error al realizar la compra');
                 }
                 return;
             }
@@ -246,6 +257,7 @@ export default function PurchaseCodesPage() {
             toast.error("Error de conexión");
         } finally {
             setIsPurchasing(false);
+            purchaseInFlightKey.current = null;
         }
     };
 
@@ -254,7 +266,7 @@ export default function PurchaseCodesPage() {
         setQuantity(1);
         setSelectedProductId('');
         setSelectedDenominationId('');
-        purchaseAttemptId.current = null;
+        purchaseInFlightKey.current = null;
     };
 
     const copyAllCodes = () => {

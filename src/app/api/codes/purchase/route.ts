@@ -11,6 +11,8 @@ const PurchaseBody = z.object({
     denominationId: z.string().optional(),
     count: z.number().int().min(1).max(100),
     storeId: z.string().optional(),
+    /** Obligatorio cuando compra un admin de plataforma en nombre de una compañía. */
+    companyId: z.string().optional(),
 });
 
 async function handler(
@@ -29,7 +31,7 @@ async function handler(
                 { status: 400 }
             );
         }
-        const { productId, denominationId, count, storeId } = parsed.data;
+        const { productId, denominationId, count, storeId, companyId } = parsed.data;
         const idempotencyKey = req.headers.get("idempotency-key")?.trim();
         if (
             !idempotencyKey
@@ -47,7 +49,9 @@ async function handler(
 
         // 3. Purchase Service
         const result = await purchaseCodes({
-            userId: user.id, // User from Guard
+            userId: user.id,
+            actorRole: user.role,
+            targetCompanyId: companyId,
             storeId,
             productId,
             denominationId,

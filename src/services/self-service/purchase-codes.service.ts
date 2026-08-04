@@ -327,22 +327,50 @@ export async function processCodePurchase(purchaseId: string) {
 
 export async function purchaseCodes(params: {
     userId: string;
+    actorRole: string;
+    targetCompanyId?: string;
     storeId?: string;
     productId: string;
     denominationId?: string;
     count: number;
     idempotencyKey: string;
 }) {
-    const { userId, storeId, productId, denominationId, count } = params;
+    const { userId, storeId, productId, denominationId, count, actorRole, targetCompanyId } = params;
     if (count <= 0) throw badRequest("Cantidad debe ser mayor a 0");
     if (count > 100) throw badRequest("Máximo 100 códigos por compra");
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, companyId: true, email: true },
+        select: { id: true, companyId: true, storeId: true, email: true, role: true },
     });
-    if (!user?.companyId) throw forbidden("Usuario inválido");
-    if (!user.email) throw badRequest("El usuario necesita un email para recibir códigos");
+    if (!user?.email) throw badRequest("El usuario necesita un email para recibir códigos");
+
+    let companyId: string;
+    if (PLATFORM_ROLES.has(actorRole)) {
+        companyId = targetCompanyId?.trim() || "";
+        if (!companyId) {
+            throw badRequest("Selecciona la compañía a la que se cargará la compra");
+        }
+        const company = await prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true },
+        });
+        if (!company) throw notFound("Compañía no encontrada");
+    } else {
+        if (!user.companyId) throw forbidden("Usuario inválido");
+        companyId = user.companyId;
+    }
+
+    let resolvedStoreId = storeId ?? null;
+    if (resolvedStoreId) {
+        const store = await prisma.store.findFirst({
+            where: { id: resolvedStoreId, companyId },
+            select: { id: true },
+        });
+        if (!store) throw badRequest("La tienda no pertenece a la compañía seleccionada");
+    } else if (!PLATFORM_ROLES.has(actorRole) && (actorRole === "ADMIN" || actorRole === "OPERATOR")) {
+        resolvedStoreId = user.storeId;
+    }
 
     const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -375,19 +403,21 @@ export async function purchaseCodes(params: {
         throw conflict("El producto no está mapeado al catálogo de Diem");
     }
 
-    const durableIdempotencyKey = `diem-sas-purchase:${user.companyId}:${params.idempotencyKey}`;
+    const durableIdempotencyKey = `diem-sas-purchase:${companyId}:${params.idempotencyKey}`;
     const matchesRequest = (existing: {
         userId: string;
         productId: string;
         denominationId: string | null;
         count: number;
         storeId: string | null;
+        companyId: string;
     }) => (
         existing.userId === userId
         && existing.productId === productId
         && existing.denominationId === (denomination?.id ?? null)
         && existing.count === count
-        && existing.storeId === (storeId ?? null)
+        && existing.storeId === resolvedStoreId
+        && existing.companyId === companyId
     );
     let purchase;
     try {
@@ -402,7 +432,7 @@ export async function purchaseCodes(params: {
                 }
                 return existing;
             }
-            const unitCost = await resolveCost(user.companyId!, productId, denomination?.id, tx);
+            const unitCost = await resolveCost(companyId, productId, denomination?.id, tx);
             const fallbackAmount = denomination?.amount;
             const unitAmount = unitCost?.amount ?? fallbackAmount;
             if (!(unitAmount && unitAmount > 0)) {
@@ -411,8 +441,8 @@ export async function purchaseCodes(params: {
             return tx.codePurchase.create({
                 data: {
                     userId,
-                    companyId: user.companyId!,
-                    storeId,
+                    companyId,
+                    storeId: resolvedStoreId,
                     productId,
                     denominationId: denomination?.id,
                     count,

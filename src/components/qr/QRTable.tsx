@@ -30,9 +30,11 @@ interface QRTableProps {
     qrs: QRWithRelations[];
     stores: { id: string; name: string }[];
     products: { id: string; name: string }[];
+    /** Solo plataforma puede editar/eliminar; otros roles ven listado de su ámbito. */
+    readOnly?: boolean;
 }
 
-export function QRTable({ qrs, stores, products }: QRTableProps) {
+export function QRTable({ qrs, stores, products, readOnly = false }: QRTableProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const toggleSelectAll = () => {
@@ -63,10 +65,12 @@ export function QRTable({ qrs, stores, products }: QRTableProps) {
 
     return (
         <div className="space-y-4">
-            <QRBulkActions
-                selectedQrs={selectedQrs}
-                onClearSelection={() => setSelectedIds(new Set())}
-            />
+            {!readOnly && (
+                <QRBulkActions
+                    selectedQrs={selectedQrs}
+                    onClearSelection={() => setSelectedIds(new Set())}
+                />
+            )}
 
             <div className="rounded-md border bg-white">
                 <Table>
@@ -139,26 +143,31 @@ export function QRTable({ qrs, stores, products }: QRTableProps) {
 
                                     <TableCell className="text-right">
                                         <div className="flex justify-end items-center gap-2">
-                                            <QRStatusToggle
-                                                id={qr.id}
-                                                isActivated={qr.isActivated}
-                                                isRedeemed={qr.isRedeemed}
-                                                qr={qr}
-                                            />
-                                            <QREditButton
-                                                id={qr.id}
-                                                uuid={qr.uuid}
-                                                initialData={{
-                                                    productId: qr.productId,
-                                                    storeId: qr.storeId,
-                                                    fabricationUnitCost: qr.fabricationUnitCost || 0,
-                                                    scanCount: qr.scanCount,
-                                                    maxScans: qr.maxScans,
-                                                }}
-                                                stores={stores}
-                                                products={products}
-                                            />
-                                            <QRUpdateKeyButton id={qr.id} uuid={qr.uuid} currentKey={qr.key?.code || null} />
+                                            {!readOnly && (
+                                                <>
+                                                    <QRStatusToggle
+                                                        id={qr.id}
+                                                        isActivated={qr.isActivated}
+                                                        isRedeemed={qr.isRedeemed}
+                                                        qr={qr}
+                                                    />
+                                                    <QREditButton
+                                                        id={qr.id}
+                                                        uuid={qr.uuid}
+                                                        initialData={{
+                                                            productId: qr.productId,
+                                                            storeId: qr.storeId,
+                                                            fabricationUnitCost: qr.fabricationUnitCost || 0,
+                                                            scanCount: qr.scanCount,
+                                                            maxScans: qr.maxScans,
+                                                        }}
+                                                        stores={stores}
+                                                        products={products}
+                                                    />
+                                                    <QRUpdateKeyButton id={qr.id} uuid={qr.uuid} currentKey={qr.key?.code || null} />
+                                                    <QRDeleteButton id={qr.id} uuid={qr.uuid} />
+                                                </>
+                                            )}
                                             <QRDownloadSVGButton uuid={qr.uuid} qrData={qr.qrData} />
                                             <Button variant="ghost" size="icon" asChild>
                                                 <Link href={`/qr/${qr.uuid}`}>
@@ -166,7 +175,6 @@ export function QRTable({ qrs, stores, products }: QRTableProps) {
                                                     <span className="sr-only">Ver detalles</span>
                                                 </Link>
                                             </Button>
-                                            <QRDeleteButton id={qr.id} uuid={qr.uuid} />
                                         </div>
                                     </TableCell>
                                 </TableRow>

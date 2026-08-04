@@ -32,6 +32,7 @@ export function defineAbilitiesFor(user: User) {
 
     if (user.role === 'SUPER_ADMIN') {
         can('manage', 'all');
+        // Generación de QR reservada a plataforma (manage all ya lo cubre).
     }
 
     else if (user.role === 'SYSTEM_ADMIN') {
@@ -40,9 +41,12 @@ export function defineAbilitiesFor(user: User) {
         can('manage', 'CompanyProductPrice');
         can('manage', 'ProductCost'); // costos que la plataforma cobra a las compañías
         can('read', ['Card', 'CardActivation', 'CodePurchase', 'Invoice', 'AuditLog']);
-        // Invoices: Can create/update invoice status but not delete
+        // Compra de códigos en nombre de una compañía (soporte urgente vía plataforma).
+        can('create', 'CodePurchase');
         can(['create', 'update', 'approve'], 'Invoice');
         cannot('delete', 'AuditLog');
+        // Solo plataforma genera QR físicos; SYSTEM_ADMIN no activa en mostrador.
+        cannot('activate', 'Card');
     }
 
     // OWNER and GENERAL_ADMIN share the same scope today: the whole company, all stores.

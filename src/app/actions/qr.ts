@@ -3,7 +3,26 @@
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+import { getSessionUser } from "@/lib/auth/session";
+import { canMutateQr, cardVisibilityFilter } from "@/lib/auth/tenant-scope";
+
+async function requireQrMutation(cardId: string) {
+    const user = await getSessionUser();
+    if (!user) return { error: "No autorizado" as const };
+    if (!canMutateQr(user)) return { error: "Sin permisos" as const };
+
+    const card = await prisma.card.findFirst({
+        where: { id: cardId, ...cardVisibilityFilter(user) },
+        select: { id: true },
+    });
+    if (!card) return { error: "Tarjeta no encontrada" as const };
+    return { user };
+}
+
 export async function toggleQRStatus(id: string, currentStatus: boolean) {
+    const gate = await requireQrMutation(id);
+    if ("error" in gate) return { success: false, error: gate.error };
+
     try {
         await prisma.card.update({
             where: { id },
@@ -18,14 +37,14 @@ export async function toggleQRStatus(id: string, currentStatus: boolean) {
         console.error("Error toggling QR status:", error);
         return { success: false, error: "Failed to toggle status" };
     }
-
 }
 
 export async function deleteQR(id: string) {
+    const gate = await requireQrMutation(id);
+    if ("error" in gate) return { success: false, error: gate.error };
+
     try {
-        await prisma.card.delete({
-            where: { id },
-        });
+        await prisma.card.delete({ where: { id } });
         revalidatePath("/qr");
         return { success: true };
     } catch (error) {
@@ -35,9 +54,11 @@ export async function deleteQR(id: string) {
 }
 
 export async function updateQRKey(id: string, keyCode: string) {
+    const gate = await requireQrMutation(id);
+    if ("error" in gate) return { success: false, error: gate.error };
+
     try {
         const trimmedKey = keyCode.trim();
-
         if (!trimmedKey) {
             return { success: false, error: "Key code cannot be empty" };
         }
@@ -46,32 +67,25 @@ export async function updateQRKey(id: string, keyCode: string) {
             where: { id },
             select: { uuid: true, productId: true },
         });
-
         if (!card) {
             return { success: false, error: "Card not found" };
         }
 
-        // Check if key exists and is assigned to another card
         const existingKey = await prisma.key.findUnique({
             where: { code: trimmedKey },
-            include: { card: true }
+            include: { card: true },
         });
 
-        if (existingKey && existingKey.card && existingKey.card.id !== id) {
-            // Optional: Decide if we want to allow stealing. For now, let's error or steal.
-            // Let's steal it (unassign from old card) to allow easy corrections.
+        if (existingKey?.card && existingKey.card.id !== id) {
             await prisma.card.update({
                 where: { id: existingKey.card.id },
-                data: { keyId: null }
+                data: { keyId: null },
             });
         }
 
-        // Create or update key
         const key = await prisma.key.upsert({
             where: { code: trimmedKey },
-            update: {
-                isVerified: true,
-            },
+            update: { isVerified: true },
             create: {
                 code: trimmedKey,
                 productId: card.productId,
@@ -79,16 +93,13 @@ export async function updateQRKey(id: string, keyCode: string) {
             },
         });
 
-        const updatedCard = await prisma.card.update({
+        await prisma.card.update({
             where: { id },
-            data: {
-                keyId: key.id,
-            },
+            data: { keyId: key.id },
         });
 
         revalidatePath(`/scan/${card.uuid}`);
         revalidatePath("/qr");
-
         return { success: true };
     } catch (error) {
         console.error("[updateQRKey] Error updating QR key:", error);
@@ -97,20 +108,18 @@ export async function updateQRKey(id: string, keyCode: string) {
 }
 
 export async function updateQRStore(id: string, storeId: string) {
-    try {
-        const store = await prisma.store.findUnique({
-            where: { id: storeId },
-        });
+    const gate = await requireQrMutation(id);
+    if ("error" in gate) return { success: false, error: gate.error };
 
+    try {
+        const store = await prisma.store.findUnique({ where: { id: storeId } });
         if (!store) {
             return { success: false, error: "Store not found" };
         }
 
         await prisma.card.update({
             where: { id },
-            data: {
-                storeId,
-            },
+            data: { storeId },
         });
 
         revalidatePath("/qr");
@@ -130,6 +139,9 @@ interface UpdateQRData {
 }
 
 export async function updateQR(id: string, data: UpdateQRData) {
+    const gate = await requireQrMutation(id);
+    if ("error" in gate) return { success: false, error: gate.error };
+
     try {
         await prisma.card.update({
             where: { id },

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { isPlatformRole } from '@/lib/auth/abilities';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -51,7 +52,9 @@ interface PurchaseResponse {
 }
 
 export default function PurchaseCodesPage() {
-    const { status: sessionStatus } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
+    const isPlatform =
+        session?.user?.role != null && isPlatformRole(session.user.role as any);
     const [products, setProducts] = useState<Product[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [productsError, setProductsError] = useState<string | null>(null);
@@ -66,6 +69,12 @@ export default function PurchaseCodesPage() {
     const [activeTab, setActiveTab] = useState('order');
     const [historyTick, setHistoryTick] = useState(0);
     const purchaseInFlightKey = useRef<string | null>(null);
+    const [targetCompanyId, setTargetCompanyId] = useState('');
+    const [targetStoreId, setTargetStoreId] = useState('');
+    const [companies, setCompanies] = useState<{ companyId: string; companyName: string }[]>([]);
+    const [platformStores, setPlatformStores] = useState<
+        { id: string; name: string; companyId: string }[]
+    >([]);
     const pendingPurchaseId = purchaseResult?.purchase?.isPending
         ? purchaseResult.purchase.id
         : null;
@@ -78,14 +87,14 @@ export default function PurchaseCodesPage() {
             if (response.ok && data?.purchase) {
                 setPurchaseResult(data);
                 if (data.purchase.status === 'COMPLETED') {
-                    toast.success("¡Códigos entregados!");
+                    toast.success("?C?digos entregados!");
                     setHistoryTick((tick) => tick + 1);
                     window.clearInterval(timer);
                 } else if (data.purchase.status === 'FAILED') {
-                    toast.error("La entrega falló y no se debitó la wallet.");
+                    toast.error("La entrega fall? y no se debit? la wallet.");
                     window.clearInterval(timer);
                 } else if (data.purchase.status === 'ACTION_REQUIRED') {
-                    toast.error("La entrega necesita revisión manual.");
+                    toast.error("La entrega necesita revisi?n manual.");
                     window.clearInterval(timer);
                 }
             }
@@ -98,7 +107,7 @@ export default function PurchaseCodesPage() {
 
         if (sessionStatus !== 'authenticated') {
             setLoadingProducts(false);
-            setProductsError('Debes iniciar sesión para ver el catálogo de compra.');
+            setProductsError('Debes iniciar sesi?n para ver el cat?logo de compra.');
             return;
         }
 
@@ -122,7 +131,7 @@ export default function PurchaseCodesPage() {
                         || (data && typeof data.detail === 'string' && data.detail)
                         || 'No se pudieron cargar los productos disponibles.';
                     const message = /invalid api key/i.test(rawMessage)
-                        ? 'Diem rechazó la API key. Verifica DIEM_SERVICE_API_KEY en .env.local (debe ser la misma que en Vercel).'
+                        ? 'Diem rechaz? la API key. Verifica DIEM_SERVICE_API_KEY en .env.local (debe ser la misma que en Vercel).'
                         : rawMessage;
                     setProducts([]);
                     setProductsError(message);
@@ -132,7 +141,7 @@ export default function PurchaseCodesPage() {
 
                 if (!Array.isArray(data)) {
                     setProducts([]);
-                    setProductsError('Respuesta inválida del catálogo de productos.');
+                    setProductsError('Respuesta inv?lida del cat?logo de productos.');
                     return;
                 }
 
@@ -152,7 +161,7 @@ export default function PurchaseCodesPage() {
                 setProducts(purchasableProducts);
                 if (purchasableProducts.length === 0) {
                     setProductsError(
-                        'No hay productos habilitados para compra. Revisa el mapeo con Diem y que estén activos.',
+                        'No hay productos habilitados para compra. Revisa el mapeo con Diem y que est?n activos.',
                     );
                 }
             } catch (err) {
@@ -180,6 +189,41 @@ export default function PurchaseCodesPage() {
         };
     }, [sessionStatus]);
 
+    useEffect(() => {
+        if (!isPlatform) return;
+        fetch('/api/wallets', { credentials: 'include' })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data?.wallets) {
+                    setCompanies(
+                        data.wallets.map((w: { companyId: string; companyName: string }) => ({
+                            companyId: w.companyId,
+                            companyName: w.companyName,
+                        })),
+                    );
+                }
+            })
+            .catch(() => undefined);
+        fetch('/api/stores')
+            .then((res) => (res.ok ? res.json() : []))
+            .then((rows) => {
+                if (Array.isArray(rows)) {
+                    setPlatformStores(
+                        rows.map((s: { id: string; name: string; companyId: string }) => ({
+                            id: s.id,
+                            name: s.name,
+                            companyId: s.companyId,
+                        })),
+                    );
+                }
+            })
+            .catch(() => undefined);
+    }, [isPlatform]);
+
+    const storesForSelectedCompany = platformStores.filter(
+        (store) => store.companyId === targetCompanyId,
+    );
+
     const selectedProduct = products.find(p => p.id === selectedProductId);
     const needsDenomination = (selectedProduct?.denominations.length ?? 0) > 1;
     const effectiveDenominationId = needsDenomination
@@ -195,11 +239,15 @@ export default function PurchaseCodesPage() {
             return;
         }
         if (needsDenomination && !selectedDenominationId) {
-            toast.error("Seleccione la denominación");
+            toast.error("Seleccione la denominaci?n");
             return;
         }
         if (quantity < 1 || quantity > 100) {
-            toast.error("Cantidad inválida (1-100)");
+            toast.error("Cantidad inv?lida (1-100)");
+            return;
+        }
+        if (isPlatform && !targetCompanyId) {
+            toast.error("Selecciona la compa??a que recibir? el cargo");
             return;
         }
 
@@ -218,7 +266,13 @@ export default function PurchaseCodesPage() {
                 body: JSON.stringify({
                     productId: selectedProductId,
                     denominationId: effectiveDenominationId || undefined,
-                    count: quantity
+                    count: quantity,
+                    ...(isPlatform
+                        ? {
+                              companyId: targetCompanyId,
+                              storeId: targetStoreId || undefined,
+                          }
+                        : {}),
                 }),
             });
 
@@ -232,7 +286,7 @@ export default function PurchaseCodesPage() {
                 if (res.status === 409) {
                     toast.error(
                         apiMessage?.includes('Idempotency-Key')
-                            ? 'Este intento de compra ya se usó con otra cantidad o producto. Vuelve a confirmar la compra.'
+                            ? 'Este intento de compra ya se us? con otra cantidad o producto. Vuelve a confirmar la compra.'
                             : apiMessage || 'Stock insuficiente',
                     );
                 } else {
@@ -245,16 +299,16 @@ export default function PurchaseCodesPage() {
             setHistoryTick((tick) => tick + 1);
             if (data.purchase?.isPending) {
                 setActiveTab('history');
-                toast.success("Solicitud recibida. Quedó en pendientes por entregar.");
+                toast.success("Solicitud recibida. Qued? en pendientes por entregar.");
             } else if (data.purchase?.status === 'COMPLETED') {
                 setActiveTab('history');
-                toast.success("¡Compra exitosa!");
+                toast.success("?Compra exitosa!");
             } else {
-                toast.error("La solicitud necesita revisión.");
+                toast.error("La solicitud necesita revisi?n.");
             }
         } catch (error) {
             console.error("Purchase error:", error);
-            toast.error("Error de conexión");
+            toast.error("Error de conexi?n");
         } finally {
             setIsPurchasing(false);
             purchaseInFlightKey.current = null;
@@ -273,7 +327,7 @@ export default function PurchaseCodesPage() {
         if (!purchaseResult) return;
         const codes = purchaseResult.purchase.keys.map(k => k.code).join('\n');
         navigator.clipboard.writeText(codes);
-        toast.success("Códigos copiados al portapapeles");
+        toast.success("C?digos copiados al portapapeles");
     };
 
     if (loadingProducts) {
@@ -293,9 +347,9 @@ export default function PurchaseCodesPage() {
     return (
         <div className="container max-w-5xl py-10">
             <div className="mb-6">
-                <h1 className="text-3xl font-bold tracking-tight">Comprar Códigos</h1>
+                <h1 className="text-3xl font-bold tracking-tight">Comprar C?digos</h1>
                 <p className="text-muted-foreground">
-                    Solicita códigos digitales y consulta entregas pendientes o completadas.
+                    Solicita c?digos digitales y consulta entregas pendientes o completadas.
                 </p>
             </div>
 
@@ -317,20 +371,20 @@ export default function PurchaseCodesPage() {
                                             : <AlertCircle className="h-5 w-5 text-red-600" />}
                                     {pendingResult
                                         ? pendingManualReview
-                                            ? 'Confirmación operativa pendiente'
+                                            ? 'Confirmaci?n operativa pendiente'
                                             : 'Solicitud en cola'
                                         : successfulResult
                                             ? 'Compra entregada'
                                             : needsActionResult
-                                                ? 'Revisión requerida'
+                                                ? 'Revisi?n requerida'
                                                 : 'Entrega fallida'}
                                 </CardTitle>
                                 <CardDescription>
                                     {pendingResult
-                                        ? 'Tu solicitud ya está registrada. Revísala en la pestaña Mis solicitudes; no necesitas pedirla otra vez.'
+                                        ? 'Tu solicitud ya est? registrada. Rev?sala en la pesta?a Mis solicitudes; no necesitas pedirla otra vez.'
                                         : successfulResult
-                                            ? `Se entregaron ${purchaseResult.purchase.count} código(s).`
-                                            : 'No se debitó la wallet.'}
+                                            ? `Se entregaron ${purchaseResult.purchase.count} c?digo(s).`
+                                            : 'No se debit? la wallet.'}
                                 </CardDescription>
                             </CardHeader>
                             {successfulResult && (
@@ -347,7 +401,7 @@ export default function PurchaseCodesPage() {
                                     </div>
                                     <Button variant="outline" onClick={copyAllCodes} className="w-full sm:w-auto">
                                         <Copy className="mr-2 h-4 w-4" />
-                                        Copiar códigos
+                                        Copiar c?digos
                                     </Button>
                                 </CardContent>
                             )}
@@ -369,6 +423,53 @@ export default function PurchaseCodesPage() {
                     <CardDescription>Selecciona el producto y la cantidad.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                    {isPlatform && (
+                        <>
+                            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                Compra en nombre de una compa??a. El cargo se debitar? de su wallet.
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="target-company">Compa??a</Label>
+                                <Select
+                                    value={targetCompanyId || undefined}
+                                    onValueChange={(value) => {
+                                        setTargetCompanyId(value);
+                                        setTargetStoreId('');
+                                    }}
+                                >
+                                    <SelectTrigger id="target-company">
+                                        <SelectValue placeholder="Seleccionar compa??a..." />
+                                    </SelectTrigger>
+                                    <SelectContent position="popper" className="z-[100]">
+                                        {companies.map((company) => (
+                                            <SelectItem key={company.companyId} value={company.companyId}>
+                                                {company.companyName}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="target-store">Tienda (opcional)</Label>
+                                <Select
+                                    value={targetStoreId || undefined}
+                                    onValueChange={setTargetStoreId}
+                                    disabled={!targetCompanyId}
+                                >
+                                    <SelectTrigger id="target-store">
+                                        <SelectValue placeholder="Sin tienda espec?fica" />
+                                    </SelectTrigger>
+                                    <SelectContent position="popper" className="z-[100]">
+                                        {storesForSelectedCompany.map((store) => (
+                                            <SelectItem key={store.id} value={store.id}>
+                                                {store.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="product">Producto</Label>
                         <Select
@@ -397,13 +498,13 @@ export default function PurchaseCodesPage() {
 
                     {needsDenomination && (
                         <div className="space-y-2">
-                            <Label htmlFor="denomination">Denominación</Label>
+                            <Label htmlFor="denomination">Denominaci?n</Label>
                             <Select
                                 value={selectedDenominationId || undefined}
                                 onValueChange={setSelectedDenominationId}
                             >
                                 <SelectTrigger id="denomination">
-                                    <SelectValue placeholder="Seleccionar denominación..." />
+                                    <SelectValue placeholder="Seleccionar denominaci?n..." />
                                 </SelectTrigger>
                                 <SelectContent position="popper" className="z-[100]">
                                     {selectedProduct?.denominations.map((d) => (
@@ -439,7 +540,7 @@ export default function PurchaseCodesPage() {
                                 className="font-mono text-lg"
                             />
                             <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                (Máx. 100)
+                                (M?x. 100)
                             </span>
                         </div>
                     </div>
@@ -448,7 +549,7 @@ export default function PurchaseCodesPage() {
                         <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold mb-1">Entrega gestionada por Diem</p>
-                            Diem reservará los códigos y la wallet se debitará únicamente cuando la entrega se complete.
+                            Diem reservar? los c?digos y la wallet se debitar? ?nicamente cuando la entrega se complete.
                         </div>
                     </div>
                 </CardContent>

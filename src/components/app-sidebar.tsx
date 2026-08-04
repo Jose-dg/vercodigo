@@ -22,6 +22,7 @@ import {
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
 import { isPlatformRole } from "@/lib/auth/abilities"
+import type { UserRole } from "@prisma/client"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -265,8 +266,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const currentUser = useCurrentUser();
 
   const navMainWithError = React.useMemo(() => {
-    const PLATFORM_ONLY_URLS = new Set(["/cards/reassign"]);
-    // Define permissions mapping
+    const PLATFORM_ONLY_URLS = new Set(["/cards/reassign", "/qr/create"]);
+    const PLACEHOLDER_URLS = new Set(["/stock", "/functions"]);
     const PERMISSIONS: Record<string, [string, string]> = {
       "/companies": ["read", "Company"],
       "/store": ["read", "Store"],
@@ -286,41 +287,44 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       "/prices": ["read", "CompanyProductPrice"],
       "/costs": ["manage", "ProductCost"],
       "/overview": ["read", "Company"],
+      "/analytics": ["read", "AuditLog"],
       "/admin": ["manage", "all"],
     };
 
+    function isNavItemVisible(url: string, role: UserRole | undefined): boolean {
+      if (!role) return false;
+      if (url === "#" || PLACEHOLDER_URLS.has(url)) return false;
+      if (url === "/") return true;
+      if (PLATFORM_ONLY_URLS.has(url)) return isPlatformRole(role);
+      // Operador: activar/escanear/comprar, sin listado de QR.
+      if (url === "/qr" && role === "OPERATOR") return false;
+      // Analytics global solo plataforma; OWNER usa /overview (su compañía).
+      if (url === "/analytics" && !isPlatformRole(role)) return false;
+      const perm = PERMISSIONS[url];
+      if (!perm) return false;
+      return ability.can(perm[0] as any, perm[1] as any);
+    }
+
     return data.navMain
       .map((group) => {
-        // Clone the group
         const newGroup = { ...group };
 
-        // If it has sub-items, filter them
-        if (newGroup.items) {
-          newGroup.items = newGroup.items.filter((item) => {
-            if (PLATFORM_ONLY_URLS.has(item.url)) {
-              return currentUser ? isPlatformRole(currentUser.role) : false;
-            }
-            const perm = PERMISSIONS[item.url];
-            if (!perm) return true; // Public by default if not listed? Or hide? Let's say public
-            return ability.can(perm[0] as any, perm[1] as any);
-          });
+        if (newGroup.url !== "#" && !newGroup.items) {
+          if (!isNavItemVisible(newGroup.url, currentUser?.role)) return null;
         }
 
-        // If it's a direct link (no items), check its permission
-        if (!newGroup.items && newGroup.url !== "#") {
-          const perm = PERMISSIONS[newGroup.url];
-          if (perm && !ability.can(perm[0] as any, perm[1] as any)) {
-            return null; // Remove this group
-          }
+        if (newGroup.items) {
+          newGroup.items = newGroup.items.filter((item) =>
+            isNavItemVisible(item.url, currentUser?.role),
+          );
         }
 
         return newGroup;
       })
       .filter((group): group is typeof data.navMain[0] => {
         if (!group) return false;
-        // If it was a group with items, and all items were removed, hide the group
-        // Exception: Maybe some groups like "Home" don't have items.
-        // Logic: If original had items, and now has 0, hide.
+        if (group.url === "#" && group.items && group.items.length === 0) return false;
+        if (group.url !== "#" && !group.items) return true;
         if (group.items && group.items.length === 0) return false;
         return true;
       });

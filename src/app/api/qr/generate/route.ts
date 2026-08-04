@@ -2,26 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { generateUUID } from '@/lib/uuid-generator';
 import { generateQRData } from '@/lib/qr-generator';
-import { verifyAuth, hasPermission } from '@/lib/auth';
+import { verifyAuth } from '@/lib/auth';
+import { isPlatformRole } from '@/lib/auth/abilities';
 
 export async function POST(req: NextRequest) {
     try {
-        console.log('🔷 [QR] Starting QR generation...');
-
-        // Verificar autenticación
         const user = await verifyAuth(req);
-        console.log('👤 [QR] User:', user ? user.email : 'null');
-
         if (!user) {
-            console.log('❌ [QR] No user authenticated');
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
         }
 
-        // Verificar permisos
-        console.log('🔑 [QR] Checking permissions for role:', user.role);
-        if (!hasPermission(user.role, 'CREATE_CARDS')) {
-            console.log('❌ [QR] User lacks CREATE_CARDS permission');
-            return NextResponse.json({ error: 'Sin permisos' }, { status: 403 });
+        if (!isPlatformRole(user.role as any)) {
+            return NextResponse.json(
+                { error: 'Solo administradores de plataforma pueden generar QR' },
+                { status: 403 },
+            );
         }
 
         const body = await req.json();

@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Prisma } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -26,6 +27,15 @@ import {
 
 export const dynamic = "force-dynamic";
 
+type QrRow = Prisma.CardGetPayload<{
+    include: {
+        product: true;
+        store: true;
+        denomination: true;
+        key: true;
+    };
+}>;
+
 export default async function QRPage() {
     const user = await requireSessionUser();
     if (!canAccessQrList(user)) {
@@ -36,7 +46,7 @@ export default async function QRPage() {
     const storeWhere = storeVisibilityFilter(user);
 
     let error: string | null = null;
-    let qrs: Awaited<ReturnType<typeof prisma.card.findMany>> = [];
+    let qrs: QrRow[] = [];
     let stores: { id: string; name: string }[] = [];
     let products: { id: string; name: string }[] = [];
 

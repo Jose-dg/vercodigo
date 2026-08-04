@@ -120,6 +120,7 @@ async function main() {
 
         const purchaseResult = await purchaseCodes({
             userId: operator.id,
+            actorRole: operator.role,
             productId: product.id,
             storeId: store.id,
             count: 2,

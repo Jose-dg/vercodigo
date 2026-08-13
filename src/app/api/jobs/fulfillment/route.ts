@@ -103,6 +103,10 @@ export async function GET(request: NextRequest) {
     }
 }
 
+/**
+ * Safety net only. Happy path is Diem → POST /api/webhook/fulfillment.
+ * Use this cron for orphaned jobs when a webhook was missed.
+ */
 export async function POST(request: NextRequest) {
     if (!isAuthorized(request)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -114,7 +118,7 @@ export async function POST(request: NextRequest) {
             attempts: { lt: 20 },
         },
         orderBy: { createdAt: "asc" },
-        take: 25,
+        take: 10,
         select: { id: true },
     });
     const results = [];
@@ -138,7 +142,7 @@ export async function POST(request: NextRequest) {
             attempts: { lt: 20 },
         },
         orderBy: { createdAt: "asc" },
-        take: 25,
+        take: 10,
         select: { id: true },
     });
     const activationResults = [];

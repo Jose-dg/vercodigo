@@ -8,7 +8,8 @@ marketplaces y el stock local de `Key` ya no participan en compras nuevas.
 - `DIEM_API_URL=https://diem-ai.onrender.com`
 - `DIEM_SERVICE_API_KEY=<key de diem-sas-production>`
 - `DIEM_STORE_ID=<uuid de la tienda autorizada>`
-- `CRON_SECRET=<secreto independiente>`
+- `CRON_SECRET=<secreto independiente>` (Vercel Cron envía `Authorization: Bearer $CRON_SECRET` a `/api/jobs/fulfillment` cada 5 min; safety net si Diem no notifica)
+- En Diem prod: `FULFILLMENT_PARTNER_WEBHOOK_URL=https://vercodigo.vercel.app/api/webhook/fulfillment` y el mismo secret que `DIEM_FULFILLMENT_WEBHOOK_SECRET` (nunca `localhost` en Render)
 
 No existe fallback automático para `DIEM_API_URL`: si falta una variable, la
 compra falla antes de contactar un servidor. En producción la URL debe usar

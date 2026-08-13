@@ -190,14 +190,20 @@ export async function getWalletForCompany(companyId: string, opts?: { page?: num
     const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? 25));
 
     const wallet = await getOrCreateWallet(companyId);
+    // FAILED se conserva en DB por auditoría (reclasificaciones) pero no se
+    // muestra al cliente: solo CONFIRMED y PENDING (FX pendiente).
+    const visibleWhere = {
+        walletId: wallet.id,
+        status: { in: ["CONFIRMED", "PENDING"] as ("CONFIRMED" | "PENDING")[] },
+    };
     const [transactions, total] = await Promise.all([
         prisma.walletTransaction.findMany({
-            where: { walletId: wallet.id },
+            where: visibleWhere,
             orderBy: { createdAt: "desc" },
             skip: (page - 1) * pageSize,
             take: pageSize,
         }),
-        prisma.walletTransaction.count({ where: { walletId: wallet.id } }),
+        prisma.walletTransaction.count({ where: visibleWhere }),
     ]);
 
     return { wallet, transactions, pagination: { page, pageSize, total } };

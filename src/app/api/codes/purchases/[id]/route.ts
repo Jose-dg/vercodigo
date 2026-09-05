@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { AppError } from "@/lib/errors";
 import { withAuth } from "@/lib/auth/guard";
-import { getCodePurchaseForUser, processCodePurchase } from "@/services/self-service/purchase-codes.service";
+import { getCodePurchaseForUser } from "@/services/self-service/purchase-codes.service";
 
 async function handler(
     _req: NextRequest,
@@ -12,14 +12,8 @@ async function handler(
 ) {
     try {
         const { id } = await context.params;
-        let purchase = await getCodePurchaseForUser(id, user);
-        if (purchase.isPending) {
-            try {
-                purchase = await processCodePurchase(id);
-            } catch {
-                purchase = await getCodePurchaseForUser(id, user);
-            }
-        }
+        // Solo lectura local. Diem avisa por webhook; no re-procesar contra Diem en cada poll.
+        const purchase = await getCodePurchaseForUser(id, user);
         return NextResponse.json({ success: true, purchase });
     } catch (error) {
         if (error instanceof AppError) {

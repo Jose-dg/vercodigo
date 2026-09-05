@@ -6,6 +6,7 @@ import {
     createCodeRequest,
     getCodeRequest,
     revealCodeRequest,
+    retryDelayMsFromDiemError,
 } from "@/lib/devdiem/fulfillment";
 import { assertCanActivateCard } from "./permissions.service";
 import { checkRateLimit } from "./rate-limit.service";
@@ -56,6 +57,36 @@ export async function processActivationJob(jobId: string) {
     });
     if (!actor?.email) throw conflict("El usuario necesita un email");
 
+    if (!(job.commercialAmount && job.commercialAmount > 0) || !job.commercialCurrency) {
+        const configuredCost = await resolveCost(
+            job.card.store.companyId,
+            job.card.productId,
+            effectiveDenomination?.id ?? job.card.denominationId,
+        );
+        const fallbackAmount = effectiveDenomination?.amount ?? job.card.customAmount;
+        const commercialAmount = configuredCost?.amount ?? fallbackAmount ?? 0;
+        if (!(commercialAmount > 0)) {
+            throw conflict("No existe un costo válido para esta activación");
+        }
+        job = await prisma.activationJob.update({
+            where: { id: job.id },
+            data: {
+                commercialAmount,
+                commercialCurrency:
+                    configuredCost?.currency ?? effectiveDenomination?.currency ?? "USD",
+            },
+            include: {
+                card: {
+                    include: {
+                        product: { include: { denominations: true } },
+                        denomination: true,
+                        store: { include: { company: true } },
+                    },
+                },
+            },
+        });
+    }
+
     try {
         if (!job.diemRequestId) {
             const [firstName, ...lastName] = (actor.name || actor.email).trim().split(/\s+/);
@@ -69,6 +100,13 @@ export async function processActivationJob(jobId: string) {
                     firstName,
                     lastName: lastName.join(" "),
                     email: actor.email,
+                },
+                commercial: {
+                    accountCode: `diem-sas:${job.card.store.companyId}`,
+                    referenceNamespace: "card_activation",
+                    currencyCode: job.commercialCurrency!,
+                    unitPrice: job.commercialAmount!,
+                    totalAmount: job.commercialAmount!,
                 },
                 metadata: {
                     activation_job_id: job.id,
@@ -238,20 +276,14 @@ export async function processActivationJob(jobId: string) {
                     activationAmount,
                 },
             });
-            const cost = await resolveCost(
-                job!.card.store.companyId,
-                job!.card.productId,
-                effectiveDenomination?.id ?? job!.card.denominationId,
-                tx,
-            );
-            const debitAmount = cost?.amount ?? activationAmount;
-            if (!(debitAmount > 0)) {
+            const debitAmount = job!.commercialAmount ?? 0;
+            if (!(debitAmount > 0) || !job!.commercialCurrency) {
                 throw conflict("No existe un costo válido para esta activación");
             }
             await debit({
                 companyId: job!.card.store.companyId,
                 amount: debitAmount,
-                currency: cost?.currency ?? effectiveDenomination?.currency ?? "USD",
+                currency: job!.commercialCurrency,
                 description: `Activación ${job!.card.product.name} (${job!.card.uuid})`,
                 createdById: job!.userId,
                 cardActivationId: activation.id,
@@ -304,12 +336,13 @@ export async function processActivationJob(jobId: string) {
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : "UNKNOWN";
+        const retryMs = retryDelayMsFromDiemError(error, RETRY_DELAY_MS);
         await prisma.activationJob.update({
             where: { id: job.id },
             data: {
                 attempts: { increment: 1 },
                 lastError: message.slice(0, 1000),
-                nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                nextRetryAt: new Date(Date.now() + retryMs),
             },
         }).catch(() => undefined);
         throw error;
@@ -383,6 +416,9 @@ export async function activateCard(params: {
                 storeId: card.storeId,
                 status: "PENDING",
                 idempotencyKey: `diem-sas-activation:${crypto.randomUUID()}`,
+                commercialAmount: configuredCost?.amount ?? fallbackAmount!,
+                commercialCurrency:
+                    configuredCost?.currency ?? effectiveDenomination?.currency ?? "USD",
             },
         });
     });

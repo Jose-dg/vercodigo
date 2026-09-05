@@ -63,6 +63,13 @@ test('createCodeRequest sends the Diem-SAS partner contract and idempotency head
             lastName: 'Lovelace',
             email: 'ada@example.com',
         },
+        commercial: {
+            accountCode: 'diem-sas:company-1',
+            referenceNamespace: 'code_purchase',
+            currencyCode: 'COP',
+            unitPrice: 40000,
+            totalAmount: 80000,
+        },
     });
 
     assert.equal(result.id, 'request-1');
@@ -73,6 +80,9 @@ test('createCodeRequest sends the Diem-SAS partner contract and idempotency head
     assert.equal(body.store_id, STORE_ID);
     assert.equal(body.delivery_mode, 'partner_retrieval');
     assert.equal(body.items[0].quantity, 2);
+    assert.equal(body.commercial.account_code, 'diem-sas:company-1');
+    assert.equal(body.commercial.lines[0].unit_price, '40000.00');
+    assert.equal(body.commercial.total_amount, '80000.00');
     assert.equal(body.metadata.application, 'diem-sas');
 });
 

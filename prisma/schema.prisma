@@ -529,6 +529,8 @@ model ActivationJob {
   idempotencyKey    String    @unique
   diemRequestId     String?   @unique
   fulfillmentStatus String?
+  commercialAmount  Float?
+  commercialCurrency String?
   deliveredCodes    Json?
   nextRetryAt       DateTime?
   createdAt         DateTime  @default(now())

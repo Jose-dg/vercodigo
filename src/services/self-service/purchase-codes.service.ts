@@ -7,6 +7,7 @@ import {
     createCodeRequest,
     getCodeRequest,
     revealCodeRequest,
+    retryDelayMsFromDiemError,
 } from "@/lib/devdiem/fulfillment";
 import { debit } from "@/services/wallet/wallet.service";
 import { resolveCost } from "@/services/costing/costing.service";
@@ -179,6 +180,13 @@ export async function processCodePurchase(purchaseId: string) {
                     lastName: lastName.join(" "),
                     email: user.email,
                 },
+                commercial: {
+                    accountCode: `diem-sas:${purchase.companyId}`,
+                    referenceNamespace: "code_purchase",
+                    currencyCode: purchase.currency,
+                    unitPrice: purchase.totalAmount / purchase.count,
+                    totalAmount: purchase.totalAmount,
+                },
                 metadata: {
                     code_purchase_id: purchase.id,
                     company_id: purchase.companyId,
@@ -313,12 +321,13 @@ export async function processCodePurchase(purchaseId: string) {
         return serializePurchase(purchase);
     } catch (error) {
         const message = error instanceof Error ? error.message : "Error desconocido";
+        const retryMs = retryDelayMsFromDiemError(error, RETRY_DELAY_MS);
         await prisma.codePurchase.update({
             where: { id: purchase.id },
             data: {
                 attempts: { increment: 1 },
                 lastError: message.slice(0, 1000),
-                nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                nextRetryAt: new Date(Date.now() + retryMs),
             },
         }).catch(() => undefined);
         throw error;

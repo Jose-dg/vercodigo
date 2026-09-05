@@ -41,14 +41,64 @@ function headers(config: DiemConfig, extra?: Record<string, string>) {
     };
 }
 
+export type DiemHttpError = Error & {
+    status?: number;
+    detail?: unknown;
+    retryAfterSeconds?: number;
+};
+
+function extractRetryAfterSeconds(response: Response, detail: unknown): number | undefined {
+    const header = response.headers.get('Retry-After');
+    if (header && /^\d+$/.test(header.trim())) {
+        return Number(header.trim());
+    }
+    const text = typeof detail === 'string'
+        ? detail
+        : detail && typeof detail === 'object' && typeof (detail as { detail?: unknown }).detail === 'string'
+            ? (detail as { detail: string }).detail
+            : '';
+    const match = text.match(/available in\s+(\d+)/i);
+    if (match) return Number(match[1]);
+    return undefined;
+}
+
+export function isDiemRateLimited(error: unknown): error is DiemHttpError {
+    return Boolean(
+        error
+        && typeof error === 'object'
+        && (error as DiemHttpError).status === 429,
+    );
+}
+
+export function retryDelayMsFromDiemError(error: unknown, fallbackMs = 60_000): number {
+    if (!isDiemRateLimited(error)) return fallbackMs;
+    const seconds = error.retryAfterSeconds;
+    if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
+        // Tope práctico: si el cupo diario quedó agotado, reintentar en 15 min
+        // y no dejar el job “muerto” 15 h en la UI.
+        return Math.min(Math.max(seconds, 5), 15 * 60) * 1000;
+    }
+    return fallbackMs;
+}
+
 async function parse<T>(response: Response): Promise<T> {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-        const error = new Error(
-            typeof body?.detail === 'string' ? body.detail : `Diem respondió HTTP ${response.status}`,
-        ) as Error & { status?: number; detail?: unknown };
+        const detailText = typeof body?.detail === 'string'
+            ? body.detail
+            : `Diem respondió HTTP ${response.status}`;
+        const retryAfterSeconds = extractRetryAfterSeconds(response, body?.detail ?? body);
+        const message = response.status === 429
+            ? (
+                retryAfterSeconds
+                    ? `Diem está limitando solicitudes. Reintenta en ${retryAfterSeconds}s.`
+                    : 'Diem está limitando solicitudes (Too Many Requests).'
+            )
+            : detailText;
+        const error = new Error(message) as DiemHttpError;
         error.status = response.status;
         error.detail = body;
+        error.retryAfterSeconds = retryAfterSeconds;
         throw error;
     }
     return body as T;
@@ -69,6 +119,7 @@ export type FulfillmentStatus =
 
 export type CodeRequest = {
     id: string;
+    commercial_order_id?: string | null;
     status: FulfillmentStatus;
     external_reference: string;
 };
@@ -84,6 +135,13 @@ export async function createCodeRequest(params: {
         lastName?: string;
         email: string;
         phone?: string;
+    };
+    commercial: {
+        accountCode: string;
+        referenceNamespace: 'code_purchase' | 'card_activation';
+        currencyCode: string;
+        unitPrice: number;
+        totalAmount: number;
     };
     metadata?: Record<string, unknown>;
 }): Promise<CodeRequest> {
@@ -111,6 +169,19 @@ export async function createCodeRequest(params: {
             }],
             preferred_channel: 'email',
             delivery_mode: 'partner_retrieval',
+            commercial: {
+                account_code: params.commercial.accountCode,
+                reference_namespace: params.commercial.referenceNamespace,
+                currency_code: params.commercial.currencyCode,
+                lines: [{
+                    product_id: params.productId,
+                    unit_price: params.commercial.unitPrice.toFixed(2),
+                }],
+                discount_amount: '0.00',
+                tax_amount: '0.00',
+                shipping_amount: '0.00',
+                total_amount: params.commercial.totalAmount.toFixed(2),
+            },
             metadata: {
                 application: 'diem-sas',
                 ...params.metadata,

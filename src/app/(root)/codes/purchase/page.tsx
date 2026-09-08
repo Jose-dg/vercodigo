@@ -8,10 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ShoppingCart, Check, AlertCircle, Copy, History } from 'lucide-react';
+import { Loader2, ShoppingCart, Check, AlertCircle, Copy, History, Building2, Package, Hash, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PurchaseHistoryPanel } from '@/components/codes/PurchaseHistoryPanel';
+import type { UserRole } from '@prisma/client';
 
 interface Product {
     id: string;
@@ -54,7 +55,7 @@ interface PurchaseResponse {
 export default function PurchaseCodesPage() {
     const { data: session, status: sessionStatus } = useSession();
     const isPlatform =
-        session?.user?.role != null && isPlatformRole(session.user.role as any);
+        session?.user?.role != null && isPlatformRole(session.user.role as UserRole);
     const [products, setProducts] = useState<Product[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [productsError, setProductsError] = useState<string | null>(null);
@@ -87,14 +88,14 @@ export default function PurchaseCodesPage() {
             if (response.ok && data?.purchase) {
                 setPurchaseResult(data);
                 if (data.purchase.status === 'COMPLETED') {
-                    toast.success("?C?digos entregados!");
+                    toast.success("Códigos entregados");
                     setHistoryTick((tick) => tick + 1);
                     window.clearInterval(timer);
                 } else if (data.purchase.status === 'FAILED') {
-                    toast.error("La entrega fall? y no se debit? la wallet.");
+                    toast.error("La entrega falló y no se debitó la wallet.");
                     window.clearInterval(timer);
                 } else if (data.purchase.status === 'ACTION_REQUIRED') {
-                    toast.error("La entrega necesita revisi?n manual.");
+                    toast.error("La entrega necesita revisión manual.");
                     window.clearInterval(timer);
                 }
             }
@@ -107,7 +108,7 @@ export default function PurchaseCodesPage() {
 
         if (sessionStatus !== 'authenticated') {
             setLoadingProducts(false);
-            setProductsError('Debes iniciar sesi?n para ver el cat?logo de compra.');
+            setProductsError('Debes iniciar sesión para ver el catálogo de compra.');
             return;
         }
 
@@ -131,7 +132,7 @@ export default function PurchaseCodesPage() {
                         || (data && typeof data.detail === 'string' && data.detail)
                         || 'No se pudieron cargar los productos disponibles.';
                     const message = /invalid api key/i.test(rawMessage)
-                        ? 'Diem rechaz? la API key. Verifica DIEM_SERVICE_API_KEY en .env.local (debe ser la misma que en Vercel).'
+                        ? 'Diem rechazó la API key. Verifica DIEM_SERVICE_API_KEY en .env.local (debe ser la misma que en Vercel).'
                         : rawMessage;
                     setProducts([]);
                     setProductsError(message);
@@ -141,7 +142,7 @@ export default function PurchaseCodesPage() {
 
                 if (!Array.isArray(data)) {
                     setProducts([]);
-                    setProductsError('Respuesta inv?lida del cat?logo de productos.');
+                    setProductsError('Respuesta inválida del catálogo de productos.');
                     return;
                 }
 
@@ -161,7 +162,7 @@ export default function PurchaseCodesPage() {
                 setProducts(purchasableProducts);
                 if (purchasableProducts.length === 0) {
                     setProductsError(
-                        'No hay productos habilitados para compra. Revisa el mapeo con Diem y que est?n activos.',
+                        'No hay productos habilitados para compra. Revisa el mapeo con Diem y que estén activos.',
                     );
                 }
             } catch (err) {
@@ -239,15 +240,15 @@ export default function PurchaseCodesPage() {
             return;
         }
         if (needsDenomination && !selectedDenominationId) {
-            toast.error("Seleccione la denominaci?n");
+            toast.error("Seleccione la denominación");
             return;
         }
         if (quantity < 1 || quantity > 100) {
-            toast.error("Cantidad inv?lida (1-100)");
+            toast.error("Cantidad inválida (1-100)");
             return;
         }
         if (isPlatform && !targetCompanyId) {
-            toast.error("Selecciona la compa??a que recibir? el cargo");
+            toast.error("Selecciona la empresa que recibirá el cargo");
             return;
         }
 
@@ -286,7 +287,7 @@ export default function PurchaseCodesPage() {
                 if (res.status === 409) {
                     toast.error(
                         apiMessage?.includes('Idempotency-Key')
-                            ? 'Este intento de compra ya se us? con otra cantidad o producto. Vuelve a confirmar la compra.'
+                            ? 'Este intento de compra ya se usó con otra cantidad o producto. Vuelve a confirmar la compra.'
                             : apiMessage || 'Stock insuficiente',
                     );
                 } else {
@@ -299,16 +300,16 @@ export default function PurchaseCodesPage() {
             setHistoryTick((tick) => tick + 1);
             if (data.purchase?.isPending) {
                 setActiveTab('history');
-                toast.success("Solicitud recibida. Qued? en pendientes por entregar.");
+                toast.success("Solicitud recibida. Quedó pendiente de entrega.");
             } else if (data.purchase?.status === 'COMPLETED') {
                 setActiveTab('history');
-                toast.success("?Compra exitosa!");
+                toast.success("Compra exitosa");
             } else {
-                toast.error("La solicitud necesita revisi?n.");
+                toast.error("La solicitud necesita revisión.");
             }
         } catch (error) {
             console.error("Purchase error:", error);
-            toast.error("Error de conexi?n");
+            toast.error("Error de conexión");
         } finally {
             setIsPurchasing(false);
             purchaseInFlightKey.current = null;
@@ -327,7 +328,7 @@ export default function PurchaseCodesPage() {
         if (!purchaseResult) return;
         const codes = purchaseResult.purchase.keys.map(k => k.code).join('\n');
         navigator.clipboard.writeText(codes);
-        toast.success("C?digos copiados al portapapeles");
+        toast.success("Códigos copiados al portapapeles");
     };
 
     if (loadingProducts) {
@@ -343,243 +344,283 @@ export default function PurchaseCodesPage() {
     const needsActionResult = purchaseResult?.purchase.needsAction;
     const pendingManualReview =
         purchaseResult?.purchase.fulfillmentStatus === 'pending_review';
+    const selectedCompany = companies.find((company) => company.companyId === targetCompanyId);
+    const estimatedTotal =
+        referencePrice?.salePrice != null ? referencePrice.salePrice * quantity : null;
+    const canPurchase =
+        Boolean(selectedProductId)
+        && (!needsDenomination || Boolean(selectedDenominationId))
+        && quantity >= 1
+        && quantity <= 100
+        && (!isPlatform || Boolean(targetCompanyId));
 
     return (
-        <div className="container max-w-5xl py-10">
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold tracking-tight">Comprar C?digos</h1>
-                <p className="text-muted-foreground">
-                    Solicita c?digos digitales y consulta entregas pendientes o completadas.
-                </p>
-            </div>
+        <main className="min-h-full bg-muted/20">
+            <div className="container max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+                <header className="mb-8 flex items-start gap-4">
+                    <div className="hidden size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm sm:flex">
+                        <ShoppingCart className="size-5" />
+                    </div>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Comprar códigos</h1>
+                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                            Solicita códigos digitales y consulta el estado de cada entrega.
+                        </p>
+                    </div>
+                </header>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList>
-                    <TabsTrigger value="order">Nueva orden</TabsTrigger>
-                    <TabsTrigger value="history">Mis solicitudes</TabsTrigger>
-                </TabsList>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                    <TabsList className="grid h-11 w-full max-w-sm grid-cols-2 p-1">
+                        <TabsTrigger value="order">Nueva orden</TabsTrigger>
+                        <TabsTrigger value="history">Mis solicitudes</TabsTrigger>
+                    </TabsList>
 
-                <TabsContent value="order" className="space-y-6">
-                    {purchaseResult && (
-                        <Card className="border-green-200 shadow-sm">
-                            <CardHeader className="bg-green-50 rounded-t-lg pb-4">
-                                <CardTitle className="text-lg text-green-800 flex items-center gap-2">
-                                    {pendingResult
-                                        ? <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                                        : successfulResult
-                                            ? <Check className="h-5 w-5 text-green-600" />
-                                            : <AlertCircle className="h-5 w-5 text-red-600" />}
-                                    {pendingResult
-                                        ? pendingManualReview
-                                            ? 'Confirmaci?n operativa pendiente'
-                                            : 'Solicitud en cola'
-                                        : successfulResult
-                                            ? 'Compra entregada'
-                                            : needsActionResult
-                                                ? 'Revisi?n requerida'
-                                                : 'Entrega fallida'}
-                                </CardTitle>
-                                <CardDescription>
-                                    {pendingResult
-                                        ? 'Tu solicitud ya est? registrada. Rev?sala en la pesta?a Mis solicitudes; no necesitas pedirla otra vez.'
-                                        : successfulResult
-                                            ? `Se entregaron ${purchaseResult.purchase.count} c?digo(s).`
-                                            : 'No se debit? la wallet.'}
-                                </CardDescription>
-                            </CardHeader>
-                            {successfulResult && (
-                                <CardContent className="pt-4 space-y-4">
-                                    <div className="bg-gray-50 p-4 rounded-md border max-h-48 overflow-y-auto font-mono text-sm">
-                                        <ul className="space-y-1 divide-y divide-dashed">
-                                            {purchaseResult.purchase.keys.map((k, i) => (
-                                                <li key={i} className="pt-1 flex justify-between">
-                                                    <span className="text-gray-500 w-8">{i + 1}.</span>
-                                                    <span className="font-bold text-gray-800 select-all">{k.code}</span>
+                    <TabsContent value="order" className="space-y-6">
+                        {purchaseResult && (
+                            <Card className="max-w-3xl overflow-hidden border-emerald-200 shadow-sm">
+                                <CardHeader className="border-b border-emerald-100 bg-emerald-50/70">
+                                    <CardTitle className="flex items-center gap-2 text-lg text-emerald-900">
+                                        {pendingResult
+                                            ? <Loader2 className="size-5 animate-spin text-blue-600" />
+                                            : successfulResult
+                                                ? <Check className="size-5 text-emerald-600" />
+                                                : <AlertCircle className="size-5 text-red-600" />}
+                                        {pendingResult
+                                            ? pendingManualReview ? 'Confirmación operativa pendiente' : 'Solicitud pendiente en Diem'
+                                            : successfulResult ? 'Compra entregada'
+                                            : needsActionResult ? 'Revisión requerida' : 'Entrega fallida'}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {pendingResult
+                                            ? 'La solicitud ya está registrada. Puedes seguirla desde Mis solicitudes.'
+                                            : successfulResult
+                                                ? `Se entregaron ${purchaseResult.purchase.count} código(s).`
+                                                : 'No se debitó la wallet.'}
+                                    </CardDescription>
+                                </CardHeader>
+                                {successfulResult && (
+                                    <CardContent className="space-y-4 pt-6">
+                                        <ol className="max-h-52 divide-y divide-dashed overflow-y-auto rounded-lg border bg-muted/40 px-4 font-mono text-sm">
+                                            {purchaseResult.purchase.keys.map((key, index) => (
+                                                <li key={index} className="flex items-center gap-4 py-3">
+                                                    <span className="w-6 text-muted-foreground">{index + 1}.</span>
+                                                    <span className="select-all font-semibold">{key.code}</span>
                                                 </li>
                                             ))}
-                                        </ul>
-                                    </div>
-                                    <Button variant="outline" onClick={copyAllCodes} className="w-full sm:w-auto">
-                                        <Copy className="mr-2 h-4 w-4" />
-                                        Copiar c?digos
+                                        </ol>
+                                        <Button variant="outline" onClick={copyAllCodes}>
+                                            <Copy className="mr-2 size-4" />
+                                            Copiar códigos
+                                        </Button>
+                                    </CardContent>
+                                )}
+                                <CardFooter className="flex-wrap gap-2 pt-6">
+                                    <Button variant="outline" onClick={() => setActiveTab('history')}>
+                                        <History className="mr-2 size-4" />
+                                        Ver mis solicitudes
                                     </Button>
-                                </CardContent>
-                            )}
-                            <CardFooter className="gap-2 flex-wrap">
-                                <Button variant="outline" onClick={() => setActiveTab('history')}>
-                                    <History className="mr-2 h-4 w-4" />
-                                    Ver mis solicitudes
-                                </Button>
-                                <Button onClick={handleReset} disabled={pendingResult}>
-                                    Nueva compra
+                                    <Button onClick={handleReset} disabled={pendingResult}>Nueva compra</Button>
+                                </CardFooter>
+                            </Card>
+                        )}
+
+                        <Card className="max-w-3xl overflow-hidden shadow-sm">
+                            <CardHeader className="border-b bg-card pb-5">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <CardTitle className="text-xl">Nueva orden</CardTitle>
+                                        <CardDescription className="mt-1">
+                                            Completa los datos para reservar y entregar los códigos.
+                                        </CardDescription>
+                                    </div>
+                                    <span className="hidden rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground sm:block">
+                                        Máximo 100 códigos
+                                    </span>
+                                </div>
+                            </CardHeader>
+
+                            <CardContent className="space-y-8 pt-6">
+                                {isPlatform && (
+                                    <section className="space-y-4" aria-labelledby="company-section">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex size-8 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                                                <Building2 className="size-4" />
+                                            </div>
+                                            <div>
+                                                <h2 id="company-section" className="text-sm font-semibold">Empresa que realiza la compra</h2>
+                                                <p className="text-xs text-muted-foreground">El cargo se aplicará a la wallet seleccionada.</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid gap-4 rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 sm:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="target-company">Empresa</Label>
+                                                <Select
+                                                    value={targetCompanyId || undefined}
+                                                    onValueChange={(value) => {
+                                                        setTargetCompanyId(value);
+                                                        setTargetStoreId('');
+                                                    }}
+                                                >
+                                                    <SelectTrigger id="target-company" className="bg-background">
+                                                        <SelectValue placeholder="Seleccionar empresa..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="popper" className="z-[100]">
+                                                        {companies.map((company) => (
+                                                            <SelectItem key={company.companyId} value={company.companyId}>
+                                                                {company.companyName}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="target-store">Tienda <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                                                <Select value={targetStoreId || undefined} onValueChange={setTargetStoreId} disabled={!targetCompanyId}>
+                                                    <SelectTrigger id="target-store" className="bg-background">
+                                                        <SelectValue placeholder="Sin tienda específica" />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="popper" className="z-[100]">
+                                                        {storesForSelectedCompany.map((store) => (
+                                                            <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </section>
+                                )}
+
+                                <section className="space-y-4" aria-labelledby="product-section">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                            <Package className="size-4" />
+                                        </div>
+                                        <div>
+                                            <h2 id="product-section" className="text-sm font-semibold">Producto y denominación</h2>
+                                            <p className="text-xs text-muted-foreground">Selecciona el código digital que necesitas.</p>
+                                        </div>
+                                    </div>
+                                    <div className={needsDenomination ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="product">Producto</Label>
+                                            <Select
+                                                value={selectedProductId || undefined}
+                                                onValueChange={(value) => {
+                                                    setSelectedProductId(value);
+                                                    setSelectedDenominationId('');
+                                                }}
+                                                disabled={products.length === 0}
+                                            >
+                                                <SelectTrigger id="product">
+                                                    <SelectValue placeholder="Seleccionar producto..." />
+                                                </SelectTrigger>
+                                                <SelectContent position="popper" className="z-[100]">
+                                                    {products.map((product) => (
+                                                        <SelectItem key={product.id} value={product.id}>
+                                                            {product.name} · {product.brand}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {productsError && <p className="text-sm text-amber-700">{productsError}</p>}
+                                        </div>
+                                        {needsDenomination && (
+                                            <div className="space-y-2">
+                                                <Label htmlFor="denomination">Denominación</Label>
+                                                <Select value={selectedDenominationId || undefined} onValueChange={setSelectedDenominationId}>
+                                                    <SelectTrigger id="denomination">
+                                                        <SelectValue placeholder="Seleccionar denominación..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent position="popper" className="z-[100]">
+                                                        {selectedProduct?.denominations.map((denomination) => (
+                                                            <SelectItem key={denomination.id} value={denomination.id}>
+                                                                {denomination.amount.toLocaleString("es-CO")} {denomination.currency}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+
+                                <section className="space-y-4" aria-labelledby="quantity-section">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                            <Hash className="size-4" />
+                                        </div>
+                                        <div>
+                                            <h2 id="quantity-section" className="text-sm font-semibold">Cantidad</h2>
+                                            <p className="text-xs text-muted-foreground">Puedes solicitar entre 1 y 100 códigos.</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="quantity">Número de códigos</Label>
+                                            <Input
+                                                id="quantity"
+                                                type="number"
+                                                min={1}
+                                                max={100}
+                                                value={quantity}
+                                                onChange={(event) => setQuantity(parseInt(event.target.value) || 0)}
+                                                className="font-mono text-base tabular-nums"
+                                            />
+                                        </div>
+                                        {referencePrice?.salePrice != null && (
+                                            <div className="rounded-lg border bg-muted/40 px-4 py-3">
+                                                <p className="text-xs text-muted-foreground">Precio configurado por unidad</p>
+                                                <p className="mt-1 font-mono text-base font-semibold tabular-nums">
+                                                    {referencePrice.salePrice.toLocaleString("es-CO")} {referencePrice.currency}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+
+                                <div className="flex gap-3 rounded-xl border border-blue-200/70 bg-blue-50/70 p-4 text-sm text-blue-900">
+                                    <AlertCircle className="mt-0.5 size-5 shrink-0 text-blue-600" />
+                                    <div>
+                                        <p className="font-semibold">Entrega protegida por Diem</p>
+                                        <p className="mt-1 leading-relaxed text-blue-800">
+                                            La wallet se debita únicamente cuando la entrega se completa.
+                                        </p>
+                                    </div>
+                                </div>
+                            </CardContent>
+
+                            <CardFooter className="flex flex-col gap-4 border-t bg-muted/30 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0 text-sm">
+                                    <p className="text-muted-foreground">
+                                        {isPlatform ? (selectedCompany?.companyName ?? 'Selecciona una empresa') : 'Compra para tu empresa'}
+                                    </p>
+                                    {estimatedTotal != null && quantity > 0 && (
+                                        <p className="mt-0.5 font-semibold">
+                                            Total estimado: <span className="font-mono tabular-nums">{estimatedTotal.toLocaleString("es-CO")} {referencePrice?.currency}</span>
+                                        </p>
+                                    )}
+                                </div>
+                                <Button
+                                    className="w-full transition-transform active:scale-[0.98] sm:w-auto sm:min-w-52"
+                                    size="lg"
+                                    onClick={handlePurchase}
+                                    disabled={isPurchasing || !canPurchase}
+                                >
+                                    {isPurchasing ? (
+                                        <><Loader2 className="mr-2 size-4 animate-spin" />Procesando...</>
+                                    ) : (
+                                        <>Confirmar compra<ArrowRight className="ml-2 size-4" /></>
+                                    )}
                                 </Button>
                             </CardFooter>
                         </Card>
-                    )}
+                    </TabsContent>
 
-                    <Card className="max-w-lg">
-                <CardHeader>
-                    <CardTitle>Nueva Orden</CardTitle>
-                    <CardDescription>Selecciona el producto y la cantidad.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    {isPlatform && (
-                        <>
-                            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                                Compra en nombre de una compa??a. El cargo se debitar? de su wallet.
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="target-company">Compa??a</Label>
-                                <Select
-                                    value={targetCompanyId || undefined}
-                                    onValueChange={(value) => {
-                                        setTargetCompanyId(value);
-                                        setTargetStoreId('');
-                                    }}
-                                >
-                                    <SelectTrigger id="target-company">
-                                        <SelectValue placeholder="Seleccionar compa??a..." />
-                                    </SelectTrigger>
-                                    <SelectContent position="popper" className="z-[100]">
-                                        {companies.map((company) => (
-                                            <SelectItem key={company.companyId} value={company.companyId}>
-                                                {company.companyName}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="target-store">Tienda (opcional)</Label>
-                                <Select
-                                    value={targetStoreId || undefined}
-                                    onValueChange={setTargetStoreId}
-                                    disabled={!targetCompanyId}
-                                >
-                                    <SelectTrigger id="target-store">
-                                        <SelectValue placeholder="Sin tienda espec?fica" />
-                                    </SelectTrigger>
-                                    <SelectContent position="popper" className="z-[100]">
-                                        {storesForSelectedCompany.map((store) => (
-                                            <SelectItem key={store.id} value={store.id}>
-                                                {store.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </>
-                    )}
-                    <div className="space-y-2">
-                        <Label htmlFor="product">Producto</Label>
-                        <Select
-                            value={selectedProductId || undefined}
-                            onValueChange={(v) => {
-                                setSelectedProductId(v);
-                                setSelectedDenominationId('');
-                            }}
-                            disabled={products.length === 0}
-                        >
-                            <SelectTrigger id="product">
-                                <SelectValue placeholder="Seleccionar producto..." />
-                            </SelectTrigger>
-                            <SelectContent position="popper" className="z-[100]">
-                                {products.map((p) => (
-                                    <SelectItem key={p.id} value={p.id}>
-                                        {p.name} - {p.brand}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {productsError && (
-                            <p className="text-sm text-amber-700">{productsError}</p>
-                        )}
-                    </div>
-
-                    {needsDenomination && (
-                        <div className="space-y-2">
-                            <Label htmlFor="denomination">Denominaci?n</Label>
-                            <Select
-                                value={selectedDenominationId || undefined}
-                                onValueChange={setSelectedDenominationId}
-                            >
-                                <SelectTrigger id="denomination">
-                                    <SelectValue placeholder="Seleccionar denominaci?n..." />
-                                </SelectTrigger>
-                                <SelectContent position="popper" className="z-[100]">
-                                    {selectedProduct?.denominations.map((d) => (
-                                        <SelectItem key={d.id} value={d.id}>
-                                            {d.amount} {d.currency}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-
-                    {referencePrice?.salePrice != null && (
-                        <div className="bg-green-50 p-3 rounded-md text-sm text-green-800 border border-green-100">
-                            Tu precio de venta configurado:{" "}
-                            <span className="font-semibold font-mono">
-                                {referencePrice.salePrice.toLocaleString("es-CO")} {referencePrice.currency}
-                            </span>{" "}
-                            por unidad
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
-                        <Label htmlFor="quantity">Cantidad</Label>
-                        <div className="flex items-center gap-4">
-                            <Input
-                                id="quantity"
-                                type="number"
-                                min={1}
-                                max={100}
-                                value={quantity}
-                                onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-                                className="font-mono text-lg"
-                            />
-                            <span className="text-sm text-muted-foreground whitespace-nowrap">
-                                (M?x. 100)
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="bg-blue-50 p-4 rounded-md flex gap-3 text-sm text-blue-700 border border-blue-100">
-                        <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                        <div>
-                            <p className="font-semibold mb-1">Entrega gestionada por Diem</p>
-                            Diem reservar? los c?digos y la wallet se debitar? ?nicamente cuando la entrega se complete.
-                        </div>
-                    </div>
-                </CardContent>
-                <CardFooter>
-                    <Button
-                        className="w-full"
-                        size="lg"
-                        onClick={handlePurchase}
-                        disabled={isPurchasing || !selectedProductId || (needsDenomination && !selectedDenominationId) || quantity < 1}
-                    >
-                        {isPurchasing ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Procesando...
-                            </>
-                        ) : (
-                            <>
-                                <ShoppingCart className="mr-2 h-4 w-4" />
-                                Confirmar Compra
-                            </>
-                        )}
-                    </Button>
-                </CardFooter>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="history">
-                    <PurchaseHistoryPanel refreshToken={historyTick} />
-                </TabsContent>
-            </Tabs>
-        </div>
+                    <TabsContent value="history">
+                        <PurchaseHistoryPanel refreshToken={historyTick} />
+                    </TabsContent>
+                </Tabs>
+            </div>
+        </main>
     );
 }

@@ -5,27 +5,20 @@ import {
   Home,
   BookOpen,
   Building2,
-  Store,
-  Package,
   QrCode,
-  Key,
   Zap,
-  FileText,
   Layers,
   Settings2,
   GalleryVerticalEnd,
-  AudioWaveform,
-  Command,
   SquareTerminal,
   Bot,
 } from "lucide-react"
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
-import { isPlatformRole } from "@/lib/auth/abilities"
+import { isPlatformRole, type Actions, type Subjects } from "@/lib/auth/abilities"
 import type { UserRole } from "@prisma/client"
 
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
@@ -37,18 +30,6 @@ import {
 } from "@/components/ui/sidebar"
 
 const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "",
-  },
-  teams: [
-    {
-      name: "Diem",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    }
-  ],
   navMain: [
     {
       title: "Home",
@@ -261,14 +242,32 @@ const data = {
   ],
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  companyName: string
+  user: {
+    name: string
+    email: string
+    avatar: string
+  }
+}
+
+export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
   const ability = useAbility();
   const currentUser = useCurrentUser();
+  const isPlatform = currentUser?.role != null && isPlatformRole(currentUser.role);
+  const teams = React.useMemo(
+    () => [{
+      name: companyName,
+      logo: isPlatform ? GalleryVerticalEnd : Building2,
+      plan: isPlatform ? "Plataforma Diem" : "Empresa activa",
+    }],
+    [companyName, isPlatform],
+  );
 
   const navMainWithError = React.useMemo(() => {
     const PLATFORM_ONLY_URLS = new Set(["/cards/reassign", "/qr/create"]);
     const PLACEHOLDER_URLS = new Set(["/stock", "/functions"]);
-    const PERMISSIONS: Record<string, [string, string]> = {
+    const PERMISSIONS: Record<string, [Actions, Subjects]> = {
       "/companies": ["read", "Company"],
       "/store": ["read", "Store"],
       "/products": ["read", "Product"],
@@ -302,7 +301,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if (url === "/analytics" && !isPlatformRole(role)) return false;
       const perm = PERMISSIONS[url];
       if (!perm) return false;
-      return ability.can(perm[0] as any, perm[1] as any);
+      return ability.can(perm[0], perm[1]);
     }
 
     return data.navMain
@@ -333,14 +332,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher teams={teams} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMainWithError} />
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

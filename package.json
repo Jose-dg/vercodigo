@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:devdiem": "node --test --experimental-strip-types tests/devdiem-fulfillment.test.mjs",
+    "reconciliation:export": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/export-commercial-reconciliation-manifest.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

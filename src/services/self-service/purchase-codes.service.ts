@@ -7,12 +7,10 @@ import {
     createCodeRequest,
     getCodeRequest,
     revealCodeRequest,
-    retryDelayMsFromDiemError,
 } from "@/lib/devdiem/fulfillment";
 import { debit } from "@/services/wallet/wallet.service";
 import { resolveCost } from "@/services/costing/costing.service";
 
-const RETRY_DELAY_MS = 60_000;
 const TERMINAL_FAILURES = new Set(["failed", "cancelled"]);
 const PENDING_STATUSES = ["PENDING", "AWAITING_STOCK", "FINALIZING", "ACTION_REQUIRED"] as const;
 const PLATFORM_ROLES = new Set(["SUPER_ADMIN", "SYSTEM_ADMIN"]);
@@ -120,26 +118,6 @@ export async function listCodePurchasesForUser(
     return enrichPurchases(purchases);
 }
 
-export async function refreshPendingCodePurchasesForUser(user: Actor) {
-    const pendingRows = await prisma.codePurchase.findMany({
-        where: {
-            ...buildPurchaseVisibilityFilter(user),
-            status: { in: [...PENDING_STATUSES] },
-        },
-        select: { id: true },
-        orderBy: { createdAt: "asc" },
-        take: 25,
-    });
-    for (const row of pendingRows) {
-        try {
-            await processCodePurchase(row.id);
-        } catch {
-            // Keep durable state; list endpoint will surface lastError.
-        }
-    }
-    return listCodePurchasesForUser(user);
-}
-
 export async function processCodePurchase(purchaseId: string) {
     let purchase = await prisma.codePurchase.findUnique({
         where: { id: purchaseId },
@@ -200,7 +178,7 @@ export async function processCodePurchase(purchaseId: string) {
                     fulfillmentStatus: request.status,
                     attempts: { increment: 1 },
                     lastError: null,
-                    nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                    nextRetryAt: null,
                 },
                 include: { denomination: true },
             });
@@ -209,13 +187,9 @@ export async function processCodePurchase(purchaseId: string) {
         const persistedCodes = Array.isArray(purchase.deliveredCodes)
             ? purchase.deliveredCodes.filter((code): code is string => typeof code === "string")
             : [];
-        const request = persistedCodes.length === purchase.count
-            ? {
-                id: purchase.diemRequestId!,
-                status: "delivered" as const,
-                external_reference: `DIEM-SAS-PURCHASE-${purchase.id}`,
-            }
-            : await getCodeRequest(purchase.diemRequestId!);
+        // Always revalidate the remote commercial link before reveal or debit,
+        // including retries that already persisted the delivered codes.
+        const request = await getCodeRequest(purchase.diemRequestId!);
         if (TERMINAL_FAILURES.has(request.status)) {
             purchase = await prisma.codePurchase.update({
                 where: { id: purchase.id },
@@ -247,7 +221,7 @@ export async function processCodePurchase(purchaseId: string) {
                 data: {
                     status: request.status === "awaiting_stock" ? "AWAITING_STOCK" : "PENDING",
                     fulfillmentStatus: request.status,
-                    nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                    nextRetryAt: null,
                 },
                 include: { denomination: true },
             });
@@ -267,7 +241,7 @@ export async function processCodePurchase(purchaseId: string) {
                     deliveredCodes: codes,
                     fulfillmentStatus: "delivered",
                     status: "PENDING",
-                    nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                    nextRetryAt: null,
                     lastError: null,
                 },
                 include: { denomination: true },
@@ -321,13 +295,12 @@ export async function processCodePurchase(purchaseId: string) {
         return serializePurchase(purchase);
     } catch (error) {
         const message = error instanceof Error ? error.message : "Error desconocido";
-        const retryMs = retryDelayMsFromDiemError(error, RETRY_DELAY_MS);
         await prisma.codePurchase.update({
             where: { id: purchase.id },
             data: {
                 attempts: { increment: 1 },
                 lastError: message.slice(0, 1000),
-                nextRetryAt: new Date(Date.now() + retryMs),
+                nextRetryAt: null,
             },
         }).catch(() => undefined);
         throw error;

@@ -119,10 +119,22 @@ export type FulfillmentStatus =
 
 export type CodeRequest = {
     id: string;
-    commercial_order_id?: string | null;
+    commercial_order_id: string;
     status: FulfillmentStatus;
     external_reference: string;
 };
+
+function requireCommercialOrder(request: CodeRequest): CodeRequest {
+    if (
+        typeof request.commercial_order_id !== 'string'
+        || request.commercial_order_id.trim() === ''
+    ) {
+        throw new Error(
+            'Diem devolvió una solicitud sin commercial_order_id; se detuvo el fulfillment',
+        );
+    }
+    return request;
+}
 
 export async function createCodeRequest(params: {
     idempotencyKey: string;
@@ -188,7 +200,7 @@ export async function createCodeRequest(params: {
             },
         }),
     });
-    return parse<CodeRequest>(response);
+    return requireCommercialOrder(await parse<CodeRequest>(response));
 }
 
 export async function getCodeRequest(requestId: string): Promise<CodeRequest> {
@@ -197,7 +209,7 @@ export async function getCodeRequest(requestId: string): Promise<CodeRequest> {
         `${config.baseUrl}/api/v1/code-requests/${encodeURIComponent(requestId)}/`,
         { headers: headers(config), cache: 'no-store' },
     );
-    return parse<CodeRequest>(response);
+    return requireCommercialOrder(await parse<CodeRequest>(response));
 }
 
 export async function revealCodeRequest(

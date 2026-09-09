@@ -47,7 +47,12 @@ test('createCodeRequest sends the Diem-SAS partner contract and idempotency head
     globalThis.fetch = async (url, init) => {
         captured = { url: String(url), init };
         return Response.json(
-            { id: 'request-1', status: 'received', external_reference: 'purchase-1' },
+            {
+                id: 'request-1',
+                commercial_order_id: 'order-1',
+                status: 'received',
+                external_reference: 'purchase-1',
+            },
             { status: 202 },
         );
     };
@@ -86,6 +91,53 @@ test('createCodeRequest sends the Diem-SAS partner contract and idempotency head
     assert.equal(body.metadata.application, 'diem-sas');
 });
 
+test('createCodeRequest rejects a remote request without commercial_order_id', async () => {
+    globalThis.fetch = async () => Response.json(
+        {
+            id: 'orphan-request',
+            commercial_order_id: null,
+            status: 'received',
+            external_reference: 'purchase-orphan',
+        },
+        { status: 202 },
+    );
+
+    await assert.rejects(
+        () => createCodeRequest({
+            idempotencyKey: 'purchase-orphan',
+            externalReference: 'purchase-orphan',
+            source: 'partner_api',
+            productId: '22222222-2222-4222-8222-222222222222',
+            quantity: 1,
+            recipient: {
+                firstName: 'Ada',
+                email: 'ada@example.com',
+            },
+            commercial: {
+                accountCode: 'diem-sas:company-1',
+                referenceNamespace: 'code_purchase',
+                currencyCode: 'COP',
+                unitPrice: 40000,
+                totalAmount: 40000,
+            },
+        }),
+        /sin commercial_order_id/,
+    );
+});
+
+test('getCodeRequest blocks continuation when commercial_order_id is missing', async () => {
+    globalThis.fetch = async () => Response.json({
+        id: 'orphan-request',
+        status: 'allocated',
+        external_reference: 'purchase-orphan',
+    });
+
+    await assert.rejects(
+        () => getCodeRequest('orphan-request'),
+        /sin commercial_order_id/,
+    );
+});
+
 test('status and reveal use protected endpoints and flatten delivered codes', async () => {
     const calls = [];
     globalThis.fetch = async (url, init = {}) => {
@@ -97,6 +149,7 @@ test('status and reveal use protected endpoints and flatten delivered codes', as
         }
         return Response.json({
             id: 'request/with spaces',
+            commercial_order_id: 'order-1',
             status: 'allocated',
             external_reference: 'purchase-1',
         });

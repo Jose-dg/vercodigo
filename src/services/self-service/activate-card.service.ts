@@ -6,7 +6,6 @@ import {
     createCodeRequest,
     getCodeRequest,
     revealCodeRequest,
-    retryDelayMsFromDiemError,
 } from "@/lib/devdiem/fulfillment";
 import { assertCanActivateCard } from "./permissions.service";
 import { checkRateLimit } from "./rate-limit.service";
@@ -18,7 +17,6 @@ import {
     resolveDevDiemProductId,
 } from "@/lib/devdiem/resolve-card-catalog";
 
-const RETRY_DELAY_MS = 60_000;
 
 export function extractCardUuid(qr: string): string {
     const value = qr?.trim();
@@ -122,7 +120,7 @@ export async function processActivationJob(jobId: string) {
                     fulfillmentStatus: remote.status,
                     status: "PROCESSING",
                     attempts: { increment: 1 },
-                    nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                    nextRetryAt: null,
                     lastError: null,
                 },
                 include: {
@@ -140,13 +138,9 @@ export async function processActivationJob(jobId: string) {
         const persistedCodes = Array.isArray(job.deliveredCodes)
             ? job.deliveredCodes.filter((code): code is string => typeof code === "string")
             : [];
-        const remote = persistedCodes.length === 1
-            ? {
-                id: job.diemRequestId!,
-                status: "delivered" as const,
-                external_reference: `DIEM-SAS-ACTIVATION-${job.id}`,
-            }
-            : await getCodeRequest(job.diemRequestId!);
+        // Always revalidate the remote commercial link before reveal or debit,
+        // including retries that already persisted the delivered code.
+        const remote = await getCodeRequest(job.diemRequestId!);
         if (["failed", "cancelled"].includes(remote.status)) {
             await prisma.$transaction([
                 prisma.activationJob.update({
@@ -186,7 +180,7 @@ export async function processActivationJob(jobId: string) {
                 data: {
                     status: remote.status === "awaiting_stock" ? "AWAITING_STOCK" : "PROCESSING",
                     fulfillmentStatus: remote.status,
-                    nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                    nextRetryAt: null,
                 },
             });
             return { status: remote.status, jobId: job.id };
@@ -203,7 +197,7 @@ export async function processActivationJob(jobId: string) {
                     deliveredCodes: codes,
                     fulfillmentStatus: "delivered",
                     status: "PROCESSING",
-                    nextRetryAt: new Date(Date.now() + RETRY_DELAY_MS),
+                    nextRetryAt: null,
                     lastError: null,
                 },
                 include: {
@@ -336,13 +330,12 @@ export async function processActivationJob(jobId: string) {
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : "UNKNOWN";
-        const retryMs = retryDelayMsFromDiemError(error, RETRY_DELAY_MS);
         await prisma.activationJob.update({
             where: { id: job.id },
             data: {
                 attempts: { increment: 1 },
                 lastError: message.slice(0, 1000),
-                nextRetryAt: new Date(Date.now() + retryMs),
+                nextRetryAt: null,
             },
         }).catch(() => undefined);
         throw error;
@@ -429,7 +422,8 @@ export async function activateCard(params: {
             return { success: true, ...processed };
         }
     } catch {
-        // The durable worker retries; the HTTP request must not perform an unsafe rollback.
+        // The job is durable. A webhook or an explicit operator retry can
+        // continue it without rolling back the accepted activation request.
     }
     return {
         success: true,

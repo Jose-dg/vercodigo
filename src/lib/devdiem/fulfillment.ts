@@ -152,6 +152,13 @@ async function parse<T>(response: Response): Promise<T> {
         error.retryAfterSeconds = retryAfterSeconds;
         if (typeof detailText === 'string' && detailText.toLowerCase().includes('commercial')) {
             error.reason = 'commercial_contract';
+            if (detailText.toLowerCase().includes('not found')
+                || detailText.toLowerCase().includes('does not resolve')) {
+                error.message = (
+                    `${detailText} Verifica CommercialAccount + grant para este `
+                    + 'account_code en la Store de DIEM_STORE_ID.'
+                );
+            }
         }
         throw error;
     }

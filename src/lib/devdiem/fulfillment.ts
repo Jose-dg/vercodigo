@@ -45,6 +45,7 @@ export type DiemHttpError = Error & {
     status?: number;
     detail?: unknown;
     retryAfterSeconds?: number;
+    reason?: string;
 };
 
 function extractRetryAfterSeconds(response: Response, detail: unknown): number | undefined {
@@ -70,6 +71,26 @@ export function isDiemRateLimited(error: unknown): error is DiemHttpError {
     );
 }
 
+/** Permanent partner-contract failures that should leave the queue (not soft PENDING). */
+export function isDiemContractError(error: unknown): error is DiemHttpError {
+    if (!error || typeof error !== 'object') return false;
+    const status = (error as DiemHttpError).status;
+    const message = String((error as Error).message || '').toLowerCase();
+    const reason = String((error as DiemHttpError).reason || '').toLowerCase();
+    const haystack = `${message} ${reason}`;
+    if (status === 401 || status === 403) return true;
+    if (status !== 400 && status !== 422) return false;
+    return (
+        haystack.includes('commercial')
+        || haystack.includes('fulfillment')
+        || haystack.includes('storeproduct')
+        || haystack.includes('idempotency')
+        || haystack.includes('catalog')
+        || haystack.includes('product must be')
+        || haystack.includes('does not resolve')
+    );
+}
+
 export function retryDelayMsFromDiemError(error: unknown, fallbackMs = 60_000): number {
     if (!isDiemRateLimited(error)) return fallbackMs;
     const seconds = error.retryAfterSeconds;
@@ -79,6 +100,36 @@ export function retryDelayMsFromDiemError(error: unknown, fallbackMs = 60_000): 
         return Math.min(Math.max(seconds, 5), 15 * 60) * 1000;
     }
     return fallbackMs;
+}
+
+/** Money strings that reconcile as unit * quantity === total on Diem. */
+export function commercialLineMoney(totalAmount: number, quantity: number): {
+    unitPrice: string;
+    totalAmount: string;
+} {
+    const totalCents = Math.round(Number(totalAmount) * 100);
+    if (!Number.isFinite(totalCents) || totalCents < 1 || quantity < 1) {
+        throw new Error('Montos comerciales inválidos para Diem');
+    }
+    if (totalCents % quantity === 0) {
+        const unitCents = totalCents / quantity;
+        return {
+            unitPrice: (unitCents / 100).toFixed(2),
+            totalAmount: (totalCents / 100).toFixed(2),
+        };
+    }
+    const unitCents = Math.round(totalCents / quantity);
+    return {
+        unitPrice: (unitCents / 100).toFixed(2),
+        totalAmount: ((unitCents * quantity) / 100).toFixed(2),
+    };
+}
+
+export function buildCommercialAccountCode(companyId: string): string {
+    const prefix = (process.env.DIEM_COMMERCIAL_ACCOUNT_PREFIX || 'diem-sas').trim() || 'diem-sas';
+    const id = companyId.trim();
+    if (!id) throw new Error('companyId es requerido para account_code comercial');
+    return `${prefix}:${id}`;
 }
 
 async function parse<T>(response: Response): Promise<T> {
@@ -99,6 +150,9 @@ async function parse<T>(response: Response): Promise<T> {
         error.status = response.status;
         error.detail = body;
         error.retryAfterSeconds = retryAfterSeconds;
+        if (typeof detailText === 'string' && detailText.toLowerCase().includes('commercial')) {
+            error.reason = 'commercial_contract';
+        }
         throw error;
     }
     return body as T;
@@ -158,6 +212,23 @@ export async function createCodeRequest(params: {
     metadata?: Record<string, unknown>;
 }): Promise<CodeRequest> {
     const config = getDiemConfig();
+    if (!params.commercial?.accountCode?.trim()) {
+        throw new Error('commercial.accountCode es obligatorio para el contrato Diem');
+    }
+    const money = commercialLineMoney(params.commercial.totalAmount, params.quantity);
+    const commercialPayload = {
+        account_code: params.commercial.accountCode.trim(),
+        reference_namespace: params.commercial.referenceNamespace,
+        currency_code: params.commercial.currencyCode,
+        lines: [{
+            product_id: params.productId,
+            unit_price: money.unitPrice,
+        }],
+        discount_amount: '0.00',
+        tax_amount: '0.00',
+        shipping_amount: '0.00',
+        total_amount: money.totalAmount,
+    };
     const response = await fetch(`${config.baseUrl}/api/v1/code-requests/`, {
         method: 'POST',
         headers: headers(config, {
@@ -181,21 +252,10 @@ export async function createCodeRequest(params: {
             }],
             preferred_channel: 'email',
             delivery_mode: 'partner_retrieval',
-            commercial: {
-                account_code: params.commercial.accountCode,
-                reference_namespace: params.commercial.referenceNamespace,
-                currency_code: params.commercial.currencyCode,
-                lines: [{
-                    product_id: params.productId,
-                    unit_price: params.commercial.unitPrice.toFixed(2),
-                }],
-                discount_amount: '0.00',
-                tax_amount: '0.00',
-                shipping_amount: '0.00',
-                total_amount: params.commercial.totalAmount.toFixed(2),
-            },
+            commercial: commercialPayload,
             metadata: {
                 application: 'diem-sas',
+                commercial_account_code: commercialPayload.account_code,
                 ...params.metadata,
             },
         }),

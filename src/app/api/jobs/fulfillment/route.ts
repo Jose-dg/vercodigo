@@ -104,8 +104,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Safety net only. Happy path is Diem → POST /api/webhook/fulfillment.
- * Use this cron for orphaned jobs when a webhook was missed.
+ * Explicit operational recovery only. Happy path is
+ * Diem → POST /api/webhook/fulfillment. This endpoint is not scheduled.
  */
 export async function POST(request: NextRequest) {
     if (!isAuthorized(request)) {

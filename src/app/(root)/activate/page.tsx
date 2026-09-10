@@ -127,6 +127,28 @@ export default function ActivatePage() {
         await loadCardPreview(trimmed);
     };
 
+    const retryActivation = async () => {
+        if (!result?.jobId) return;
+        setLoading(true);
+        try {
+            const response = await fetch(`/api/jobs/activation/${result.jobId}`, {
+                method: 'POST',
+                cache: 'no-store',
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok || !data) {
+                throw new Error(data?.message || 'No se pudo consultar Diem');
+            }
+            const completed = data.status === 'COMPLETED';
+            setResult({ ...data, success: true, processing: !completed });
+            toast.success(completed ? 'Tarjeta activada exitosamente' : 'Estado actualizado desde Diem');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'No se pudo consultar Diem');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleScanResult = useCallback((scannedValue: string) => {
         setShowScanner(false);
         setPendingQr(scannedValue);
@@ -342,12 +364,14 @@ export default function ActivatePage() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={reset}
-                                        disabled={result.processing}
+                                        onClick={result.processing ? retryActivation : reset}
+                                        disabled={loading}
                                         className="mt-3"
                                     >
-                                        {result.processing
-                                            ? 'Procesando...'
+                                        {loading
+                                            ? 'Consultando...'
+                                            : result.processing
+                                            ? 'Consultar Diem'
                                             : result.success
                                                 ? 'Activar otra tarjeta'
                                                 : 'Intentar de nuevo'}

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { AppError } from "@/lib/errors";
 import { withAuth } from "@/lib/auth/guard";
-import { getCodePurchaseForUser } from "@/services/self-service/purchase-codes.service";
+import {
+    getCodePurchaseForUser,
+    processCodePurchase,
+} from "@/services/self-service/purchase-codes.service";
 
 async function handler(
     _req: NextRequest,
@@ -27,3 +30,31 @@ async function handler(
 }
 
 export const GET = withAuth("read", "CodePurchase", handler);
+
+async function retryHandler(
+    _req: NextRequest,
+    context: { params: Promise<{ id: string }> },
+    _ability: unknown,
+    user: { id: string; role: string; companyId: string | null; storeId: string | null },
+) {
+    try {
+        const { id } = await context.params;
+        // Visibility is checked before any remote call or wallet finalization.
+        await getCodePurchaseForUser(id, user);
+        const purchase = await processCodePurchase(id);
+        return NextResponse.json({ success: true, purchase });
+    } catch (error) {
+        if (error instanceof AppError) {
+            return NextResponse.json(
+                { error: error.code, message: error.message },
+                { status: error.status },
+            );
+        }
+        return NextResponse.json(
+            { error: "INTERNAL", message: "No se pudo consultar la entrega en Diem" },
+            { status: 500 },
+        );
+    }
+}
+
+export const POST = withAuth("read", "CodePurchase", retryHandler);

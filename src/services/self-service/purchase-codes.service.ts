@@ -4,8 +4,11 @@ import prisma from "@/lib/prisma";
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import type { TokenPayload } from "@/lib/auth";
 import {
+    buildCommercialAccountCode,
     createCodeRequest,
     getCodeRequest,
+    isDiemContractError,
+    isDiemRateLimited,
     revealCodeRequest,
 } from "@/lib/devdiem/fulfillment";
 import { debit } from "@/services/wallet/wallet.service";
@@ -159,7 +162,7 @@ export async function processCodePurchase(purchaseId: string) {
                     email: user.email,
                 },
                 commercial: {
-                    accountCode: `diem-sas:${purchase.companyId}`,
+                    accountCode: buildCommercialAccountCode(purchase.companyId),
                     referenceNamespace: "code_purchase",
                     currencyCode: purchase.currency,
                     unitPrice: purchase.totalAmount / purchase.count,
@@ -295,12 +298,15 @@ export async function processCodePurchase(purchaseId: string) {
         return serializePurchase(purchase);
     } catch (error) {
         const message = error instanceof Error ? error.message : "Error desconocido";
+        const permanent = isDiemContractError(error);
+        const leaveQueue = permanent && !purchase.diemRequestId;
         await prisma.codePurchase.update({
             where: { id: purchase.id },
             data: {
                 attempts: { increment: 1 },
                 lastError: message.slice(0, 1000),
                 nextRetryAt: null,
+                ...(leaveQueue ? { status: "ACTION_REQUIRED" as const } : {}),
             },
         }).catch(() => undefined);
         throw error;
@@ -452,11 +458,31 @@ export async function purchaseCodes(params: {
 
     try {
         return await processCodePurchase(purchase.id);
-    } catch {
+    } catch (error) {
         const pending = await prisma.codePurchase.findUniqueOrThrow({
             where: { id: purchase.id },
             include: { denomination: true },
         });
+        // Soft-pending only for transient Diem pressure. Contract/auth failures
+        // must leave the "En cola" lane so operators can fix grants and retry.
+        if (isDiemRateLimited(error)) {
+            return serializePurchase(pending);
+        }
+        if (pending.status === "ACTION_REQUIRED" || pending.status === "FAILED") {
+            return serializePurchase(pending);
+        }
+        if (isDiemContractError(error)) {
+            const blocked = await prisma.codePurchase.update({
+                where: { id: purchase.id },
+                data: {
+                    status: "ACTION_REQUIRED",
+                    lastError: (error instanceof Error ? error.message : "Contrato Diem").slice(0, 1000),
+                    nextRetryAt: null,
+                },
+                include: { denomination: true },
+            });
+            return serializePurchase(blocked);
+        }
         return serializePurchase(pending);
     }
 }

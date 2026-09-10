@@ -55,13 +55,13 @@ interface PurchaseHistoryPanelProps {
 function statusLabel(purchase: PurchaseHistoryItem): string {
     switch (purchase.status) {
         case "PENDING":
-            return "En cola";
+            return purchase.lastError ? "Pendiente · error Diem" : "Pendiente en Diem";
         case "AWAITING_STOCK":
             return "Esperando stock";
         case "FINALIZING":
             return "Finalizando";
         case "ACTION_REQUIRED":
-            return "Revisión manual";
+            return "Acción requerida";
         case "COMPLETED":
             return "Entregada";
         case "FAILED":
@@ -150,11 +150,15 @@ function PurchaseTable({
     emptyMessage,
     showCodes = false,
     onViewCodes,
+    onRetry,
+    retryingId,
 }: {
     rows: PurchaseHistoryItem[];
     emptyMessage: string;
     showCodes?: boolean;
     onViewCodes?: (purchase: PurchaseHistoryItem) => void;
+    onRetry?: (purchase: PurchaseHistoryItem) => void;
+    retryingId?: string | null;
 }) {
     if (!rows.length) {
         return (
@@ -177,7 +181,7 @@ function PurchaseTable({
                     <TableHead>Cant.</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Solicitó</TableHead>
-                    {showCodes && <TableHead className="text-right">Códigos</TableHead>}
+                    <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -193,7 +197,7 @@ function PurchaseTable({
                                     {purchase.denomination.amount} {purchase.denomination.currency}
                                 </div>
                             )}
-                            {purchase.lastError && purchase.isPending && (
+                            {purchase.lastError && (purchase.isPending || purchase.needsAction) && (
                                 <div className="text-xs text-amber-700 mt-1">{purchase.lastError}</div>
                             )}
                         </TableCell>
@@ -204,10 +208,9 @@ function PurchaseTable({
                         <TableCell className="text-sm text-muted-foreground">
                             {purchase.requesterLabel ?? "—"}
                         </TableCell>
-                        {showCodes && (
-                            <TableCell className="text-right">
+                        <TableCell className="text-right">
                                 <div className="flex flex-col items-end gap-2">
-                                    {purchase.keys.length > 0 && (
+                                    {showCodes && purchase.keys.length > 0 && (
                                         <div className="font-mono text-xs text-left w-full max-w-[220px] space-y-1">
                                             {purchase.keys.slice(0, 2).map((row, index) => (
                                                 <div
@@ -225,6 +228,23 @@ function PurchaseTable({
                                         </div>
                                     )}
                                     <div className="flex flex-wrap justify-end gap-2">
+                                        {(purchase.isPending || purchase.needsAction) && onRetry ? (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={retryingId === purchase.id}
+                                                onClick={() => onRetry(purchase)}
+                                            >
+                                                {retryingId === purchase.id ? (
+                                                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <RefreshCw className="mr-2 h-3 w-3" />
+                                                )}
+                                                {purchase.needsAction ? "Reintentar Diem" : "Consultar Diem"}
+                                            </Button>
+                                        ) : null}
+                                        {showCodes ? (
+                                          <>
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -243,10 +263,11 @@ function PurchaseTable({
                                             <Copy className="mr-2 h-3 w-3" />
                                             Copiar
                                         </Button>
+                                          </>
+                                        ) : null}
                                     </div>
                                 </div>
                             </TableCell>
-                        )}
                     </TableRow>
                 ))}
             </TableBody>
@@ -261,13 +282,13 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
     const [completed, setCompleted] = useState<PurchaseHistoryItem[]>([]);
     const [failed, setFailed] = useState<PurchaseHistoryItem[]>([]);
     const [viewingPurchase, setViewingPurchase] = useState<PurchaseHistoryItem | null>(null);
+    const [retryingId, setRetryingId] = useState<string | null>(null);
 
     const loadHistory = useCallback(async (refresh = false) => {
         if (refresh) setRefreshing(true);
         else setLoading(true);
         try {
-            const params = refresh ? "?refresh=1" : "";
-            const response = await fetch(`/api/codes/purchases${params}`, { cache: "no-store" });
+            const response = await fetch("/api/codes/purchases", { cache: "no-store" });
             const data = await response.json();
             if (!response.ok) {
                 throw new Error(data.message || "No se pudo cargar el historial");
@@ -282,6 +303,30 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
             setRefreshing(false);
         }
     }, []);
+
+    const retryPurchase = useCallback(async (purchase: PurchaseHistoryItem) => {
+        setRetryingId(purchase.id);
+        try {
+            const response = await fetch(`/api/codes/purchases/${purchase.id}`, {
+                method: "POST",
+                cache: "no-store",
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(data?.message || "No se pudo consultar la entrega en Diem");
+            }
+            toast.success(
+                data?.purchase?.status === "COMPLETED"
+                    ? "Entrega completada"
+                    : "Estado actualizado desde Diem",
+            );
+            await loadHistory(true);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "No se pudo consultar Diem");
+        } finally {
+            setRetryingId(null);
+        }
+    }, [loadHistory]);
 
     useEffect(() => {
         loadHistory();
@@ -314,7 +359,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                 <div>
                     <h2 className="text-xl font-semibold">Mis solicitudes</h2>
                     <p className="text-sm text-muted-foreground">
-                        Las compras pendientes siguen en cola aunque cierres esta pantalla. No necesitas volver a pedirlas.
+                        Las solicitudes quedan registradas aunque cierres esta pantalla. Si Diem ya resolvió stock o aprobación, consulta nuevamente su estado.
                     </p>
                 </div>
                 <Button
@@ -348,6 +393,8 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                     <PurchaseTable
                         rows={pending}
                         emptyMessage="Sin solicitudes pendientes."
+                        onRetry={retryPurchase}
+                        retryingId={retryingId}
                     />
                 </CardContent>
             </Card>
@@ -380,13 +427,15 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                             Requieren atención
                         </CardTitle>
                         <CardDescription>
-                            Estas solicitudes no completaron la entrega automática.
+                            Estas solicitudes requieren una revisión o consulta explícita.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <PurchaseTable
                             rows={failed}
                             emptyMessage=""
+                            onRetry={retryPurchase}
+                            retryingId={retryingId}
                         />
                     </CardContent>
                 </Card>

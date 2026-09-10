@@ -3,6 +3,7 @@ import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import {
+    buildCommercialAccountCode,
     createCodeRequest,
     getCodeRequest,
     revealCodeRequest,
@@ -100,7 +101,7 @@ export async function processActivationJob(jobId: string) {
                     email: actor.email,
                 },
                 commercial: {
-                    accountCode: `diem-sas:${job.card.store.companyId}`,
+                    accountCode: buildCommercialAccountCode(job.card.store.companyId),
                     referenceNamespace: "card_activation",
                     currencyCode: job.commercialCurrency!,
                     unitPrice: job.commercialAmount!,

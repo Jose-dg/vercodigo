@@ -169,6 +169,10 @@ const data = {
           title: "Draft",
           url: "/draft",
         },
+        {
+          title: "Ops Diem",
+          url: "/ops/diem",
+        },
       ],
     },
     {
@@ -265,7 +269,7 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
   );
 
   const navMainWithError = React.useMemo(() => {
-    const PLATFORM_ONLY_URLS = new Set(["/cards/reassign", "/qr/create"]);
+    const PLATFORM_ONLY_URLS = new Set(["/cards/reassign", "/qr/create", "/ops/diem"]);
     const PLACEHOLDER_URLS = new Set(["/stock", "/functions"]);
     const PERMISSIONS: Record<string, [Actions, Subjects]> = {
       "/companies": ["read", "Company"],

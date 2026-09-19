@@ -5,28 +5,13 @@ import { useSession } from 'next-auth/react';
 import { isPlatformRole } from '@/lib/auth/abilities';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ShoppingCart, Check, AlertCircle, Copy, History, Building2, Package, Hash, ArrowRight } from 'lucide-react';
+import { Loader2, ShoppingCart, Check, AlertCircle, Copy, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PurchaseHistoryPanel } from '@/components/codes/PurchaseHistoryPanel';
+import { PurchaseWizard } from '@/components/codes/PurchaseWizard';
+import type { CatalogProduct } from '@/lib/codes/catalog-regions';
 import type { UserRole } from '@prisma/client';
-
-interface Product {
-    id: string;
-    name: string;
-    brand: string;
-    isActive: boolean;
-    devDiemProductId: string | null;
-    denominations: {
-        id: string;
-        amount: number;
-        currency: string;
-        devDiemProductId: string | null;
-    }[];
-}
 
 interface PriceRow {
     productId: string;
@@ -56,13 +41,10 @@ export default function PurchaseCodesPage() {
     const { data: session, status: sessionStatus } = useSession();
     const isPlatform =
         session?.user?.role != null && isPlatformRole(session.user.role as UserRole);
-    const [products, setProducts] = useState<Product[]>([]);
+    const [products, setProducts] = useState<CatalogProduct[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [productsError, setProductsError] = useState<string | null>(null);
 
-    const [selectedProductId, setSelectedProductId] = useState('');
-    const [selectedDenominationId, setSelectedDenominationId] = useState('');
-    const [quantity, setQuantity] = useState(1);
     const [isPurchasing, setIsPurchasing] = useState(false);
     const [prices, setPrices] = useState<PriceRow[]>([]);
 
@@ -76,6 +58,7 @@ export default function PurchaseCodesPage() {
     const [platformStores, setPlatformStores] = useState<
         { id: string; name: string; companyId: string }[]
     >([]);
+    const [wizardKey, setWizardKey] = useState(0);
     const pendingPurchaseId = purchaseResult?.purchase?.isPending
         ? purchaseResult.purchase.id
         : null;
@@ -88,14 +71,14 @@ export default function PurchaseCodesPage() {
             if (response.ok && data?.purchase) {
                 setPurchaseResult(data);
                 if (data.purchase.status === 'COMPLETED') {
-                    toast.success("Códigos entregados");
+                    toast.success('Códigos entregados');
                     setHistoryTick((tick) => tick + 1);
                     window.clearInterval(timer);
                 } else if (data.purchase.status === 'FAILED') {
-                    toast.error("La entrega falló y no se debitó la wallet.");
+                    toast.error('La entrega falló y no se debitó la wallet.');
                     window.clearInterval(timer);
                 } else if (data.purchase.status === 'ACTION_REQUIRED') {
-                    toast.error("La entrega necesita revisión manual.");
+                    toast.error('La entrega necesita revisión manual.');
                     window.clearInterval(timer);
                 }
             }
@@ -146,16 +129,16 @@ export default function PurchaseCodesPage() {
                     return;
                 }
 
-                const purchasableProducts = (data as Product[])
-                    .filter(product => product.isActive)
-                    .map(product => ({
+                const purchasableProducts = (data as CatalogProduct[])
+                    .filter((product) => product.isActive)
+                    .map((product) => ({
                         ...product,
                         denominations: product.denominations.filter(
-                            denomination =>
+                            (denomination) =>
                                 Boolean(denomination.devDiemProductId || product.devDiemProductId),
                         ),
                     }))
-                    .filter(product =>
+                    .filter((product) =>
                         Boolean(product.devDiemProductId || product.denominations.length > 0),
                     );
 
@@ -179,8 +162,8 @@ export default function PurchaseCodesPage() {
         loadCatalog();
 
         fetch('/api/prices', { credentials: 'include' })
-            .then(res => (res.ok ? res.json() : null))
-            .then(data => {
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
                 if (data?.rows) setPrices(data.rows);
             })
             .catch(() => { });
@@ -225,30 +208,21 @@ export default function PurchaseCodesPage() {
         (store) => store.companyId === targetCompanyId,
     );
 
-    const selectedProduct = products.find(p => p.id === selectedProductId);
-    const needsDenomination = (selectedProduct?.denominations.length ?? 0) > 1;
-    const effectiveDenominationId = needsDenomination
-        ? selectedDenominationId
-        : selectedProduct?.denominations[0]?.id ?? null;
-    const referencePrice = prices.find(
-        p => p.productId === selectedProductId && p.denominationId === (effectiveDenominationId ?? null)
-    );
-
-    const handlePurchase = async () => {
-        if (!selectedProductId) {
-            toast.error("Seleccione un producto");
+    const handlePurchase = async (payload: {
+        productId: string;
+        denominationId: string | null;
+        count: number;
+    }) => {
+        if (!payload.productId) {
+            toast.error('Seleccione un producto');
             return;
         }
-        if (needsDenomination && !selectedDenominationId) {
-            toast.error("Seleccione la denominación");
-            return;
-        }
-        if (quantity < 1 || quantity > 100) {
-            toast.error("Cantidad inválida (1-100)");
+        if (payload.count < 1 || payload.count > 100) {
+            toast.error('Cantidad inválida (1-100)');
             return;
         }
         if (isPlatform && !targetCompanyId) {
-            toast.error("Selecciona la empresa que recibirá el cargo");
+            toast.error('Selecciona la empresa que recibirá el cargo');
             return;
         }
 
@@ -265,9 +239,9 @@ export default function PurchaseCodesPage() {
                     'Idempotency-Key': idempotencyKey,
                 },
                 body: JSON.stringify({
-                    productId: selectedProductId,
-                    denominationId: effectiveDenominationId || undefined,
-                    count: quantity,
+                    productId: payload.productId,
+                    denominationId: payload.denominationId || undefined,
+                    count: payload.count,
                     ...(isPlatform
                         ? {
                               companyId: targetCompanyId,
@@ -300,16 +274,16 @@ export default function PurchaseCodesPage() {
             setHistoryTick((tick) => tick + 1);
             if (data.purchase?.isPending) {
                 setActiveTab('history');
-                toast.success("Solicitud recibida. Quedó pendiente de entrega.");
+                toast.success('Solicitud recibida. Quedó pendiente de entrega.');
             } else if (data.purchase?.status === 'COMPLETED') {
                 setActiveTab('history');
-                toast.success("Compra exitosa");
+                toast.success('Compra exitosa');
             } else {
-                toast.error("La solicitud necesita revisión.");
+                toast.error('La solicitud necesita revisión.');
             }
         } catch (error) {
-            console.error("Purchase error:", error);
-            toast.error("Error de conexión");
+            console.error('Purchase error:', error);
+            toast.error('Error de conexión');
         } finally {
             setIsPurchasing(false);
             purchaseInFlightKey.current = null;
@@ -318,17 +292,16 @@ export default function PurchaseCodesPage() {
 
     const handleReset = () => {
         setPurchaseResult(null);
-        setQuantity(1);
-        setSelectedProductId('');
-        setSelectedDenominationId('');
         purchaseInFlightKey.current = null;
+        setWizardKey((k) => k + 1);
+        setActiveTab('order');
     };
 
     const copyAllCodes = () => {
         if (!purchaseResult) return;
-        const codes = purchaseResult.purchase.keys.map(k => k.code).join('\n');
+        const codes = purchaseResult.purchase.keys.map((k) => k.code).join('\n');
         navigator.clipboard.writeText(codes);
-        toast.success("Códigos copiados al portapapeles");
+        toast.success('Códigos copiados al portapapeles');
     };
 
     if (loadingProducts) {
@@ -344,40 +317,31 @@ export default function PurchaseCodesPage() {
     const needsActionResult = purchaseResult?.purchase.needsAction;
     const pendingManualReview =
         purchaseResult?.purchase.fulfillmentStatus === 'pending_review';
-    const selectedCompany = companies.find((company) => company.companyId === targetCompanyId);
-    const estimatedTotal =
-        referencePrice?.salePrice != null ? referencePrice.salePrice * quantity : null;
-    const canPurchase =
-        Boolean(selectedProductId)
-        && (!needsDenomination || Boolean(selectedDenominationId))
-        && quantity >= 1
-        && quantity <= 100
-        && (!isPlatform || Boolean(targetCompanyId));
 
     return (
         <main className="min-h-full bg-muted/20">
-            <div className="container max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-                <header className="mb-8 flex items-start gap-4">
+            <div className="container max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+                <header className="mb-6 flex items-start gap-4 sm:mb-8">
                     <div className="hidden size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm sm:flex">
                         <ShoppingCart className="size-5" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Comprar códigos</h1>
+                        <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">Comprar códigos</h1>
                         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                            Solicita códigos digitales y consulta el estado de cada entrega.
+                            Elige región, marca y producto paso a paso. Pensado para comprar fácil desde el celular.
                         </p>
                     </div>
                 </header>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="grid h-11 w-full max-w-sm grid-cols-2 p-1">
-                        <TabsTrigger value="order">Nueva orden</TabsTrigger>
-                        <TabsTrigger value="history">Mis solicitudes</TabsTrigger>
+                    <TabsList className="grid h-12 w-full max-w-sm grid-cols-2 p-1">
+                        <TabsTrigger value="order" className="text-sm">Nueva orden</TabsTrigger>
+                        <TabsTrigger value="history" className="text-sm">Mis solicitudes</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="order" className="space-y-6">
                         {purchaseResult && (
-                            <Card className="max-w-3xl overflow-hidden border-emerald-200 shadow-sm">
+                            <Card className="mx-auto max-w-xl overflow-hidden border-emerald-200 shadow-sm">
                                 <CardHeader className="border-b border-emerald-100 bg-emerald-50/70">
                                     <CardTitle className="flex items-center gap-2 text-lg text-emerald-900">
                                         {pendingResult
@@ -408,212 +372,41 @@ export default function PurchaseCodesPage() {
                                                 </li>
                                             ))}
                                         </ol>
-                                        <Button variant="outline" onClick={copyAllCodes}>
+                                        <Button variant="outline" className="h-12 w-full sm:w-auto" onClick={copyAllCodes}>
                                             <Copy className="mr-2 size-4" />
                                             Copiar códigos
                                         </Button>
                                     </CardContent>
                                 )}
                                 <CardFooter className="flex-wrap gap-2 pt-6">
-                                    <Button variant="outline" onClick={() => setActiveTab('history')}>
+                                    <Button variant="outline" className="h-12" onClick={() => setActiveTab('history')}>
                                         <History className="mr-2 size-4" />
                                         Ver mis solicitudes
                                     </Button>
-                                    <Button onClick={handleReset} disabled={pendingResult}>Nueva compra</Button>
+                                    <Button className="h-12" onClick={handleReset} disabled={pendingResult}>
+                                        Nueva compra
+                                    </Button>
                                 </CardFooter>
                             </Card>
                         )}
 
-                        <Card className="max-w-3xl overflow-hidden shadow-sm">
-                            <CardHeader className="border-b bg-card pb-5">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div>
-                                        <CardTitle className="text-xl">Nueva orden</CardTitle>
-                                        <CardDescription className="mt-1">
-                                            Completa los datos para reservar y entregar los códigos.
-                                        </CardDescription>
-                                    </div>
-                                    <span className="hidden rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground sm:block">
-                                        Máximo 100 códigos
-                                    </span>
-                                </div>
-                            </CardHeader>
-
-                            <CardContent className="space-y-8 pt-6">
-                                {isPlatform && (
-                                    <section className="space-y-4" aria-labelledby="company-section">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex size-8 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-                                                <Building2 className="size-4" />
-                                            </div>
-                                            <div>
-                                                <h2 id="company-section" className="text-sm font-semibold">Empresa que realiza la compra</h2>
-                                                <p className="text-xs text-muted-foreground">El cargo se aplicará a la wallet seleccionada.</p>
-                                            </div>
-                                        </div>
-                                        <div className="grid gap-4 rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 sm:grid-cols-2">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="target-company">Empresa</Label>
-                                                <Select
-                                                    value={targetCompanyId || undefined}
-                                                    onValueChange={(value) => {
-                                                        setTargetCompanyId(value);
-                                                        setTargetStoreId('');
-                                                    }}
-                                                >
-                                                    <SelectTrigger id="target-company" className="bg-background">
-                                                        <SelectValue placeholder="Seleccionar empresa..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent position="popper" className="z-[100]">
-                                                        {companies.map((company) => (
-                                                            <SelectItem key={company.companyId} value={company.companyId}>
-                                                                {company.companyName}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="target-store">Tienda <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                                                <Select value={targetStoreId || undefined} onValueChange={setTargetStoreId} disabled={!targetCompanyId}>
-                                                    <SelectTrigger id="target-store" className="bg-background">
-                                                        <SelectValue placeholder="Sin tienda específica" />
-                                                    </SelectTrigger>
-                                                    <SelectContent position="popper" className="z-[100]">
-                                                        {storesForSelectedCompany.map((store) => (
-                                                            <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                    </section>
-                                )}
-
-                                <section className="space-y-4" aria-labelledby="product-section">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                            <Package className="size-4" />
-                                        </div>
-                                        <div>
-                                            <h2 id="product-section" className="text-sm font-semibold">Producto y denominación</h2>
-                                            <p className="text-xs text-muted-foreground">Selecciona el código digital que necesitas.</p>
-                                        </div>
-                                    </div>
-                                    <div className={needsDenomination ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="product">Producto</Label>
-                                            <Select
-                                                value={selectedProductId || undefined}
-                                                onValueChange={(value) => {
-                                                    setSelectedProductId(value);
-                                                    setSelectedDenominationId('');
-                                                }}
-                                                disabled={products.length === 0}
-                                            >
-                                                <SelectTrigger id="product">
-                                                    <SelectValue placeholder="Seleccionar producto..." />
-                                                </SelectTrigger>
-                                                <SelectContent position="popper" className="z-[100]">
-                                                    {products.map((product) => (
-                                                        <SelectItem key={product.id} value={product.id}>
-                                                            {product.name} · {product.brand}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {productsError && <p className="text-sm text-amber-700">{productsError}</p>}
-                                        </div>
-                                        {needsDenomination && (
-                                            <div className="space-y-2">
-                                                <Label htmlFor="denomination">Denominación</Label>
-                                                <Select value={selectedDenominationId || undefined} onValueChange={setSelectedDenominationId}>
-                                                    <SelectTrigger id="denomination">
-                                                        <SelectValue placeholder="Seleccionar denominación..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent position="popper" className="z-[100]">
-                                                        {selectedProduct?.denominations.map((denomination) => (
-                                                            <SelectItem key={denomination.id} value={denomination.id}>
-                                                                {denomination.amount.toLocaleString("es-CO")} {denomination.currency}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        )}
-                                    </div>
-                                </section>
-
-                                <section className="space-y-4" aria-labelledby="quantity-section">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                            <Hash className="size-4" />
-                                        </div>
-                                        <div>
-                                            <h2 id="quantity-section" className="text-sm font-semibold">Cantidad</h2>
-                                            <p className="text-xs text-muted-foreground">Puedes solicitar entre 1 y 100 códigos.</p>
-                                        </div>
-                                    </div>
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="quantity">Número de códigos</Label>
-                                            <Input
-                                                id="quantity"
-                                                type="number"
-                                                min={1}
-                                                max={100}
-                                                value={quantity}
-                                                onChange={(event) => setQuantity(parseInt(event.target.value) || 0)}
-                                                className="font-mono text-base tabular-nums"
-                                            />
-                                        </div>
-                                        {referencePrice?.salePrice != null && (
-                                            <div className="rounded-lg border bg-muted/40 px-4 py-3">
-                                                <p className="text-xs text-muted-foreground">Precio configurado por unidad</p>
-                                                <p className="mt-1 font-mono text-base font-semibold tabular-nums">
-                                                    {referencePrice.salePrice.toLocaleString("es-CO")} {referencePrice.currency}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </section>
-
-                                <div className="flex gap-3 rounded-xl border border-blue-200/70 bg-blue-50/70 p-4 text-sm text-blue-900">
-                                    <AlertCircle className="mt-0.5 size-5 shrink-0 text-blue-600" />
-                                    <div>
-                                        <p className="font-semibold">Entrega protegida por Diem</p>
-                                        <p className="mt-1 leading-relaxed text-blue-800">
-                                            La wallet se debita únicamente cuando la entrega se completa.
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-
-                            <CardFooter className="flex flex-col gap-4 border-t bg-muted/30 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="min-w-0 text-sm">
-                                    <p className="text-muted-foreground">
-                                        {isPlatform ? (selectedCompany?.companyName ?? 'Selecciona una empresa') : 'Compra para tu empresa'}
-                                    </p>
-                                    {estimatedTotal != null && quantity > 0 && (
-                                        <p className="mt-0.5 font-semibold">
-                                            Total estimado: <span className="font-mono tabular-nums">{estimatedTotal.toLocaleString("es-CO")} {referencePrice?.currency}</span>
-                                        </p>
-                                    )}
-                                </div>
-                                <Button
-                                    className="w-full transition-transform active:scale-[0.98] sm:w-auto sm:min-w-52"
-                                    size="lg"
-                                    onClick={handlePurchase}
-                                    disabled={isPurchasing || !canPurchase}
-                                >
-                                    {isPurchasing ? (
-                                        <><Loader2 className="mr-2 size-4 animate-spin" />Procesando...</>
-                                    ) : (
-                                        <>Confirmar compra<ArrowRight className="ml-2 size-4" /></>
-                                    )}
-                                </Button>
-                            </CardFooter>
-                        </Card>
+                        {!purchaseResult && (
+                            <PurchaseWizard
+                                key={wizardKey}
+                                products={products}
+                                productsError={productsError}
+                                prices={prices}
+                                isPlatform={isPlatform}
+                                companies={companies}
+                                storesForSelectedCompany={storesForSelectedCompany}
+                                targetCompanyId={targetCompanyId}
+                                targetStoreId={targetStoreId}
+                                onTargetCompanyChange={setTargetCompanyId}
+                                onTargetStoreChange={setTargetStoreId}
+                                isPurchasing={isPurchasing}
+                                onPurchase={handlePurchase}
+                            />
+                        )}
                     </TabsContent>
 
                     <TabsContent value="history">

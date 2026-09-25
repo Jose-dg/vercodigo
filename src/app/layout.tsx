@@ -6,8 +6,11 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Key App",
-  description: "Key View App",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_MARKETING_URL ?? "https://vercode.me",
+  ),
+  title: "Vercode",
+  description: "Códigos digitales y tarjetas con QR para empresas.",
   manifest: "/manifest.json", 
   icons: {
     icon: "/icons/icon-192x192.png",
@@ -16,7 +19,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true, 
     statusBarStyle: "default", 
-    title: "Key App",
+    title: "Vercode",
   },
 };
 

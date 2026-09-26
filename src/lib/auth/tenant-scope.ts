@@ -36,7 +36,7 @@ export function storeVisibilityFilter(user: TenantActor): Prisma.StoreWhereInput
 }
 
 export function canAccessQrList(user: TenantActor): boolean {
-    return user.role !== "OPERATOR";
+    return isPlatformRole(user.role as UserRole);
 }
 
 export function canCreateQr(user: TenantActor): boolean {

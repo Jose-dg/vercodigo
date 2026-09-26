@@ -269,7 +269,14 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
   );
 
   const navMainWithError = React.useMemo(() => {
-    const PLATFORM_ONLY_URLS = new Set(["/cards/reassign", "/qr/create", "/ops/diem"]);
+    const PLATFORM_ONLY_URLS = new Set([
+      "/qr",
+      "/qr/create",
+      "/cards/reassign",
+      "/batches",
+      "/keys",
+      "/ops/diem",
+    ]);
     const PLACEHOLDER_URLS = new Set(["/stock", "/functions"]);
     const PERMISSIONS: Record<string, [Actions, Subjects]> = {
       "/companies": ["read", "Company"],
@@ -299,8 +306,6 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
       if (url === "#" || PLACEHOLDER_URLS.has(url)) return false;
       if (url === "/") return true;
       if (PLATFORM_ONLY_URLS.has(url)) return isPlatformRole(role);
-      // Operador: activar/escanear/comprar, sin listado de QR.
-      if (url === "/qr" && role === "OPERATOR") return false;
       // Analytics global solo plataforma; OWNER usa /overview (su compañía).
       if (url === "/analytics" && !isPlatformRole(role)) return false;
       const perm = PERMISSIONS[url];

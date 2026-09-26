@@ -13,10 +13,16 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { redirect } from 'next/navigation';
+import type { UserRole } from '@prisma/client';
+import { isPlatformRole } from '@/lib/auth/abilities';
+import { requireSessionUser } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BatchesPage() {
+    const user = await requireSessionUser();
+    if (!isPlatformRole(user.role as UserRole)) redirect('/');
     const batches = await getAllBatches();
 
     return (
@@ -66,4 +72,3 @@ export default async function BatchesPage() {
         </>
     );
 }
-

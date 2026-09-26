@@ -6,7 +6,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import type { UserRole } from "@prisma/client";
 import { QRDownloadButton } from "@/components/qr/QRDownloadButton";
 import { QRDownloadSVGButton } from "@/components/qr/QRDownloadSVGButton";
 import { QRCodeDisplay } from "@/components/qr/QRCodeDisplay";
@@ -22,6 +23,8 @@ import { Separator } from "@/components/ui/separator";
 import {
     SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { isPlatformRole } from "@/lib/auth/abilities";
+import { requireSessionUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +33,8 @@ interface PageProps {
 }
 
 export default async function QRDetailPage({ params }: PageProps) {
+    const user = await requireSessionUser();
+    if (!isPlatformRole(user.role as UserRole)) redirect("/");
     const { uuid } = await params;
 
     const qr = await prisma.card.findUnique({

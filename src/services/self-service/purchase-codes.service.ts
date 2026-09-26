@@ -144,10 +144,25 @@ export async function processCodePurchase(purchaseId: string) {
 
     try {
         if (!purchase.diemRequestId) {
-            const user = await prisma.user.findUnique({
-                where: { id: purchase.userId },
-                select: { email: true, name: true },
-            });
+            const [user, originCompany, originStore] = await Promise.all([
+                prisma.user.findUnique({
+                    where: { id: purchase.userId },
+                    select: { email: true, name: true },
+                }),
+                prisma.company.findUnique({
+                    where: { id: purchase.companyId },
+                    select: { name: true },
+                }),
+                purchase.storeId
+                    ? prisma.store.findFirst({
+                        where: {
+                            id: purchase.storeId,
+                            companyId: purchase.companyId,
+                        },
+                        select: { name: true },
+                    })
+                    : Promise.resolve(null),
+            ]);
             if (!user?.email) throw conflict("El usuario necesita un email para recibir el código");
             const [firstName, ...lastName] = (user.name || user.email).trim().split(/\s+/);
             const request = await createCodeRequest({
@@ -171,7 +186,9 @@ export async function processCodePurchase(purchaseId: string) {
                 metadata: {
                     code_purchase_id: purchase.id,
                     company_id: purchase.companyId,
+                    company_name: originCompany?.name ?? null,
                     store_id: purchase.storeId,
+                    store_name: originStore?.name ?? null,
                 },
             });
             purchase = await prisma.codePurchase.update({

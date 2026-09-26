@@ -37,7 +37,7 @@ async function handler(req: NextRequest, ctx: any, ability: any, user: any) {
             userAgent: reqCtx.userAgent,
         });
 
-        return NextResponse.json(result, { status: 200 });
+        return NextResponse.json(result, { status: result.success ? 200 : 409 });
     } catch (e: unknown) {
         if (e instanceof AppError) {
             return NextResponse.json(

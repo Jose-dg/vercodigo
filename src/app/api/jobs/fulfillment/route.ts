@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 import { checkDiemConnection, getDiemConfig } from "@/lib/devdiem/fulfillment";
-import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
 import { processActivationJob } from "@/services/self-service/activate-card.service";
+import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
 
 function isAuthorized(request: NextRequest) {
     const secret = process.env.CRON_SECRET;
@@ -104,8 +104,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Explicit operational recovery only. Happy path is
- * Diem → POST /api/webhook/fulfillment. This endpoint is not scheduled.
+ * Manual recovery only. Delivery after approval is Diem → webhook.
+ * Web checkout delivery does not use this path.
  */
 export async function POST(request: NextRequest) {
     if (!isAuthorized(request)) {

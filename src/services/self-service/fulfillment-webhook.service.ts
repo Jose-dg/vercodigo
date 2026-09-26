@@ -2,6 +2,7 @@ import crypto from "crypto";
 
 import prisma from "@/lib/prisma";
 import { processActivationJob } from "@/services/self-service/activate-card.service";
+import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
 import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
 
 export type FulfillmentWebhookPayload = {
@@ -26,9 +27,6 @@ const ACTIONABLE_STATUSES = new Set([
     "processing",
     "received",
 ]);
-
-const PURCHASE_TERMINAL = new Set(["COMPLETED", "FAILED", "ACTION_REQUIRED"]);
-const ACTIVATION_TERMINAL = new Set(["COMPLETED", "FAILED", "ACTION_REQUIRED"]);
 
 export function verifyDiemFulfillmentSignature(body: string, signature: string | null): boolean {
     const secret = process.env.DIEM_FULFILLMENT_WEBHOOK_SECRET?.trim();
@@ -113,14 +111,14 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
                 nextRetryAt: null,
             },
         });
-        if (PURCHASE_TERMINAL.has(purchase.status)) {
+        if (isSettledFulfillmentStatus(purchase.status)) {
             return {
                 ok: true,
                 handled: true,
                 kind: "purchase",
                 id: purchase.id,
                 status: purchase.status,
-                reason: "already_terminal",
+                reason: "already_settled",
             };
         }
         const processed = await processCodePurchase(purchase.id);
@@ -154,14 +152,14 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
                 nextRetryAt: null,
             },
         });
-        if (ACTIVATION_TERMINAL.has(job.status)) {
+        if (isSettledFulfillmentStatus(job.status)) {
             return {
                 ok: true,
                 handled: true,
                 kind: "activation",
                 id: job.id,
                 status: job.status,
-                reason: "already_terminal",
+                reason: "already_settled",
             };
         }
         const processed = await processActivationJob(job.id);

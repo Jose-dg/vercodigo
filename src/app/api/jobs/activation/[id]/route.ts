@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { withAuth } from "@/lib/auth/guard";
 import { processActivationJob } from "@/services/self-service/activate-card.service";
+import { isFulfillmentWaitLocal } from "@/services/self-service/fulfillment-lifecycle";
 
 async function handler(
     _request: NextRequest,
@@ -25,10 +26,9 @@ async function handler(
     });
     if (!owned) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const terminal = ["COMPLETED", "FAILED", "ACTION_REQUIRED"].includes(owned.status);
     return NextResponse.json({
         success: true,
-        processing: !terminal,
+        processing: !isFulfillmentWaitLocal(owned.status),
         jobId: owned.id,
         status: owned.status,
         lastError: owned.lastError,

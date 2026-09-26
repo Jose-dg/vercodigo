@@ -8,7 +8,7 @@ marketplaces y el stock local de `Key` ya no participan en compras nuevas.
 - `DIEM_API_URL=https://diem-ai.onrender.com`
 - `DIEM_SERVICE_API_KEY=<key de diem-sas-production>`
 - `DIEM_STORE_ID=<uuid de la tienda autorizada>`
-- `CRON_SECRET=<secreto independiente>` (Vercel Cron envía `Authorization: Bearer $CRON_SECRET` a `/api/jobs/fulfillment` cada 5 min; safety net si Diem no notifica)
+- `CRON_SECRET=<secreto independiente>` (solo autentica el preflight `GET /api/jobs/fulfillment`; no hay cron de entrega)
 - En Diem prod: `FULFILLMENT_PARTNER_WEBHOOK_URL=https://vercodigo.vercel.app/api/webhook/fulfillment` y el mismo secret que `DIEM_FULFILLMENT_WEBHOOK_SECRET` (nunca `localhost` en Render)
 
 No existe fallback automático para `DIEM_API_URL`: si falta una variable, la
@@ -42,8 +42,9 @@ Una compra sin costo configurado solo usa el valor nominal de su denominación
 como fallback. Si tampoco existe un valor nominal positivo, se rechaza antes
 de pedir códigos a Diem.
 
-`ACTION_REQUIRED` y `FAILED` detienen el sondeo de la pantalla y no se presentan
-como compras exitosas.
+`ACTION_REQUIRED` pausa el sondeo de la pantalla (gate de revisión en Diem).
+No es un asentamiento: cuando Diem notifica `allocated`/`delivered`, el webhook
+reanuda reveal y débito. `FAILED` y `COMPLETED` sí son terminales.
 
 ## Tarjetas físicas
 
@@ -54,12 +55,9 @@ revelado exitoso.
 
 ## Worker
 
-Programar cada minuto:
-
-`POST /api/jobs/fulfillment`
-
-con `Authorization: Bearer <CRON_SECRET>`. Procesa compras y activaciones
-pendientes con reintentos idempotentes.
+No hay cron de fulfillment. Las compras con revisión esperan la aprobación
+humana en Diem; el webhook reanuda reveal y débito. La entrega automática de
+checkout web no pasa por este job.
 
 ## Preflight protegido
 

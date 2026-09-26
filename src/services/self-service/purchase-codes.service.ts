@@ -206,12 +206,17 @@ export async function processCodePurchase(purchaseId: string) {
             });
             return serializePurchase(purchase);
         }
-        if (request.status === "action_required") {
+        if (request.status === "action_required" || request.status === "pending_review") {
+            // Pause only. After Diem approves, the partner webhook resumes.
             purchase = await prisma.codePurchase.update({
                 where: { id: purchase.id },
                 data: {
                     status: "ACTION_REQUIRED",
                     fulfillmentStatus: request.status,
+                    lastError:
+                        request.status === "pending_review"
+                            ? "Diem exige revisión manual de esta solicitud. No se debitó la wallet."
+                            : purchase.lastError,
                     nextRetryAt: null,
                 },
                 include: { denomination: true },
@@ -255,7 +260,7 @@ export async function processCodePurchase(purchaseId: string) {
             const claimed = await tx.codePurchase.updateMany({
                 where: {
                     id: purchase!.id,
-                    status: { in: ["PENDING", "AWAITING_STOCK"] },
+                    status: { in: ["PENDING", "AWAITING_STOCK", "ACTION_REQUIRED"] },
                 },
                 data: { status: "FINALIZING" },
             });

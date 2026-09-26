@@ -6,6 +6,7 @@ import {
     buildCommercialAccountCode,
     createCodeRequest,
     getCodeRequest,
+    isDiemContractError,
     revealCodeRequest,
 } from "@/lib/devdiem/fulfillment";
 import { assertCanActivateCard } from "./permissions.service";
@@ -164,12 +165,16 @@ export async function processActivationJob(jobId: string) {
             ]);
             return { status: "FAILED", jobId: job.id };
         }
-        if (remote.status === "action_required") {
+        if (remote.status === "action_required" || remote.status === "pending_review") {
             await prisma.activationJob.update({
                 where: { id: job.id },
                 data: {
                     status: "ACTION_REQUIRED",
                     fulfillmentStatus: remote.status,
+                    lastError:
+                        remote.status === "pending_review"
+                            ? "Diem exige revisión manual de esta solicitud. No se debitó la wallet."
+                            : job.lastError,
                     nextRetryAt: null,
                 },
             });
@@ -217,7 +222,7 @@ export async function processActivationJob(jobId: string) {
             const claimed = await tx.activationJob.updateMany({
                 where: {
                     id: job!.id,
-                    status: { in: ["PENDING", "PROCESSING", "AWAITING_STOCK"] },
+                    status: { in: ["PENDING", "PROCESSING", "AWAITING_STOCK", "ACTION_REQUIRED"] },
                 },
                 data: { status: "FINALIZING" },
             });
@@ -331,14 +336,30 @@ export async function processActivationJob(jobId: string) {
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : "UNKNOWN";
-        await prisma.activationJob.update({
-            where: { id: job.id },
-            data: {
-                attempts: { increment: 1 },
-                lastError: message.slice(0, 1000),
-                nextRetryAt: null,
-            },
-        }).catch(() => undefined);
+        const permanent = isDiemContractError(error) && !job.diemRequestId;
+        await prisma.$transaction([
+            prisma.activationJob.update({
+                where: { id: job.id },
+                data: {
+                    attempts: { increment: 1 },
+                    lastError: message.slice(0, 1000),
+                    nextRetryAt: null,
+                    ...(permanent ? { status: "FAILED" as const } : {}),
+                },
+            }),
+            ...(permanent
+                ? [
+                    prisma.card.update({
+                        where: { id: job.cardId },
+                        data: {
+                            activationLock: false,
+                            activationLockBy: null,
+                            activationLockAt: null,
+                        },
+                    }),
+                ]
+                : []),
+        ]).catch(() => undefined);
         throw error;
     }
 }
@@ -417,21 +438,57 @@ export async function activateCard(params: {
         });
     });
 
+    const cardSummary = {
+        uuid: card.uuid,
+        product: card.product.name,
+        store: card.store.name,
+    };
     try {
         const processed = await processActivationJob(job.id);
         if (processed.status === "COMPLETED") {
-            return { success: true, ...processed };
+            return { success: true as const, ...processed };
         }
-    } catch {
-        // The job is durable. A webhook or an explicit operator retry can
-        // continue it without rolling back the accepted activation request.
+        if (processed.status === "FAILED" || processed.status === "ACTION_REQUIRED") {
+            const latest = await prisma.activationJob.findUnique({
+                where: { id: job.id },
+                select: { lastError: true, status: true },
+            });
+            return {
+                success: false,
+                processing: false,
+                jobId: job.id,
+                status: processed.status,
+                message:
+                    latest?.lastError
+                    || "La activación no se pudo completar. Revisa la cuenta comercial o el catálogo en Diem.",
+                card: cardSummary,
+            };
+        }
+    } catch (error) {
+        const latest = await prisma.activationJob.findUnique({
+            where: { id: job.id },
+            select: { lastError: true, status: true },
+        });
+        if (latest?.status === "FAILED" || isDiemContractError(error)) {
+            return {
+                success: false,
+                processing: false,
+                jobId: job.id,
+                status: latest?.status ?? "FAILED",
+                message:
+                    latest?.lastError
+                    || (error instanceof Error ? error.message : "La activación falló."),
+                card: cardSummary,
+            };
+        }
+        // Transient Diem pressure: the job is durable. Webhook or retry continues it.
     }
     return {
         success: true,
         processing: true,
         jobId: job.id,
         message: "Activación recibida. Diem está asignando el código.",
-        card: { uuid: card.uuid, product: card.product.name, store: card.store.name },
+        card: cardSummary,
     };
 }
 

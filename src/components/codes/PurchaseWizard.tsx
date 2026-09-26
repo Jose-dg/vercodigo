@@ -25,9 +25,10 @@ import {
     REGION_META,
     brandAccent,
     brandsInRegion,
+    filterProductsByRegion,
     filterProductsByRegionAndBrand,
     formatDenomAmount,
-    resolveProductRegion,
+    productRegions,
 } from '@/lib/codes/catalog-regions';
 
 export type WizardStep = 'region' | 'brand' | 'product' | 'denomination' | 'quantity';
@@ -131,7 +132,7 @@ export function PurchaseWizard({
     const [quantity, setQuantity] = useState(1);
 
     const availableRegions = useMemo(() => {
-        const present = new Set(products.map(resolveProductRegion));
+        const present = new Set(products.flatMap(productRegions));
         return (Object.keys(REGION_META) as BuyRegion[]).filter((r) => present.has(r));
     }, [products]);
 
@@ -145,7 +146,7 @@ export function PurchaseWizard({
         [products, region, brand],
     );
 
-    const selectedProduct = products.find((p) => p.id === productId);
+    const selectedProduct = regionProducts.find((p) => p.id === productId);
     const needsDenomination = (selectedProduct?.denominations.length ?? 0) > 1;
     const effectiveDenominationId = needsDenomination
         ? denominationId
@@ -225,7 +226,7 @@ export function PurchaseWizard({
     }
 
     function selectProduct(nextId: string) {
-        const product = products.find((p) => p.id === nextId);
+        const product = regionProducts.find((p) => p.id === nextId);
         setProductId(nextId);
         setDenominationId('');
         if ((product?.denominations.length ?? 0) > 1) {
@@ -403,7 +404,7 @@ export function PurchaseWizard({
                         )}
                         {availableRegions.map((r) => {
                             const meta = REGION_META[r];
-                            const count = products.filter((p) => resolveProductRegion(p) === r).length;
+                            const count = filterProductsByRegion(products, r).length;
                             return (
                                 <SelectionTile
                                     key={r}

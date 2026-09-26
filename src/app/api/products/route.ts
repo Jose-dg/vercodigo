@@ -44,7 +44,21 @@ export async function GET(req: NextRequest) {
                 },
                 orderBy: { name: "asc" },
             });
-            return NextResponse.json(products);
+            const regions = catalog.catalogProductRegions;
+            return NextResponse.json(products.map((product) => ({
+                ...product,
+                countryRegion: product.devDiemProductId
+                    ? regions[product.devDiemProductId] ?? null
+                    : null,
+                denominations: product.denominations.map((denomination) => ({
+                    ...denomination,
+                    countryRegion: regions[
+                        denomination.devDiemProductId
+                        ?? product.devDiemProductId
+                        ?? ''
+                    ] ?? null,
+                })),
+            })));
         }
 
         const products = await prisma.product.findMany({

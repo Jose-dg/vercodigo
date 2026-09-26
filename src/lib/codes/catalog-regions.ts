@@ -1,7 +1,4 @@
-/**
- * Infer USA vs Colombia for Buy Codes catalog items.
- * There is no `region` column in Prisma; region comes from currency + name cues.
- */
+/** Region filtering for Buy Codes, sourced from Diem's catalog. */
 
 export type BuyRegion = "US" | "CO";
 
@@ -10,6 +7,7 @@ export interface CatalogDenomination {
     amount: number;
     currency: string;
     devDiemProductId: string | null;
+    countryRegion?: string | null;
 }
 
 export interface CatalogProduct {
@@ -19,6 +17,7 @@ export interface CatalogProduct {
     category?: string | null;
     isActive: boolean;
     devDiemProductId: string | null;
+    countryRegion?: string | null;
     denominations: CatalogDenomination[];
 }
 
@@ -51,40 +50,37 @@ export const REGION_META: Record<
     },
 };
 
-const COLOMBIA_NAME_RE = /\b(colombia|colombiano|cop)\b/i;
-const USA_NAME_RE = /\b(usa|united states|us\$|usd)\b/i;
-
-function primaryCurrency(product: CatalogProduct): string | null {
-    const currencies = product.denominations.map((d) => d.currency.toUpperCase());
-    if (currencies.length === 0) return null;
-    const cop = currencies.filter((c) => c === "COP").length;
-    const usd = currencies.filter((c) => c === "USD").length;
-    if (cop > usd) return "COP";
-    if (usd > cop) return "USD";
-    return currencies[0] ?? null;
+function mapCountryRegion(countryRegion?: string | null): BuyRegion | null {
+    const normalized = String(countryRegion || "").trim().toLowerCase();
+    if (normalized === "colombia") return "CO";
+    if (normalized === "united_states") return "US";
+    return null;
 }
 
-/** Resolve region for a purchasable product. */
-export function resolveProductRegion(product: CatalogProduct): BuyRegion {
-    const name = product.name;
-    if (COLOMBIA_NAME_RE.test(name) && !USA_NAME_RE.test(name)) return "CO";
-    if (USA_NAME_RE.test(name) && !COLOMBIA_NAME_RE.test(name)) return "US";
-
-    const currency = primaryCurrency(product);
-    if (currency === "COP") return "CO";
-    if (currency === "USD") return "US";
-
-    // Fallback: Colombia brands in seeds are COP-first; Steam/PlayStation USD → US
-    const brand = product.brand.toLowerCase();
-    if (brand === "xbox" || brand === "free fire" || brand === "netflix") return "CO";
-    return "US";
+export function productRegions(product: CatalogProduct): BuyRegion[] {
+    const regions = new Set<BuyRegion>();
+    const productRegion = mapCountryRegion(product.countryRegion);
+    if (productRegion) regions.add(productRegion);
+    for (const denomination of product.denominations) {
+        const denominationRegion = mapCountryRegion(denomination.countryRegion);
+        if (denominationRegion) regions.add(denominationRegion);
+    }
+    return Array.from(regions);
 }
 
 export function filterProductsByRegion(
     products: CatalogProduct[],
     region: BuyRegion,
 ): CatalogProduct[] {
-    return products.filter((p) => resolveProductRegion(p) === region);
+    return products.flatMap((product) => {
+        const productRegion = mapCountryRegion(product.countryRegion);
+        const denominations = product.denominations.filter(
+            (denomination) => mapCountryRegion(denomination.countryRegion) === region,
+        );
+        if (product.denominations.length > 0 && denominations.length === 0) return [];
+        if (product.denominations.length === 0 && productRegion !== region) return [];
+        return [{ ...product, denominations }];
+    });
 }
 
 export function brandsInRegion(

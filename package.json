@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test:devdiem": "node --test --experimental-strip-types tests/devdiem-fulfillment.test.mjs tests/fulfillment-lifecycle.test.mjs",
+    "test:devdiem": "node --test --experimental-strip-types tests/catalog-regions.test.mjs tests/devdiem-fulfillment.test.mjs tests/fulfillment-lifecycle.test.mjs",
     "reconciliation:export": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/export-commercial-reconciliation-manifest.ts",
     "postinstall": "prisma generate"
   },

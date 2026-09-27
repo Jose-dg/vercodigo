@@ -45,6 +45,8 @@ export interface PurchaseHistoryItem {
     isSuccessful: boolean;
     needsAction: boolean;
     keys: { code: string }[];
+    deliveredCodeCount: number;
+    hasDeliveryCountMismatch: boolean;
     denomination?: { amount: number; currency: string } | null;
 }
 
@@ -201,7 +203,15 @@ function PurchaseTable({
                                 <div className="text-xs text-amber-700 mt-1">{purchase.lastError}</div>
                             )}
                         </TableCell>
-                        <TableCell>{purchase.count}</TableCell>
+                        <TableCell>
+                            <span>{purchase.count}</span>
+                            {purchase.hasDeliveryCountMismatch && (
+                                <span className="mt-1 block text-xs leading-tight text-amber-700">
+                                    {purchase.count} unidad{purchase.count === 1 ? "" : "es"} facturada{purchase.count === 1 ? "" : "s"}
+                                    {" · "}{purchase.deliveredCodeCount} códigos registrados
+                                </span>
+                            )}
+                        </TableCell>
                         <TableCell>
                             <Badge variant={statusVariant(purchase)}>{statusLabel(purchase)}</Badge>
                         </TableCell>

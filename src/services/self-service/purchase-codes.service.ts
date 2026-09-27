@@ -13,6 +13,7 @@ import {
 } from "@/lib/devdiem/fulfillment";
 import { debit } from "@/services/wallet/wallet.service";
 import { resolveCost } from "@/services/costing/costing.service";
+import { summarizeCodeDelivery } from "@/lib/codes/delivery-counts";
 
 const TERMINAL_FAILURES = new Set(["failed", "cancelled"]);
 const PENDING_STATUSES = ["PENDING", "AWAITING_STOCK", "FINALIZING", "ACTION_REQUIRED"] as const;
@@ -48,14 +49,18 @@ function serializePurchase<T extends {
     purchase: T,
     extras?: { productName?: string; requesterLabel?: string },
 ) {
-    const codes = Array.isArray(purchase.deliveredCodes)
-        ? purchase.deliveredCodes.filter((code): code is string => typeof code === "string")
-        : [];
+    const delivery = summarizeCodeDelivery({
+        status: purchase.status,
+        billedCount: "count" in purchase && typeof purchase.count === "number" ? purchase.count : undefined,
+        deliveredCodes: purchase.deliveredCodes,
+    });
     return {
         ...purchase,
         productName: extras?.productName,
         requesterLabel: extras?.requesterLabel,
-        keys: purchase.status === "COMPLETED" ? codes.map((code) => ({ code })) : [],
+        keys: purchase.status === "COMPLETED" ? delivery.codes.map((code) => ({ code })) : [],
+        deliveredCodeCount: delivery.deliveredCodeCount,
+        hasDeliveryCountMismatch: delivery.hasDeliveryCountMismatch,
         isPending: PENDING_STATUSES.includes(purchase.status as typeof PENDING_STATUSES[number]),
         isSuccessful: purchase.status === "COMPLETED",
         needsAction: purchase.status === "ACTION_REQUIRED",

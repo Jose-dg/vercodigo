@@ -468,7 +468,7 @@ async function applyHistory(manifest: Manifest, expectedFingerprint: string) {
                 originalCurrency: "USD",
                 exchangeRate: event.fxRate,
                 description: event.codes.length === event.billedCount
-                    ? "Compra digital histórica Blue Panther"
+                    ? "Buy - Blue Panther"
                     : `${event.billedCount} unidad facturada · ${event.codes.length} códigos registrados`,
                 createdById: ACTOR_ID,
                 codePurchaseId: id,
@@ -522,7 +522,7 @@ async function applyHistory(manifest: Manifest, expectedFingerprint: string) {
                     method: WalletRechargeMethod.MANUAL,
                     amount: event.amountCop,
                     balanceAfter: null,
-                    description: "Abono manual histórico Blue Panther",
+                    description: "Payment - Blue Panther",
                     externalReference: event.externalReference ?? null,
                     createdById: ACTOR_ID,
                     createdAt: new Date(event.occurredAt),
@@ -532,7 +532,7 @@ async function applyHistory(manifest: Manifest, expectedFingerprint: string) {
                     method: WalletRechargeMethod.MANUAL,
                     amount: event.amountCop,
                     balanceAfter: null,
-                    description: "Abono manual histórico Blue Panther",
+                    description: "Payment - Blue Panther",
                     externalReference: event.externalReference ?? null,
                     createdById: ACTOR_ID,
                 },

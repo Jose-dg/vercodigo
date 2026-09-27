@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { AccountStatementsPanel } from "@/components/account-statements/AccountStatementsPanel";
+import { formatWalletRunningBalance } from "@/lib/wallet/presentation";
 
 interface WalletTx {
     id: string;
@@ -24,6 +25,7 @@ interface WalletTx {
     originalAmount: number | null;
     originalCurrency: string | null;
     description: string | null;
+    displayDescription: string;
     externalReference: string | null;
     createdAt: string;
 }
@@ -68,12 +70,6 @@ function balancePresentation(balance: number) {
         amount: 0,
         tone: "text-[#123f68]",
     };
-}
-
-function formattedRunningBalance(balance: number, currency: string) {
-    if (balance < 0) return `${formatMoney(Math.abs(balance), currency)} pendiente`;
-    if (balance > 0) return `${formatMoney(balance, currency)} a favor`;
-    return "Al día";
 }
 
 export default function CompanyWalletPage() {
@@ -193,7 +189,7 @@ export default function CompanyWalletPage() {
                                                 </span>
                                             </TableCell>
                                             <TableCell className="max-w-md truncate" title={tx.description ?? tx.externalReference ?? undefined}>
-                                                {tx.description ?? tx.externalReference ?? "—"}
+                                                {tx.displayDescription}
                                             </TableCell>
                                             <TableCell
                                                 className={`text-right tabular-nums ${isDebit ? "text-red-700" : "text-emerald-700"}`}
@@ -208,7 +204,7 @@ export default function CompanyWalletPage() {
                                                     : "text-emerald-700"
                                             }`}>
                                                 {tx.balanceAfter != null
-                                                    ? formattedRunningBalance(tx.balanceAfter, data.wallet.currency)
+                                                    ? formatWalletRunningBalance(tx.balanceAfter, data.wallet.currency)
                                                     : "—"}
                                             </TableCell>
                                         </TableRow>

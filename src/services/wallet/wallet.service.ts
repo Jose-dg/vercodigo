@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { walletMovementDescription } from "@/lib/wallet/presentation";
 import { Prisma, WalletRechargeMethod } from "@prisma/client";
 import { badRequest, conflict, notFound } from "@/lib/errors";
 
@@ -206,5 +207,36 @@ export async function getWalletForCompany(companyId: string, opts?: { page?: num
         prisma.walletTransaction.count({ where: visibleWhere }),
     ]);
 
-    return { wallet, transactions, pagination: { page, pageSize, total } };
+    const purchaseIds = transactions.flatMap((transaction) =>
+        transaction.codePurchaseId ? [transaction.codePurchaseId] : []
+    );
+    const historicalPurchases = purchaseIds.length
+        ? await prisma.codePurchase.findMany({
+            where: {
+                id: { in: purchaseIds },
+                idempotencyKey: { startsWith: "history:blue-panther:" },
+            },
+            select: { id: true },
+        })
+        : [];
+    const historicalPurchaseIds = new Set(historicalPurchases.map((purchase) => purchase.id));
+    const presentedTransactions = transactions.map((transaction) => {
+        const isHistoricalPurchase = Boolean(
+            transaction.codePurchaseId && historicalPurchaseIds.has(transaction.codePurchaseId)
+        );
+        const isHistoricalRecharge = transaction.id.startsWith("bp-hist-wallet-recharge-");
+        const historicalAction = isHistoricalPurchase ? "Buy" : isHistoricalRecharge ? "Payment" : null;
+
+        return {
+            ...transaction,
+            displayDescription: walletMovementDescription({
+                description: transaction.description,
+                externalReference: transaction.externalReference,
+                historicalAction,
+                historicalBuyerName: historicalAction ? "Blue Panther" : null,
+            }),
+        };
+    });
+
+    return { wallet, transactions: presentedTransactions, pagination: { page, pageSize, total } };
 }

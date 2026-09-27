@@ -5,10 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "vercel-build": "node scripts/vercel-build.mjs",
     "start": "next start",
     "lint": "eslint",
+    "db:migrate:status": "prisma migrate status",
+    "db:migrate:deploy": "prisma migrate deploy",
     "test:devdiem": "node --test --experimental-strip-types tests/catalog-regions.test.mjs tests/devdiem-fulfillment.test.mjs tests/fulfillment-lifecycle.test.mjs tests/purchase-delivery-counts.test.mjs",
     "test:account-statements": "node --test --experimental-strip-types tests/account-statements.test.mjs",
+    "test:wallet": "node --test --experimental-strip-types tests/wallet-presentation.test.mjs",
     "history:blue-panther": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-blue-panther-history.ts",
     "reconciliation:export": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/export-commercial-reconciliation-manifest.ts",
     "postinstall": "prisma generate"

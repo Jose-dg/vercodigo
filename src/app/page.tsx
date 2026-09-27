@@ -155,10 +155,45 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="solicitar-cuenta" className="marketing-section bg-[#e7edf9]">
-          <div className="marketing-container grid gap-12 lg:grid-cols-[0.78fr_1.22fr]">
-            <div><h2 className="text-3xl font-semibold tracking-[-0.045em] text-[#12333a] sm:text-5xl">Conversemos sobre tu operación.</h2><p className="mt-5 max-w-md leading-7 text-[#526a6e]">Cuéntanos qué tipo de negocio tienes. El equipo revisará la solicitud antes de habilitar una cuenta.</p><Link href="/empresas" className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-[#244aa6] underline-offset-4 hover:underline">¿Buscas regalos o incentivos para una empresa? <ArrowRight className="size-4" /></Link></div>
-            <div className="rounded-2xl bg-white p-6 shadow-[0_24px_70px_rgba(18,51,58,0.09)] sm:p-9"><LeadForm /></div>
+        <section id="solicitar-cuenta" className="marketing-account-request marketing-section scroll-mt-20 bg-white">
+          <div className="marketing-container">
+            <div className="grid border-y border-[#cad7d4] lg:grid-cols-[0.82fr_1.18fr]">
+              <div className="border-b border-[#cad7d4] py-12 lg:border-b-0 lg:border-r lg:py-16 lg:pr-16">
+                <p className="text-sm font-semibold text-[#2457d6]">Cuenta comercial Vercode</p>
+                <h2 className="mt-5 max-w-lg text-balance text-3xl font-semibold leading-[1.08] tracking-[-0.05em] text-[#12333a] sm:text-5xl">
+                  Una cuenta preparada para tu forma de vender.
+                </h2>
+                <p className="mt-6 max-w-md leading-7 text-[#526a6e]">
+                  Comparte los datos esenciales de tu comercio. Revisaremos tu operación, las categorías que buscas y la modalidad comercial adecuada.
+                </p>
+
+                <dl className="mt-12 max-w-md divide-y divide-[#dce5e2] border-y border-[#dce5e2]">
+                  <div className="grid grid-cols-[7.5rem_1fr] gap-4 py-4">
+                    <dt className="text-sm font-semibold text-[#12333a]">Revisión</dt>
+                    <dd className="text-sm leading-6 text-[#61777a]">El equipo comercial valida la información de tu negocio.</dd>
+                  </div>
+                  <div className="grid grid-cols-[7.5rem_1fr] gap-4 py-4">
+                    <dt className="text-sm font-semibold text-[#12333a]">Configuración</dt>
+                    <dd className="text-sm leading-6 text-[#61777a]">Definimos catálogo, usuarios y condiciones para operar.</dd>
+                  </div>
+                </dl>
+
+                <Link href="/empresas" className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-[#244aa6] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#2457d6]">
+                  ¿Necesitas regalos o incentivos corporativos? <ArrowRight aria-hidden="true" className="size-4" />
+                </Link>
+              </div>
+
+              <div className="py-12 lg:py-16 lg:pl-16">
+                <div className="mb-9 flex items-end justify-between gap-6 border-b border-[#dce5e2] pb-5">
+                  <div>
+                    <h3 className="text-xl font-semibold tracking-[-0.025em] text-[#12333a]">Datos de tu negocio</h3>
+                    <p className="mt-2 text-sm leading-6 text-[#61777a]">Usaremos esta información únicamente para contactarte.</p>
+                  </div>
+                  <span className="hidden shrink-0 text-xs text-[#718487] sm:block">Colombia</span>
+                </div>
+                <LeadForm />
+              </div>
+            </div>
           </div>
         </section>
       </main>

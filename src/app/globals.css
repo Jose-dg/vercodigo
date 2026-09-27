@@ -366,6 +366,30 @@ header {
   box-shadow: 0 0 0 4px rgba(36, 87, 214, 0.1);
 }
 
+.marketing-account-request .marketing-field {
+  min-height: 2.75rem;
+  border-width: 0 0 1px;
+  border-color: #b9c8c5;
+  border-radius: 0;
+  background: transparent;
+  padding-inline: 0;
+}
+
+.marketing-account-request .marketing-field:focus {
+  border-color: #2457d6;
+  box-shadow: 0 2px 0 #2457d6;
+}
+
+.marketing-account-request textarea.marketing-field {
+  padding-top: 0.75rem;
+}
+
+.marketing-account-request .marketing-lead-form button[type="submit"] {
+  min-width: 12rem;
+  justify-self: start;
+  border-radius: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .marketing-page *,
   .marketing-page *::before,

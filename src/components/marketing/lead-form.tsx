@@ -66,11 +66,11 @@ export function LeadForm({ audience = "stores" }: LeadFormProps) {
   const isCompanies = audience === "companies";
 
   return (
-    <form onSubmit={submit} className="grid gap-5" noValidate>
-      <div className="grid gap-5 sm:grid-cols-2">
+    <form onSubmit={submit} className="marketing-lead-form grid gap-6">
+      <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
         <Field label="Nombre" name="name" autoComplete="name" required />
         <Field label="Cargo" name="role" autoComplete="organization-title" required />
-        <Field label="Correo corporativo" name="workEmail" type="email" autoComplete="email" required />
+        <Field label="Correo corporativo" name="workEmail" type="email" autoComplete="email" spellCheck={false} required />
         <Field label="WhatsApp" name="whatsapp" type="tel" autoComplete="tel" required={!isCompanies} />
         <Field label="Empresa" name="companyName" autoComplete="organization" required />
         {isCompanies ? (
@@ -134,12 +134,12 @@ export function LeadForm({ audience = "stores" }: LeadFormProps) {
           }`}
         >
           <div className="flex items-start gap-2">
-            {status === "success" ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : null}
+            {status === "success" ? <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
             <span>{message}</span>
           </div>
           {status === "error" && marketingConfig.contact.whatsappUrl !== "#solicitar-cuenta" && (
             <a href={marketingConfig.contact.whatsappUrl} className="mt-3 inline-flex items-center gap-2 font-semibold underline underline-offset-4">
-              <MessageCircle className="size-4" /> Escribir por WhatsApp
+              <MessageCircle aria-hidden="true" className="size-4" /> Escribir por WhatsApp
             </a>
           )}
         </div>
@@ -160,7 +160,7 @@ function SelectField({ label, name, options }: { label: string; name: string; op
   return (
     <div>
       <label htmlFor={name} className="marketing-field-label">{label}</label>
-      <select id={name} name={name} required className="marketing-field mt-2">
+      <select id={name} name={name} required className="marketing-field mt-2 bg-white text-[#12333a]">
         <option value="">Selecciona una opción</option>
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sheet";
 import { Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { AccountStatementDialog } from "@/components/account-statements/AccountStatementDialog";
 
 interface WalletSummary {
     companyId: string;
@@ -253,9 +254,12 @@ export default function WalletsAdminPage() {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <Button size="sm" onClick={() => openRecharge(w.companyId)}>
-                                                <Plus className="mr-1 h-4 w-4" /> Abono
-                                            </Button>
+                                            <div className="flex flex-wrap justify-end gap-2">
+                                                <AccountStatementDialog companyId={w.companyId} companyName={w.companyName} />
+                                                <Button size="sm" onClick={() => openRecharge(w.companyId)}>
+                                                    <Plus className="mr-1 h-4 w-4" /> Abono
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))

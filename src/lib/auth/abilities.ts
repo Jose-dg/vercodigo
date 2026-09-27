@@ -15,6 +15,7 @@ export type Subjects =
     | 'AuditLog'
     | 'Wallet'
     | 'WalletTransaction'
+    | 'AccountStatement'
     | 'CompanyProductPrice'
     | 'ProductCost'
     | 'all';
@@ -38,6 +39,7 @@ export function defineAbilitiesFor(user: User) {
     else if (user.role === 'SYSTEM_ADMIN') {
         can('manage', ['Company', 'Store', 'User', 'Product', 'Key']);
         can('manage', ['Wallet', 'WalletTransaction']); // recargas manuales y tasas FX
+        can('manage', 'AccountStatement');
         can('manage', 'CompanyProductPrice');
         can('manage', 'ProductCost'); // costos que la plataforma cobra a las compañías
         can('read', ['Card', 'CardActivation', 'CodePurchase', 'Invoice', 'AuditLog']);
@@ -81,6 +83,7 @@ export function defineAbilitiesFor(user: User) {
         // Wallet: solo lectura (balance + histórico). La recarga la hace la
         // plataforma; recarga self-service de GENERAL_ADMIN es fase futura.
         can('read', ['Wallet', 'WalletTransaction'], { companyId } as any);
+        can('read', 'AccountStatement', { companyId } as any);
 
         // Precios de venta: OWNER y GENERAL_ADMIN los configuran para su compañía.
         can(['read', 'create', 'update', 'delete'], 'CompanyProductPrice', { companyId } as any);

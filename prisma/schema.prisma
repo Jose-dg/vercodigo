@@ -8,55 +8,58 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         UserRole
-  isActive     Boolean  @default(true)
-  companyId    String?
-  storeId      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  company      Company? @relation(fields: [companyId], references: [id])
-  store        Store?   @relation(fields: [storeId], references: [id])
+  id                      String             @id @default(cuid())
+  email                   String             @unique
+  passwordHash            String
+  name                    String
+  role                    UserRole
+  isActive                Boolean            @default(true)
+  companyId               String?
+  storeId                 String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  company                 Company?           @relation(fields: [companyId], references: [id])
+  store                   Store?             @relation(fields: [storeId], references: [id])
+  accountStatementsIssued AccountStatement[] @relation("AccountStatementIssuer")
 
   @@index([companyId])
   @@index([storeId])
 }
 
 model Company {
-  id               String                @id @default(cuid())
-  name             String
-  taxId            String                @unique
-  email            String
-  phone            String
-  address          String?
-  isActive         Boolean               @default(true)
-  billingFrequency BillingFrequency      @default(DAILY)
-  commissionRate   Float                 @default(0.05)
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  invoices         Invoice[]
-  stores           Store[]
-  users            User[]
-  authorizedPhones AuthorizedPhone[]
-  wallet           Wallet?
-  productPrices    CompanyProductPrice[]
-  productCosts     ProductCost[]
+  id                String                @id @default(cuid())
+  name              String
+  taxId             String                @unique
+  email             String
+  phone             String
+  address           String?
+  isActive          Boolean               @default(true)
+  billingFrequency  BillingFrequency      @default(DAILY)
+  commissionRate    Float                 @default(0.05)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  invoices          Invoice[]
+  stores            Store[]
+  users             User[]
+  authorizedPhones  AuthorizedPhone[]
+  wallet            Wallet?
+  productPrices     CompanyProductPrice[]
+  productCosts      ProductCost[]
+  accountStatements AccountStatement[]
 }
 
 model Wallet {
-  id           String              @id @default(cuid())
-  companyId    String              @unique
-  currency     String              @default("COP")
-  balance      Float               @default(0) // negativo = deuda de la compañía
-  creditLimit  Float? // null = sin límite (enforcement en fase futura)
-  isActive     Boolean             @default(true)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  company      Company             @relation(fields: [companyId], references: [id])
-  transactions WalletTransaction[]
+  id                String              @id @default(cuid())
+  companyId         String              @unique
+  currency          String              @default("COP")
+  balance           Float               @default(0) // negativo = deuda de la compañía
+  creditLimit       Float? // null = sin límite (enforcement en fase futura)
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  company           Company             @relation(fields: [companyId], references: [id])
+  transactions      WalletTransaction[]
+  accountStatements AccountStatement[]
 }
 
 model WalletTransaction {
@@ -78,10 +81,66 @@ model WalletTransaction {
   codePurchaseId       String?
   createdAt            DateTime                @default(now())
   wallet               Wallet                  @relation(fields: [walletId], references: [id])
+  accountStatementLine AccountStatementLine?
 
   @@index([walletId, createdAt])
   @@index([status])
   @@index([codePurchaseId])
+}
+
+model AccountStatement {
+  id                 String                 @id @default(cuid())
+  statementNumber    String                 @unique
+  sequenceYear       Int
+  sequenceNumber     Int
+  companyId          String
+  walletId           String
+  issuedById         String
+  currency           String
+  periodStart        DateTime
+  periodEnd          DateTime
+  openingBalance     Decimal                @db.Decimal(18, 2)
+  consumptions       Decimal                @db.Decimal(18, 2)
+  recharges          Decimal                @db.Decimal(18, 2)
+  refunds            Decimal                @db.Decimal(18, 2)
+  adjustments        Decimal                @db.Decimal(18, 2)
+  closingBalance     Decimal                @db.Decimal(18, 2)
+  totalPending       Decimal                @db.Decimal(18, 2)
+  creditBalance      Decimal                @db.Decimal(18, 2)
+  issuerSnapshot     Json
+  customerSnapshot   Json
+  previewFingerprint String
+  issuedAt           DateTime               @default(now())
+  company            Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  wallet             Wallet                 @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  issuedBy           User                   @relation("AccountStatementIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  lines              AccountStatementLine[]
+
+  @@unique([sequenceYear, sequenceNumber])
+  @@index([companyId, issuedAt])
+  @@index([walletId, periodEnd])
+  @@index([issuedById])
+}
+
+model AccountStatementLine {
+  id                  String                @id @default(cuid())
+  accountStatementId  String
+  walletTransactionId String                @unique
+  position            Int
+  occurredAt          DateTime
+  type                WalletTransactionType
+  description         String
+  productDetail       String?
+  quantity            Int?
+  unitPrice           Decimal?              @db.Decimal(18, 2)
+  debit               Decimal               @db.Decimal(18, 2)
+  credit              Decimal               @db.Decimal(18, 2)
+  balanceAfter        Decimal               @db.Decimal(18, 2)
+  accountStatement    AccountStatement      @relation(fields: [accountStatementId], references: [id], onDelete: Restrict)
+  walletTransaction   WalletTransaction     @relation(fields: [walletTransactionId], references: [id], onDelete: Restrict)
+
+  @@unique([accountStatementId, position])
+  @@index([accountStatementId, occurredAt])
 }
 
 enum WalletTransactionType {

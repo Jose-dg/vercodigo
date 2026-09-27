@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { AccountStatementsPanel } from "@/components/account-statements/AccountStatementsPanel";
 
 interface WalletTx {
     id: string;
@@ -109,6 +110,8 @@ export default function CompanyWalletPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {data ? <AccountStatementsPanel /> : null}
 
             <Card>
                 <CardHeader>

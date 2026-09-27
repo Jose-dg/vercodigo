@@ -26,15 +26,20 @@ function money(value: string, currency: string) {
 export function AccountStatementsPanel() {
     const [statements, setStatements] = useState<StatementSummary[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     const load = useCallback(async () => {
+        setLoading(true);
+        setError("");
         try {
             const response = await fetch("/api/account-statements");
             const data = await response.json();
             if (!response.ok) throw new Error(data.message);
             setStatements(data.statements ?? []);
         } catch {
-            toast.error("No se pudieron cargar los estados de cuenta");
+            const message = "No se pudieron cargar los estados de cuenta. Intenta nuevamente.";
+            setError(message);
+            toast.error(message);
         } finally {
             setLoading(false);
         }
@@ -43,11 +48,11 @@ export function AccountStatementsPanel() {
     useEffect(() => { load(); }, [load]);
 
     return (
-        <Card>
+        <Card className="shadow-none">
             <CardHeader className="border-b">
                 <div className="flex items-start gap-3">
                     <div className="mt-0.5 grid size-9 place-items-center rounded-md bg-[#123f68] text-white">
-                        <FileText className="size-4" />
+                        <FileText aria-hidden="true" className="size-4" />
                     </div>
                     <div>
                         <CardTitle>Estados de cuenta</CardTitle>
@@ -55,8 +60,24 @@ export function AccountStatementsPanel() {
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="pt-4">
-                <Table>
+            <CardContent className="pt-5">
+                {error ? (
+                    <div className="flex flex-col items-start gap-3 border-l-2 border-red-600 bg-red-50 px-4 py-3 text-sm text-red-950" role="alert">
+                        <p>{error}</p>
+                        <Button variant="outline" size="sm" onClick={load}>Reintentar</Button>
+                    </div>
+                ) : loading ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground" role="status">Cargando estados de cuenta…</div>
+                ) : statements.length === 0 ? (
+                    <div className="border-l-2 border-[#123f68] bg-slate-50 px-5 py-4">
+                        <p className="font-medium text-foreground">El primer estado todavía no ha sido emitido.</p>
+                        <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                            Cuando Vercode cierre el periodo, el documento aparecerá aquí para consulta y descarga.
+                        </p>
+                    </div>
+                ) : (
+                <div className="overflow-x-auto">
+                <Table className="min-w-[680px]">
                     <TableHeader>
                         <TableRow>
                             <TableHead>Número</TableHead>
@@ -66,11 +87,7 @@ export function AccountStatementsPanel() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {loading ? (
-                            <TableRow><TableCell colSpan={4} className="h-20 text-center">Cargando…</TableCell></TableRow>
-                        ) : statements.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="h-20 text-center text-muted-foreground">Aún no hay estados de cuenta emitidos.</TableCell></TableRow>
-                        ) : statements.map((statement) => {
+                        {statements.map((statement) => {
                             const hasDebt = Number(statement.totalPending) > 0;
                             return (
                                 <TableRow key={statement.id}>
@@ -87,7 +104,7 @@ export function AccountStatementsPanel() {
                                     <TableCell className="text-right">
                                         <Button variant="outline" size="sm" asChild>
                                             <a href={`/api/account-statements/${statement.id}/pdf`} target="_blank" rel="noreferrer">
-                                                <Download /> Descargar PDF
+                                                <Download aria-hidden="true" /> Descargar PDF
                                             </a>
                                         </Button>
                                     </TableCell>
@@ -96,6 +113,8 @@ export function AccountStatementsPanel() {
                         })}
                     </TableBody>
                 </Table>
+                </div>
+                )}
             </CardContent>
         </Card>
     );

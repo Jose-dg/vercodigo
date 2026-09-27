@@ -45,6 +45,37 @@ function formatMoney(amount: number, currency: string) {
     return new Intl.NumberFormat("es-CO", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
 }
 
+function balancePresentation(balance: number) {
+    if (balance < 0) {
+        return {
+            label: "Total pendiente",
+            description: "Consumos confirmados pendientes de abono a Vercode.",
+            amount: Math.abs(balance),
+            tone: "text-red-700",
+        };
+    }
+    if (balance > 0) {
+        return {
+            label: "Saldo a favor",
+            description: "Saldo disponible para cubrir próximos consumos.",
+            amount: balance,
+            tone: "text-emerald-700",
+        };
+    }
+    return {
+        label: "Cuenta al día",
+        description: "No tienes saldo pendiente ni saldo a favor.",
+        amount: 0,
+        tone: "text-[#123f68]",
+    };
+}
+
+function formattedRunningBalance(balance: number, currency: string) {
+    if (balance < 0) return `${formatMoney(Math.abs(balance), currency)} pendiente`;
+    if (balance > 0) return `${formatMoney(balance, currency)} a favor`;
+    return "Al día";
+}
+
 export default function CompanyWalletPage() {
     const ability = useAbility();
     const [data, setData] = useState<WalletData | null>(null);
@@ -83,25 +114,26 @@ export default function CompanyWalletPage() {
     const totalPages = data ? Math.max(1, Math.ceil(data.pagination.total / data.pagination.pageSize)) : 1;
 
     return (
-        <div className="p-6 space-y-6">
-            <h1 className="text-3xl font-bold tracking-tight">Mi Wallet</h1>
+        <div className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6 lg:p-8">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight text-balance">Mi cuenta</h1>
+                <p className="mt-2 text-sm text-muted-foreground">Consulta el saldo, los estados emitidos y cada movimiento confirmado.</p>
+            </div>
 
-            <Card>
+            <Card className="overflow-hidden shadow-none">
                 <CardHeader>
-                    <CardTitle>Balance actual</CardTitle>
-                    <CardDescription>
-                        Balance negativo indica saldo pendiente por abonar a la plataforma.
-                    </CardDescription>
+                    <CardTitle>{data ? balancePresentation(data.wallet.balance).label : "Saldo de la cuenta"}</CardTitle>
+                    <CardDescription>{data ? balancePresentation(data.wallet.balance).description : "Resumen financiero de tu cuenta comercial."}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading && !data ? (
-                        <div className="text-muted-foreground">Cargando...</div>
+                        <div className="text-muted-foreground" role="status">Cargando…</div>
                     ) : data ? (
                         <div
-                            className={`text-4xl font-bold font-mono ${data.wallet.balance < 0 ? "text-red-600" : "text-green-700"}`}
+                            className={`flex flex-wrap items-baseline gap-x-2 text-4xl font-bold tabular-nums ${balancePresentation(data.wallet.balance).tone}`}
                         >
-                            {formatMoney(data.wallet.balance, data.wallet.currency)}
-                            <span className="ml-2 text-base font-normal text-muted-foreground">
+                            {formatMoney(balancePresentation(data.wallet.balance).amount, data.wallet.currency)}
+                            <span className="text-sm font-medium tracking-wide text-muted-foreground" translate="no">
                                 {data.wallet.currency}
                             </span>
                         </div>
@@ -113,12 +145,13 @@ export default function CompanyWalletPage() {
 
             {data ? <AccountStatementsPanel /> : null}
 
-            <Card>
+            <Card className="shadow-none">
                 <CardHeader>
                     <CardTitle>Movimientos</CardTitle>
+                    <CardDescription>Débitos, abonos y balance resultante en orden cronológico.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Table>
+                <CardContent className="overflow-x-auto">
+                    <Table className="min-w-[760px]">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Fecha</TableHead>
@@ -131,7 +164,7 @@ export default function CompanyWalletPage() {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center h-24">Cargando...</TableCell>
+                                    <TableCell colSpan={5} className="h-24 text-center" role="status">Cargando…</TableCell>
                                 </TableRow>
                             ) : !data || data.transactions.length === 0 ? (
                                 <TableRow>
@@ -159,19 +192,23 @@ export default function CompanyWalletPage() {
                                                     {tx.status === "PENDING" && " (pendiente)"}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="max-w-md truncate">
+                                            <TableCell className="max-w-md truncate" title={tx.description ?? tx.externalReference ?? undefined}>
                                                 {tx.description ?? tx.externalReference ?? "—"}
                                             </TableCell>
                                             <TableCell
-                                                className={`text-right font-mono ${isDebit ? "text-red-600" : "text-green-700"}`}
+                                                className={`text-right tabular-nums ${isDebit ? "text-red-700" : "text-emerald-700"}`}
                                             >
                                                 {tx.status === "PENDING" && tx.originalAmount != null
                                                     ? `${tx.originalAmount} ${tx.originalCurrency ?? ""} (sin tasa)`
-                                                    : `${isDebit ? "-" : "+"}${formatMoney(tx.amount, data.wallet.currency)}`}
+                                                    : `${isDebit ? "−" : "+"}${formatMoney(tx.amount, data.wallet.currency)}`}
                                             </TableCell>
-                                            <TableCell className="text-right font-mono">
+                                            <TableCell className={`whitespace-nowrap text-right text-sm tabular-nums ${
+                                                tx.balanceAfter != null && tx.balanceAfter < 0
+                                                    ? "font-medium text-red-700"
+                                                    : "text-emerald-700"
+                                            }`}>
                                                 {tx.balanceAfter != null
-                                                    ? formatMoney(tx.balanceAfter, data.wallet.currency)
+                                                    ? formattedRunningBalance(tx.balanceAfter, data.wallet.currency)
                                                     : "—"}
                                             </TableCell>
                                         </TableRow>

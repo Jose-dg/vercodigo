@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:devdiem": "node --test --experimental-strip-types tests/catalog-regions.test.mjs tests/devdiem-fulfillment.test.mjs tests/fulfillment-lifecycle.test.mjs tests/purchase-delivery-counts.test.mjs",
     "test:account-statements": "node --test --experimental-strip-types tests/account-statements.test.mjs",
+    "history:blue-panther": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-blue-panther-history.ts",
     "reconciliation:export": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/export-commercial-reconciliation-manifest.ts",
     "postinstall": "prisma generate"
   },

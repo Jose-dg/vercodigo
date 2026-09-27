@@ -42,5 +42,9 @@ next-env.d.ts
 
 /app/generated/prisma
 
-# Graphify
-graphify-out/cost.json
+# Local Graphify/agent indexes and machine-specific hooks
+/graphify-out/
+/.claude/
+/.cursor/
+/.graphifyignore
+/CLAUDE.md

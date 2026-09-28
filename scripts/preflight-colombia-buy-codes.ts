@@ -10,8 +10,8 @@
  * After provisioning Steam COP / Mercado Libre / IMVU / Google Play / Uber:
  *   python manage.py provision_colombia_gift_cards --apply
  *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-steam-buy-codes.ts --apply
- *   npx tsx scripts/seed-meli-buy-codes.ts --apply
- *   npx tsx scripts/seed-colombia-pins-buy-codes.ts --apply
+ *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-meli-buy-codes.ts --apply
+ *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-colombia-pins-buy-codes.ts --apply
  *   GET {DIEM_API}/api/v1/catalog/products/?store_id={DIEM_STORE_ID}&fulfillment_enabled=true
  *   GET /api/products?purchasable=true  → listed under región CO
  * This script does not load PINs; without stock purchases stay AWAITING_STOCK.

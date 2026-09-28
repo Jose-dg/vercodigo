@@ -1,15 +1,22 @@
 /**
- * Idempotent seed for Steam wallet SKUs in Buy Codes (diem-sas).
- * Maps each Diem Product UUID via denomination.devDiemProductId.
+ * Idempotent reconciliation for Steam wallet SKUs in Buy Codes (diem-sas).
  *
  * Usage:
- *   npx tsx scripts/seed-steam-buy-codes.ts
+ *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-steam-buy-codes.ts
+ *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-steam-buy-codes.ts --apply
  *
- * Requires DATABASE_URL (loads .env.local if present).
- * Prerequisite: Diem StoreProduct.fulfillment_enabled=True for these UUIDs.
+ * Dry-run is the default. Requires DATABASE_URL and loads .env.local if present.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { Prisma, PrismaClient } from "@prisma/client";
+
+import {
+    RETIRED_STEAM_SKUS,
+    STEAM_CATALOG,
+    type SteamProductSpec,
+} from "../src/lib/catalog/steam";
 
 const envPath = resolve(process.cwd(), ".env.local");
 try {
@@ -29,131 +36,113 @@ try {
         process.env[key] = value;
     }
 } catch {
-    // Rely on existing process.env
+    // Rely on existing process.env.
 }
 
-import { PrismaClient } from "@prisma/client";
-
 const prisma = new PrismaClient();
-
 const COP_PER_USD = 3600;
 
-type ProductSpec = {
-    name: string;
+type ReconciliationAction = {
+    action: "create" | "update" | "unchanged" | "retire" | "missing";
     sku: string;
-    amount: number;
-    currency: "USD" | "COP";
-    devDiemProductId: string;
-    /** Wallet debit cost in the denomination currency (COP for COP SKUs). */
-    cost?: number;
+    name?: string;
 };
 
-const CATALOG: ProductSpec[] = [
-    {
-        name: "Steam Wallet US$5",
-        sku: "79936608432A",
-        amount: 5,
-        currency: "USD",
-        devDiemProductId: "0953a6e5-a4dd-414a-b4b1-75621ee5e074",
-    },
-    {
-        name: "Steam Wallet US$10",
-        sku: "93839483",
-        amount: 10,
-        currency: "USD",
-        devDiemProductId: "5d6750dc-d1eb-4105-98c9-45b20ff410c4",
-    },
-    {
-        name: "Steam Wallet US$20",
-        sku: "3423242342-25",
-        amount: 20,
-        currency: "USD",
-        devDiemProductId: "f1943029-d4df-4afa-9f83-9f75878bdc33",
-    },
-    {
-        name: "Steam Wallet US$20 (alt)",
-        sku: "7993660843273",
-        amount: 20,
-        currency: "USD",
-        devDiemProductId: "0405e46c-6e43-4dea-ae99-7c4615458c3f",
-    },
-    {
-        name: "Steam Wallet US$25",
-        sku: "7993660843223",
-        amount: 25,
-        currency: "USD",
-        devDiemProductId: "77727452-c107-4d7d-9754-d49ef9fb499a",
-    },
-    {
-        name: "Steam Wallet US$50",
-        sku: "799366010272",
-        amount: 50,
-        currency: "USD",
-        devDiemProductId: "3b4ff719-3401-4953-acc7-998b2e422560",
-    },
-    {
-        name: "Steam Wallet US$100",
-        sku: "3423242342-25-D100-88E399A1",
-        amount: 100,
-        currency: "USD",
-        devDiemProductId: "88e399a1-5aa1-4b2b-9b4f-941b829a46ef",
-    },
-    {
-        name: "Steam Wallet COP $41.000",
-        sku: "26030541000",
-        amount: 41000,
-        currency: "COP",
-        cost: 41000,
-        devDiemProductId: "978a9348-a74d-4b19-9774-114925a0c7f9",
-    },
-    {
-        name: "Steam Wallet COP $205.000",
-        sku: "260305205000",
-        amount: 205000,
-        currency: "COP",
-        cost: 205000,
-        devDiemProductId: "103f178e-0730-4b15-acae-c976b0d0b8e2",
-    },
-];
+function expectedCost(spec: SteamProductSpec): number {
+    return spec.cost ?? (spec.currency === "USD" ? spec.amount * COP_PER_USD : spec.amount);
+}
 
-async function upsertGlobalCost(params: {
-    productId: string;
-    denominationId: string;
-    cost: number;
-    currency: string;
-}) {
-    const existing = await prisma.productCost.findFirst({
+async function planReconciliation(): Promise<ReconciliationAction[]> {
+    const rows = await prisma.product.findMany({
+        where: {
+            sku: { in: [...STEAM_CATALOG.map((spec) => spec.sku), ...RETIRED_STEAM_SKUS] },
+        },
+        include: { denominations: true, costs: true },
+    });
+    const bySku = new Map(rows.map((row) => [row.sku, row]));
+
+    const actions: ReconciliationAction[] = STEAM_CATALOG.map((spec) => {
+        const product = bySku.get(spec.sku);
+        if (!product) return { action: "create", sku: spec.sku, name: spec.name };
+
+        const denomination = product.denominations.find(
+            (row) => row.devDiemProductId === spec.devDiemProductId,
+        ) ?? product.denominations.find((row) => row.amount === spec.amount);
+        const cost = denomination
+            ? product.costs.find((row) => (
+                row.companyId === null && row.denominationId === denomination.id
+            ))
+            : undefined;
+        const needsUpdate = product.name !== spec.name
+            || product.brand !== "Steam"
+            || product.category !== "Gift Card Digital"
+            || !product.isActive
+            || !product.isGiftCard
+            || product.devDiemProductId !== null
+            || !denomination
+            || denomination.amount !== spec.amount
+            || denomination.currency !== spec.currency
+            || denomination.devDiemProductId !== spec.devDiemProductId
+            || !cost
+            || cost.cost !== expectedCost(spec)
+            || cost.currency !== "COP"
+            || !cost.isActive;
+        return { action: needsUpdate ? "update" : "unchanged", sku: spec.sku, name: spec.name };
+    });
+
+    for (const sku of RETIRED_STEAM_SKUS) {
+        const product = bySku.get(sku);
+        if (!product) {
+            actions.push({ action: "missing", sku });
+            continue;
+        }
+        const hasActiveCost = product.costs.some((cost) => cost.isActive);
+        actions.push({
+            action: product.isActive || hasActiveCost ? "retire" : "unchanged",
+            sku,
+            name: product.name,
+        });
+    }
+    return actions;
+}
+
+async function upsertGlobalCost(
+    tx: Prisma.TransactionClient,
+    params: {
+        productId: string;
+        denominationId: string;
+        cost: number;
+    },
+) {
+    const existing = await tx.productCost.findFirst({
         where: {
             companyId: null,
             productId: params.productId,
             denominationId: params.denominationId,
         },
+        orderBy: { createdAt: "asc" },
     });
     if (existing) {
-        await prisma.productCost.update({
+        await tx.productCost.update({
             where: { id: existing.id },
-            data: {
-                cost: params.cost,
-                currency: params.currency,
-                isActive: true,
-            },
+            data: { cost: params.cost, currency: "COP", isActive: true },
         });
         return;
     }
-    await prisma.productCost.create({
+    await tx.productCost.create({
         data: {
             companyId: null,
             productId: params.productId,
             denominationId: params.denominationId,
             cost: params.cost,
-            currency: params.currency,
+            currency: "COP",
             isActive: true,
         },
     });
 }
 
-async function upsertProduct(spec: ProductSpec) {
-    const product = await prisma.product.upsert({
+async function upsertProduct(tx: Prisma.TransactionClient, spec: SteamProductSpec) {
+    const product = await tx.product.upsert({
         where: { sku: spec.sku },
         update: {
             name: spec.name,
@@ -161,7 +150,6 @@ async function upsertProduct(spec: ProductSpec) {
             category: "Gift Card Digital",
             isActive: true,
             isGiftCard: true,
-            // Mapping lives on denomination (1 Diem SKU = 1 denom).
             devDiemProductId: null,
         },
         create: {
@@ -174,12 +162,11 @@ async function upsertProduct(spec: ProductSpec) {
         },
     });
 
-    const byRemote = await prisma.productDenomination.findFirst({
+    const byRemote = await tx.productDenomination.findFirst({
         where: { devDiemProductId: spec.devDiemProductId },
     });
-    let denomination;
-    if (byRemote) {
-        denomination = await prisma.productDenomination.update({
+    const denomination = byRemote
+        ? await tx.productDenomination.update({
             where: { id: byRemote.id },
             data: {
                 productId: product.id,
@@ -187,19 +174,10 @@ async function upsertProduct(spec: ProductSpec) {
                 currency: spec.currency,
                 devDiemProductId: spec.devDiemProductId,
             },
-        });
-    } else {
-        denomination = await prisma.productDenomination.upsert({
-            where: {
-                productId_amount: {
-                    productId: product.id,
-                    amount: spec.amount,
-                },
-            },
-            update: {
-                currency: spec.currency,
-                devDiemProductId: spec.devDiemProductId,
-            },
+        })
+        : await tx.productDenomination.upsert({
+            where: { productId_amount: { productId: product.id, amount: spec.amount } },
+            update: { currency: spec.currency, devDiemProductId: spec.devDiemProductId },
             create: {
                 productId: product.id,
                 amount: spec.amount,
@@ -207,31 +185,45 @@ async function upsertProduct(spec: ProductSpec) {
                 devDiemProductId: spec.devDiemProductId,
             },
         });
-    }
 
-    const cost =
-        spec.cost
-        ?? (spec.currency === "USD" ? spec.amount * COP_PER_USD : spec.amount);
-    const costCurrency = "COP";
-    await upsertGlobalCost({
+    await upsertGlobalCost(tx, {
         productId: product.id,
         denominationId: denomination.id,
-        cost,
-        currency: costCurrency,
+        cost: expectedCost(spec),
     });
+}
 
-    return { product, cost };
+async function applyReconciliation() {
+    await prisma.$transaction(
+        async (tx) => {
+            for (const spec of STEAM_CATALOG) {
+                await upsertProduct(tx, spec);
+            }
+            for (const sku of RETIRED_STEAM_SKUS) {
+                const product = await tx.product.findUnique({ where: { sku } });
+                if (!product) continue;
+                await tx.product.update({ where: { id: product.id }, data: { isActive: false } });
+                await tx.productCost.updateMany({
+                    where: { productId: product.id, isActive: true },
+                    data: { isActive: false },
+                });
+            }
+        },
+        { maxWait: 10_000, timeout: 30_000 },
+    );
 }
 
 async function main() {
-    console.log(`Seeding ${CATALOG.length} Steam Buy Codes products...`);
-    for (const spec of CATALOG) {
-        const { product, cost } = await upsertProduct(spec);
-        console.log(
-            `✓ ${product.name} (${product.sku}) — cost ${cost} COP → ${spec.devDiemProductId}`,
-        );
+    const before = await planReconciliation();
+    if (!process.argv.includes("--apply")) {
+        console.log(JSON.stringify({ apply: false, actions: before }, null, 2));
+        console.log("No database changes were made. Re-run with --apply after reviewing the plan.");
+        return;
     }
-    console.log("Done.");
+
+    await applyReconciliation();
+    const after = await planReconciliation();
+    console.log(JSON.stringify({ apply: true, actions: before, verification: after }, null, 2));
 }
 
 main()

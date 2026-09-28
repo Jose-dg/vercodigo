@@ -11,47 +11,57 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Download } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 
-interface Product {
-    id: string;
+interface QrCatalogItem {
+    productId: string;
+    denominationId: string;
     name: string;
     sku: string;
-    denominations: { id: string; amount: number; currency: string }[];
+    amount: number;
+    currency: string;
 }
 
 interface Store {
     id: string;
     name: string;
     code: string;
+    isActive: boolean;
+}
+
+interface GeneratedQr {
+    id: string;
+    uuid: string;
+    qrData: string;
 }
 
 export function QRGeneratorForm() {
-    const [products, setProducts] = useState<Product[]>([]);
+    const [catalog, setCatalog] = useState<QrCatalogItem[]>([]);
     const [stores, setStores] = useState<Store[]>([]);
-    const [selectedProduct, setSelectedProduct] = useState("");
+    const [selectedDenomination, setSelectedDenomination] = useState("");
     const [selectedStore, setSelectedStore] = useState("");
-    const [amount, setAmount] = useState<number | "">("");
     const [quantity, setQuantity] = useState(1);
     const [loading, setLoading] = useState(false);
-    const [generatedQRs, setGeneratedQRs] = useState<any[]>([]);
+    const [generatedQRs, setGeneratedQRs] = useState<GeneratedQr[]>([]);
     const { toast } = useToast();
+    const selectedItem = catalog.find(
+        (item) => item.denominationId === selectedDenomination,
+    );
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [productsRes, storesRes] = await Promise.all([
-                    fetch("/api/products"),
+                const [catalogRes, storesRes] = await Promise.all([
+                    fetch("/api/qr/catalog"),
                     fetch("/api/stores"),
                 ]);
 
-                if (productsRes.ok) {
-                    const productsData = await productsRes.json();
-                    setProducts(productsData);
+                if (!catalogRes.ok || !storesRes.ok) {
+                    throw new Error("No se pudo cargar el catálogo QR");
                 }
 
-                if (storesRes.ok) {
-                    const storesData = await storesRes.json();
-                    setStores(storesData);
-                }
+                const catalogData = await catalogRes.json();
+                const storesData: Store[] = await storesRes.json();
+                setCatalog(catalogData.items);
+                setStores(storesData.filter((store) => store.isActive));
             } catch (error) {
                 console.error("Error fetching data", error);
                 toast({
@@ -65,28 +75,25 @@ export function QRGeneratorForm() {
     }, [toast]);
 
     const handleGenerate = async () => {
+        if (!selectedItem) return;
         setLoading(true);
         try {
-            const newQRs: any[] = [];
-            for (let i = 0; i < quantity; i++) {
-                const res = await fetch("/api/qr/generate", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        storeId: selectedStore,
-                        productId: selectedProduct,
-                        quantity: 1,
-                        customAmount: Number(amount),
-                    }),
-                });
-
-                if (!res.ok) throw new Error("Failed to generate QR");
-
-                const data = await res.json();
-                newQRs.push(data);
+            const res = await fetch("/api/qr/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    storeId: selectedStore,
+                    productId: selectedItem.productId,
+                    denominationId: selectedItem.denominationId,
+                    quantity,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "No se pudieron generar los QR");
             }
 
-            setGeneratedQRs((prev) => [...prev, ...newQRs]);
+            setGeneratedQRs((prev) => [...prev, ...data.cards]);
 
             toast({
                 title: "QRs Generados",
@@ -96,7 +103,9 @@ export function QRGeneratorForm() {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: "No se pudo generar los códigos QR.",
+                description: error instanceof Error
+                    ? error.message
+                    : "No se pudieron generar los códigos QR.",
             });
         } finally {
             setLoading(false);
@@ -127,15 +136,18 @@ export function QRGeneratorForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                             <Label className="text-gray-700 font-medium">Producto</Label>
-                            <Select onValueChange={setSelectedProduct} value={selectedProduct}>
+                            <Select onValueChange={setSelectedDenomination} value={selectedDenomination}>
                                 <SelectTrigger className="bg-gray-50 border-gray-300 focus:ring-blue-500">
                                     <SelectValue placeholder="Seleccionar producto" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {products.map((product) => (
-                                        <SelectItem key={product.id} value={product.id}>
-                                            <span className="font-medium">{product.name}</span>
-                                            <span className="text-gray-500 text-xs ml-2">({product.sku})</span>
+                                    {catalog.map((item) => (
+                                        <SelectItem key={item.denominationId} value={item.denominationId}>
+                                            <span className="font-medium">{item.name}</span>
+                                            <span className="text-gray-600 text-xs ml-2">
+                                                {item.currency} {new Intl.NumberFormat("es-CO").format(item.amount)}
+                                            </span>
+                                            <span className="text-gray-500 text-xs ml-2">({item.sku})</span>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -162,13 +174,14 @@ export function QRGeneratorForm() {
                         <div className="space-y-2">
                             <Label className="text-gray-700 font-medium">Monto</Label>
                             <div className="relative">
-                                <span className="absolute left-3 top-2.5 text-gray-500">$</span>
                                 <Input
-                                    type="number"
-                                    placeholder="0.00"
-                                    value={amount}
-                                    onChange={(e) => setAmount(Number(e.target.value))}
-                                    className="pl-7 bg-gray-50 border-gray-300 focus:bg-white transition-colors"
+                                    type="text"
+                                    placeholder="Selecciona un producto"
+                                    value={selectedItem
+                                        ? `${selectedItem.currency} ${new Intl.NumberFormat("es-CO").format(selectedItem.amount)}`
+                                        : ""}
+                                    readOnly
+                                    className="bg-gray-100 border-gray-300"
                                 />
                             </div>
                         </div>
@@ -188,7 +201,14 @@ export function QRGeneratorForm() {
                 <CardFooter className="bg-gray-50/50 border-t border-gray-100 p-6">
                     <Button
                         onClick={handleGenerate}
-                        disabled={loading || !selectedProduct || !selectedStore}
+                        disabled={
+                            loading
+                            || !selectedItem
+                            || !selectedStore
+                            || !Number.isInteger(quantity)
+                            || quantity < 1
+                            || quantity > 100
+                        }
                         className="w-full md:w-auto md:ml-auto bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
                     >
                         {loading ? "Generando..." : "Generar Códigos QR"}
@@ -204,8 +224,8 @@ export function QRGeneratorForm() {
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                            {generatedQRs.map((qr, i) => (
-                                <Dialog key={i}>
+                            {generatedQRs.map((qr) => (
+                                <Dialog key={qr.id}>
                                     <DialogTrigger asChild>
                                         <div className="group relative border border-gray-200 rounded-lg p-4 flex flex-col items-center bg-white hover:shadow-md transition-shadow cursor-pointer">
                                             <div className="bg-white p-2 rounded-md">

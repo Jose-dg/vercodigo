@@ -6,10 +6,24 @@
  *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/preflight-colombia-buy-codes.ts --smoke --confirm-smoke
  *
  * Loads .env.local and fails closed when its configured Diem API is unreachable.
+ *
+ * After provisioning Steam COP / Mercado Libre / IMVU / Google Play / Uber:
+ *   python manage.py provision_colombia_gift_cards --apply
+ *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-steam-buy-codes.ts --apply
+ *   npx tsx scripts/seed-meli-buy-codes.ts --apply
+ *   npx tsx scripts/seed-colombia-pins-buy-codes.ts --apply
+ *   GET {DIEM_API}/api/v1/catalog/products/?store_id={DIEM_STORE_ID}&fulfillment_enabled=true
+ *   GET /api/products?purchasable=true  → listed under región CO
+ * This script does not load PINs; without stock purchases stay AWAITING_STOCK.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+
+import {
+    RETIRED_STEAM_SKUS,
+    STEAM_COP_CATALOG,
+} from "../src/lib/catalog/steam";
 
 const envPath = resolve(process.cwd(), ".env.local");
 for (const line of readFileSync(envPath, "utf8").split("\n")) {
@@ -61,9 +75,6 @@ async function main() {
 
     const { checkDiemConnection } = await import("../src/lib/devdiem/fulfillment");
     const prisma = (await import("../src/lib/prisma")).default;
-    const { purchaseCodes, processCodePurchase } = await import(
-        "../src/services/self-service/purchase-codes.service"
-    );
 
     const remote = await checkDiemConnection();
     const remoteIds = new Set(remote.catalogProductIds);
@@ -92,8 +103,11 @@ async function main() {
 
     const unmapped: string[] = [];
     const unknown: string[] = [];
+    const missingExpected: string[] = [];
+    const mismatchedExpected: string[] = [];
     const colombia = products.filter((p) =>
-        ["Xbox", "Free Fire", "Netflix"].includes(p.brand) && p.sku !== "NFLX-USD",
+        ["Xbox", "Free Fire", "Netflix", "Steam", "Mercado Libre", "IMVU", "Google Play", "Uber"].includes(p.brand)
+        && p.sku !== "NFLX-USD",
     );
 
     for (const product of products) {
@@ -117,6 +131,32 @@ async function main() {
         }
     }
 
+    const productsBySku = new Map(products.map((product) => [product.sku, product]));
+    for (const expected of STEAM_COP_CATALOG) {
+        const product = productsBySku.get(expected.sku);
+        if (!product) {
+            missingExpected.push(expected.sku);
+            continue;
+        }
+        const denomination = product.denominations.find((row) => (
+            row.devDiemProductId === expected.devDiemProductId
+        ));
+        if (
+            !denomination
+            || denomination.amount !== expected.amount
+            || denomination.currency !== expected.currency
+        ) {
+            mismatchedExpected.push(
+                `${expected.sku} expected ${expected.amount} ${expected.currency} → ${expected.devDiemProductId}`,
+            );
+        }
+    }
+
+    const retiredStillActive = await prisma.product.findMany({
+        where: { sku: { in: [...RETIRED_STEAM_SKUS] }, isActive: true },
+        select: { sku: true },
+    });
+
     console.log(`Colombia brand products: ${colombia.length}`);
     for (const p of colombia) {
         console.log(
@@ -129,8 +169,20 @@ async function main() {
     const nflx = await prisma.product.findUnique({ where: { sku: "NFLX-USD" } });
     console.log(`NFLX-USD isActive=${nflx?.isActive ?? "missing"}`);
 
-    const ok = unmapped.length === 0 && unknown.length === 0 && remote.catalogProducts > 0;
-    console.log(JSON.stringify({ ok, unmapped, unknownMappings: unknown }, null, 2));
+    const ok = unmapped.length === 0
+        && unknown.length === 0
+        && missingExpected.length === 0
+        && mismatchedExpected.length === 0
+        && retiredStillActive.length === 0
+        && remote.catalogProducts > 0;
+    console.log(JSON.stringify({
+        ok,
+        unmapped,
+        unknownMappings: unknown,
+        missingExpected,
+        mismatchedExpected,
+        retiredStillActive: retiredStillActive.map((product) => product.sku),
+    }, null, 2));
     if (!ok) {
         process.exitCode = 1;
         return;
@@ -140,6 +192,10 @@ async function main() {
         console.log("Preflight OK. Re-run with --smoke --confirm-smoke to create the one-unit smoke purchase.");
         return;
     }
+
+    const { purchaseCodes, processCodePurchase } = await import(
+        "../src/services/self-service/purchase-codes.service"
+    );
 
     // Smoke: use a mapped automatic product with inventory in the restored DB.
     const smoke = await prisma.product.findUnique({

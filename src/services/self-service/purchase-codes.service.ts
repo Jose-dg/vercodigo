@@ -5,7 +5,6 @@ import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import type { TokenPayload } from "@/lib/auth";
 import {
     buildCommercialAccountCode,
-    checkDiemConnection,
     createCodeRequest,
     getCodeRequest,
     isDiemContractError,
@@ -420,18 +419,9 @@ export async function purchaseCodes(params: {
         throw conflict("El producto no está mapeado al catálogo de Diem");
     }
 
-    const catalog = await checkDiemConnection();
-    if (Object.hasOwn(catalog.catalogProductStock, remoteProductId)) {
-        const available = catalog.catalogProductStock[remoteProductId];
-        if (available < count) {
-            throw conflict(
-                available <= 0
-                    ? "No hay stock de este producto. Llama a Diem para que te agreguen inventario y puedas pedirlo."
-                    : `Solo hay ${available} código(s) disponible(s). Pide ${available} o menos, o llama a Diem para agregar stock.`,
-            );
-        }
-    }
-
+    // Stock is informational only, not a gate: Diem accepts requests against
+    // depleted inventory and queues them as "awaiting_stock", delivering
+    // automatically once codes are restocked (see processCodePurchase below).
     const durableIdempotencyKey = `diem-sas-purchase:${companyId}:${params.idempotencyKey}`;
     const matchesRequest = (existing: {
         userId: string;

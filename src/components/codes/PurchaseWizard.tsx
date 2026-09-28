@@ -183,8 +183,6 @@ export function PurchaseWizard({
         && (!needsDenomination || Boolean(denominationId))
         && quantity >= 1
         && quantity <= maxQuantity
-        && !outOfStock
-        && !exceedsStock
         && (!isPlatform || Boolean(targetCompanyId));
 
     function resetFrom(from: WizardStep) {
@@ -602,8 +600,8 @@ export function PurchaseWizard({
                                         {selectedStock == null
                                             ? 'Entre 1 y 100'
                                             : outOfStock
-                                                ? 'Sin stock ahora'
-                                                : `Hasta ${maxQuantity} según stock`}
+                                                ? 'Sin stock ahora · quedará en espera'
+                                                : `Entre 1 y ${maxQuantity}`}
                                     </p>
                                 </div>
                             </div>
@@ -614,7 +612,7 @@ export function PurchaseWizard({
                                     variant="outline"
                                     className="size-14 rounded-2xl"
                                     onClick={() => bumpQuantity(-1)}
-                                    disabled={quantity <= 1 || outOfStock}
+                                    disabled={quantity <= 1}
                                     aria-label="Disminuir cantidad"
                                 >
                                     <Minus className="size-6" />
@@ -641,7 +639,7 @@ export function PurchaseWizard({
                                     variant="outline"
                                     className="size-14 rounded-2xl"
                                     onClick={() => bumpQuantity(1)}
-                                    disabled={outOfStock || quantity >= Math.max(maxQuantity, 1)}
+                                    disabled={quantity >= Math.max(maxQuantity, 1)}
                                     aria-label="Aumentar cantidad"
                                 >
                                     <Plus className="size-6" />
@@ -653,18 +651,18 @@ export function PurchaseWizard({
                             <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                                 <Phone className="mt-0.5 size-5 shrink-0 text-amber-700" />
                                 <div>
-                                    <p className="font-semibold">No hay stock de este producto</p>
+                                    <p className="font-semibold">Sin stock ahora mismo</p>
                                     <p className="mt-1 leading-relaxed text-amber-900">
-                                        Llama a Diem para que te agreguen inventario. Así evitas pedir
-                                        y que la entrega no llegue.
+                                        Puedes confirmar igual: el pedido queda en espera y Diem lo
+                                        entrega automáticamente en cuanto haya códigos disponibles.
                                     </p>
                                 </div>
                             </div>
                         )}
                         {exceedsStock && !outOfStock && (
                             <p className="text-sm text-amber-800">
-                                Solo hay {selectedStock} código(s). Baja la cantidad o llama a Diem
-                                para agregar stock.
+                                Solo hay {selectedStock} código(s) disponibles ahora. El resto quedará
+                                en espera y se entrega en cuanto haya stock.
                             </p>
                         )}
 
@@ -726,7 +724,10 @@ export function PurchaseWizard({
                                 Procesando...
                             </>
                         ) : outOfStock ? (
-                            'Sin stock — llama a Diem'
+                            <>
+                                Pedir (queda en espera de stock)
+                                <ArrowRight className="ml-2 size-5" />
+                            </>
                         ) : (
                             <>
                                 Confirmar compra

@@ -50,9 +50,13 @@ export function stockLabel(units: number | null): string | null {
     return `${units} disponible${units === 1 ? "" : "s"}`;
 }
 
-export function maxPurchasableQuantity(units: number | null): number {
-    if (units == null) return 100;
-    return Math.max(0, Math.min(100, units));
+/**
+ * Cap on how many codes can be requested per order. Not tied to current
+ * stock: Diem accepts requests against depleted inventory and queues them
+ * as "awaiting_stock", delivering automatically once codes are restocked.
+ */
+export function maxPurchasableQuantity(_units: number | null): number {
+    return 100;
 }
 
 export const REGION_META: Record<

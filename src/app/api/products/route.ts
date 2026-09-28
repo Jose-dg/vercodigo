@@ -45,19 +45,25 @@ export async function GET(req: NextRequest) {
                 orderBy: { name: "asc" },
             });
             const regions = catalog.catalogProductRegions;
+            const stock = catalog.catalogProductStock;
             return NextResponse.json(products.map((product) => ({
                 ...product,
                 countryRegion: product.devDiemProductId
                     ? regions[product.devDiemProductId] ?? null
                     : null,
-                denominations: product.denominations.map((denomination) => ({
-                    ...denomination,
-                    countryRegion: regions[
-                        denomination.devDiemProductId
+                availableUnits: product.devDiemProductId != null
+                    ? stock[product.devDiemProductId] ?? 0
+                    : null,
+                denominations: product.denominations.map((denomination) => {
+                    const remoteId = denomination.devDiemProductId
                         ?? product.devDiemProductId
-                        ?? ''
-                    ] ?? null,
-                })),
+                        ?? '';
+                    return {
+                        ...denomination,
+                        countryRegion: regions[remoteId] ?? null,
+                        availableUnits: remoteId ? stock[remoteId] ?? 0 : null,
+                    };
+                }),
             })));
         }
 

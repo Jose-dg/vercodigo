@@ -306,6 +306,7 @@ export async function checkDiemConnection(): Promise<{
     catalogProducts: number;
     catalogProductIds: string[];
     catalogProductRegions: Record<string, string>;
+    catalogProductStock: Record<string, number>;
 }> {
     const config = getDiemConfig();
     const query = new URLSearchParams({
@@ -317,6 +318,7 @@ export async function checkDiemConnection(): Promise<{
         `${config.baseUrl}/api/v1/catalog/products/?${query.toString()}`;
     const productIds = new Set<string>();
     const productRegions = new Map<string, string>();
+    const productStock = new Map<string, number>();
     let pageCount = 0;
     while (nextUrl) {
         if (++pageCount > 50) throw new Error('El catálogo de Diem excede el límite de páginas');
@@ -346,6 +348,10 @@ export async function checkDiemConnection(): Promise<{
                 if (typeof countryRegion === 'string' && countryRegion.trim()) {
                     productRegions.set(productId, countryRegion.trim().toLowerCase());
                 }
+                const availableUnits = (row as { available_units?: unknown }).available_units;
+                if (typeof availableUnits === 'number' && Number.isFinite(availableUnits)) {
+                    productStock.set(productId, Math.max(0, Math.floor(availableUnits)));
+                }
             }
         }
         const next: string | null = (
@@ -372,5 +378,6 @@ export async function checkDiemConnection(): Promise<{
         catalogProducts: productIds.size,
         catalogProductIds: [...productIds],
         catalogProductRegions: Object.fromEntries(productRegions),
+        catalogProductStock: Object.fromEntries(productStock),
     };
 }

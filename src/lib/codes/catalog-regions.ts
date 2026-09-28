@@ -8,6 +8,7 @@ export interface CatalogDenomination {
     currency: string;
     devDiemProductId: string | null;
     countryRegion?: string | null;
+    availableUnits?: number | null;
 }
 
 export interface CatalogProduct {
@@ -18,7 +19,40 @@ export interface CatalogProduct {
     isActive: boolean;
     devDiemProductId: string | null;
     countryRegion?: string | null;
+    availableUnits?: number | null;
     denominations: CatalogDenomination[];
+}
+
+/** Units Diem can allocate now. null = catalog did not report stock. */
+export function denominationStock(denomination: CatalogDenomination): number | null {
+    return typeof denomination.availableUnits === "number" ? denomination.availableUnits : null;
+}
+
+export function productStock(product: CatalogProduct): number | null {
+    if (product.denominations.length === 0) {
+        return typeof product.availableUnits === "number" ? product.availableUnits : null;
+    }
+    let total = 0;
+    let reported = false;
+    for (const denomination of product.denominations) {
+        const units = denominationStock(denomination);
+        if (units == null) continue;
+        reported = true;
+        total += units;
+    }
+    if (reported) return total;
+    return typeof product.availableUnits === "number" ? product.availableUnits : null;
+}
+
+export function stockLabel(units: number | null): string | null {
+    if (units == null) return null;
+    if (units <= 0) return "Sin stock";
+    return `${units} disponible${units === 1 ? "" : "s"}`;
+}
+
+export function maxPurchasableQuantity(units: number | null): number {
+    if (units == null) return 100;
+    return Math.max(0, Math.min(100, units));
 }
 
 export const REGION_META: Record<
@@ -120,6 +154,18 @@ export function brandAccent(brand: string): { bg: string; fg: string; ring: stri
     }
     if (key.includes("netflix")) {
         return { bg: "bg-red-700", fg: "text-white", ring: "ring-red-500" };
+    }
+    if (key.includes("mercado") || key.includes("meli")) {
+        return { bg: "bg-yellow-400", fg: "text-slate-900", ring: "ring-yellow-500" };
+    }
+    if (key.includes("imvu")) {
+        return { bg: "bg-violet-700", fg: "text-white", ring: "ring-violet-500" };
+    }
+    if (key.includes("google play") || key.includes("gplay")) {
+        return { bg: "bg-green-600", fg: "text-white", ring: "ring-green-400" };
+    }
+    if (key.includes("uber")) {
+        return { bg: "bg-zinc-950", fg: "text-white", ring: "ring-zinc-500" };
     }
     return { bg: "bg-slate-800", fg: "text-slate-100", ring: "ring-slate-500" };
 }

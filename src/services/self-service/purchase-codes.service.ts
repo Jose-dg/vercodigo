@@ -5,6 +5,7 @@ import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import type { TokenPayload } from "@/lib/auth";
 import {
     buildCommercialAccountCode,
+    checkDiemConnection,
     createCodeRequest,
     getCodeRequest,
     isDiemContractError,
@@ -414,8 +415,21 @@ export async function purchaseCodes(params: {
     } else if (product.denominations.length > 1) {
         throw badRequest("Selecciona la denominación del producto");
     }
-    if (!(denomination?.devDiemProductId ?? product.devDiemProductId)) {
+    const remoteProductId = denomination?.devDiemProductId ?? product.devDiemProductId;
+    if (!remoteProductId) {
         throw conflict("El producto no está mapeado al catálogo de Diem");
+    }
+
+    const catalog = await checkDiemConnection();
+    if (Object.hasOwn(catalog.catalogProductStock, remoteProductId)) {
+        const available = catalog.catalogProductStock[remoteProductId];
+        if (available < count) {
+            throw conflict(
+                available <= 0
+                    ? "No hay stock de este producto. Llama a Diem para que te agreguen inventario y puedas pedirlo."
+                    : `Solo hay ${available} código(s) disponible(s). Pide ${available} o menos, o llama a Diem para agregar stock.`,
+            );
+        }
     }
 
     const durableIdempotencyKey = `diem-sas-purchase:${companyId}:${params.idempotencyKey}`;

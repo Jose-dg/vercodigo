@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    brandAccent,
     filterProductsByRegion,
+    maxPurchasableQuantity,
     productRegions,
+    productStock,
+    stockLabel,
 } from '../src/lib/codes/catalog-regions.ts';
 
 function product(overrides = {}) {
@@ -81,4 +85,29 @@ test('fails closed when Diem does not provide a supported region', () => {
     assert.deepEqual(productRegions(unknown), []);
     assert.equal(filterProductsByRegion([unknown], 'CO').length, 0);
     assert.equal(filterProductsByRegion([unknown], 'US').length, 0);
+});
+
+test('uses Mercado Libre yellow accent', () => {
+    assert.equal(brandAccent('Mercado Libre').bg, 'bg-yellow-400');
+    assert.equal(brandAccent('MELI').bg, 'bg-yellow-400');
+});
+
+test('uses IMVU, Google Play and Uber accents', () => {
+    assert.equal(brandAccent('IMVU').bg, 'bg-violet-700');
+    assert.equal(brandAccent('Google Play').bg, 'bg-green-600');
+    assert.equal(brandAccent('Uber').bg, 'bg-zinc-950');
+});
+
+test('sums reported denomination stock and labels out-of-stock', () => {
+    const withStock = product({
+        denominations: [
+            { id: 'a', amount: 24000, currency: 'COP', devDiemProductId: 'imvu-24', availableUnits: 2 },
+            { id: 'b', amount: 48000, currency: 'COP', devDiemProductId: 'imvu-48', availableUnits: 0 },
+        ],
+    });
+    assert.equal(productStock(withStock), 2);
+    assert.equal(stockLabel(0), 'Sin stock');
+    assert.equal(stockLabel(2), '2 disponibles');
+    assert.equal(maxPurchasableQuantity(0), 0);
+    assert.equal(maxPurchasableQuantity(null), 100);
 });

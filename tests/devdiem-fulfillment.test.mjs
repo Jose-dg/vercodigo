@@ -191,12 +191,12 @@ test('connection check validates credentials, store grant and catalog access', a
             assert.match(String(url), /page_size=100/);
             return Response.json({
                 next: `https://diem.example.test/api/v1/catalog/products/?page=2&store_id=${STORE_ID}`,
-                results: [{ product_id: 'one', country_region: 'colombia' }],
+                results: [{ product_id: 'one', country_region: 'colombia', available_units: 3 }],
             });
         }
         return Response.json({
             next: null,
-            results: [{ product_id: 'two', country_region: 'united_states' }],
+            results: [{ product_id: 'two', country_region: 'united_states', available_units: 0 }],
         });
     };
 
@@ -208,6 +208,10 @@ test('connection check validates credentials, store grant and catalog access', a
         catalogProductRegions: {
             one: 'colombia',
             two: 'united_states',
+        },
+        catalogProductStock: {
+            one: 3,
+            two: 0,
         },
     });
 });

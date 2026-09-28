@@ -16,6 +16,7 @@ import {
     Loader2,
     Minus,
     Package,
+    Phone,
     Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -27,8 +28,12 @@ import {
     brandsInRegion,
     filterProductsByRegion,
     filterProductsByRegionAndBrand,
+    denominationStock,
     formatDenomAmount,
+    maxPurchasableQuantity,
     productRegions,
+    productStock,
+    stockLabel,
 } from '@/lib/codes/catalog-regions';
 
 export type WizardStep = 'region' | 'brand' | 'product' | 'denomination' | 'quantity';
@@ -164,12 +169,22 @@ export function PurchaseWizard({
         referencePrice?.salePrice != null ? referencePrice.salePrice * quantity : null;
 
     const selectedCompany = companies.find((c) => c.companyId === targetCompanyId);
+    const selectedStock = selectedDenomination
+        ? denominationStock(selectedDenomination)
+        : selectedProduct
+            ? productStock(selectedProduct)
+            : null;
+    const maxQuantity = maxPurchasableQuantity(selectedStock);
+    const outOfStock = selectedStock != null && selectedStock <= 0;
+    const exceedsStock = selectedStock != null && quantity > selectedStock;
 
     const canConfirm =
         Boolean(productId)
         && (!needsDenomination || Boolean(denominationId))
         && quantity >= 1
-        && quantity <= 100
+        && quantity <= maxQuantity
+        && !outOfStock
+        && !exceedsStock
         && (!isPlatform || Boolean(targetCompanyId));
 
     function resetFrom(from: WizardStep) {
@@ -242,7 +257,7 @@ export function PurchaseWizard({
     }
 
     function bumpQuantity(delta: number) {
-        setQuantity((q) => Math.min(100, Math.max(1, q + delta)));
+        setQuantity((q) => Math.min(Math.max(maxQuantity, 1), Math.max(1, q + delta)));
     }
 
     const progressLabel = (() => {
@@ -481,6 +496,8 @@ export function PurchaseWizard({
                                         product.denominations[0].currency,
                                     )
                                     : `${product.denominations.length} valores`;
+                            const units = productStock(product);
+                            const label = stockLabel(units);
                             return (
                                 <SelectionTile
                                     key={product.id}
@@ -502,6 +519,14 @@ export function PurchaseWizard({
                                                 </>
                                             )}
                                             {denomSummary}
+                                            {label && (
+                                                <>
+                                                    {' · '}
+                                                    <span className={units != null && units <= 0 ? 'font-medium text-amber-800' : ''}>
+                                                        {label}
+                                                    </span>
+                                                </>
+                                            )}
                                         </p>
                                     </div>
                                     <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
@@ -513,19 +538,30 @@ export function PurchaseWizard({
 
                 {step === 'denomination' && selectedProduct && (
                     <div className="grid grid-cols-2 gap-3">
-                        {selectedProduct.denominations.map((denom) => (
-                            <SelectionTile
-                                key={denom.id}
-                                selected={denominationId === denom.id}
-                                onClick={() => selectDenomination(denom.id)}
-                                className="min-h-20 flex-col items-start justify-center gap-1 sm:min-h-24"
-                            >
-                                <span className="text-lg font-bold tabular-nums sm:text-xl">
-                                    {formatDenomAmount(denom.amount, denom.currency)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">{denom.currency}</span>
-                            </SelectionTile>
-                        ))}
+                        {selectedProduct.denominations.map((denom) => {
+                            const units = denominationStock(denom);
+                            const label = stockLabel(units);
+                            return (
+                                <SelectionTile
+                                    key={denom.id}
+                                    selected={denominationId === denom.id}
+                                    onClick={() => selectDenomination(denom.id)}
+                                    className="min-h-20 flex-col items-start justify-center gap-1 sm:min-h-24"
+                                >
+                                    <span className="text-lg font-bold tabular-nums sm:text-xl">
+                                        {formatDenomAmount(denom.amount, denom.currency)}
+                                    </span>
+                                    <span className={cn(
+                                        'text-xs',
+                                        units != null && units <= 0
+                                            ? 'font-medium text-amber-800'
+                                            : 'text-muted-foreground',
+                                    )}>
+                                        {label ?? denom.currency}
+                                    </span>
+                                </SelectionTile>
+                            );
+                        })}
                     </div>
                 )}
 
@@ -562,7 +598,13 @@ export function PurchaseWizard({
                                     <h2 id="quantity-section" className="text-sm font-semibold">
                                         Cantidad de códigos
                                     </h2>
-                                    <p className="text-xs text-muted-foreground">Entre 1 y 100</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {selectedStock == null
+                                            ? 'Entre 1 y 100'
+                                            : outOfStock
+                                                ? 'Sin stock ahora'
+                                                : `Hasta ${maxQuantity} según stock`}
+                                    </p>
                                 </div>
                             </div>
 
@@ -572,7 +614,7 @@ export function PurchaseWizard({
                                     variant="outline"
                                     className="size-14 rounded-2xl"
                                     onClick={() => bumpQuantity(-1)}
-                                    disabled={quantity <= 1}
+                                    disabled={quantity <= 1 || outOfStock}
                                     aria-label="Disminuir cantidad"
                                 >
                                     <Minus className="size-6" />
@@ -581,7 +623,7 @@ export function PurchaseWizard({
                                     id="quantity"
                                     type="number"
                                     min={1}
-                                    max={100}
+                                    max={Math.max(maxQuantity, 1)}
                                     inputMode="numeric"
                                     value={quantity}
                                     onChange={(event) => {
@@ -590,7 +632,7 @@ export function PurchaseWizard({
                                             setQuantity(1);
                                             return;
                                         }
-                                        setQuantity(Math.min(100, Math.max(1, next)));
+                                        setQuantity(Math.min(Math.max(maxQuantity, 1), Math.max(1, next)));
                                     }}
                                     className="h-14 w-24 rounded-2xl text-center font-mono text-2xl font-semibold tabular-nums"
                                 />
@@ -599,13 +641,32 @@ export function PurchaseWizard({
                                     variant="outline"
                                     className="size-14 rounded-2xl"
                                     onClick={() => bumpQuantity(1)}
-                                    disabled={quantity >= 100}
+                                    disabled={outOfStock || quantity >= Math.max(maxQuantity, 1)}
                                     aria-label="Aumentar cantidad"
                                 >
                                     <Plus className="size-6" />
                                 </Button>
                             </div>
                         </div>
+
+                        {outOfStock && (
+                            <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                                <Phone className="mt-0.5 size-5 shrink-0 text-amber-700" />
+                                <div>
+                                    <p className="font-semibold">No hay stock de este producto</p>
+                                    <p className="mt-1 leading-relaxed text-amber-900">
+                                        Llama a Diem para que te agreguen inventario. Así evitas pedir
+                                        y que la entrega no llegue.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        {exceedsStock && !outOfStock && (
+                            <p className="text-sm text-amber-800">
+                                Solo hay {selectedStock} código(s). Baja la cantidad o llama a Diem
+                                para agregar stock.
+                            </p>
+                        )}
 
                         {referencePrice?.salePrice != null && (
                             <div className="rounded-2xl border bg-muted/40 px-4 py-3">
@@ -664,6 +725,8 @@ export function PurchaseWizard({
                                 <Loader2 className="mr-2 size-5 animate-spin" />
                                 Procesando...
                             </>
+                        ) : outOfStock ? (
+                            'Sin stock — llama a Diem'
                         ) : (
                             <>
                                 Confirmar compra

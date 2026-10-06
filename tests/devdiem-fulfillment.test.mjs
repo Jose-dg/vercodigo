@@ -60,6 +60,7 @@ test('createCodeRequest sends the Diem-SAS partner contract and idempotency head
     const result = await createCodeRequest({
         idempotencyKey: 'purchase-key-1',
         externalReference: 'purchase-1',
+        correlationId: 'code-purchase:purchase-1',
         source: 'partner_api',
         productId: '22222222-2222-4222-8222-222222222222',
         quantity: 2,
@@ -81,6 +82,7 @@ test('createCodeRequest sends the Diem-SAS partner contract and idempotency head
     assert.equal(captured.url, 'https://diem.example.test/api/v1/code-requests/');
     assert.equal(captured.init.headers.Authorization, 'Bearer ddk_test_secret');
     assert.equal(captured.init.headers['Idempotency-Key'], 'purchase-key-1');
+    assert.equal(captured.init.headers['X-Correlation-ID'], 'code-purchase:purchase-1');
     const body = JSON.parse(captured.init.body);
     assert.equal(body.store_id, STORE_ID);
     assert.equal(body.delivery_mode, 'partner_retrieval');
@@ -167,7 +169,7 @@ test('status and reveal use protected endpoints and flatten delivered codes', as
 test('Diem HTTP errors preserve status and provider detail', async () => {
     globalThis.fetch = async () => Response.json(
         { detail: 'Service account lacks code_requests:create scope.' },
-        { status: 403 },
+        { status: 403, headers: { 'X-Correlation-ID': 'code-purchase:abc' } },
     );
 
     await assert.rejects(
@@ -175,6 +177,8 @@ test('Diem HTTP errors preserve status and provider detail', async () => {
         (error) => {
             assert.equal(error.status, 403);
             assert.match(error.message, /lacks code_requests:create/);
+            assert.match(error.message, /correlación: code-purchase:abc/);
+            assert.equal(error.correlationId, 'code-purchase:abc');
             return true;
         },
     );

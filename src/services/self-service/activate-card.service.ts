@@ -93,6 +93,7 @@ export async function processActivationJob(jobId: string) {
             const remote = await createCodeRequest({
                 idempotencyKey: job.idempotencyKey,
                 externalReference: `DIEM-SAS-ACTIVATION-${job.id}`,
+                correlationId: `card-activation:${job.id}`,
                 source: "physical_card",
                 productId: remoteProductId,
                 quantity: 1,

@@ -184,6 +184,7 @@ export async function processCodePurchase(purchaseId: string) {
             const request = await createCodeRequest({
                 idempotencyKey: purchase.idempotencyKey,
                 externalReference: `DIEM-SAS-PURCHASE-${purchase.id}`,
+                correlationId: `code-purchase:${purchase.id}`,
                 source: "partner_api",
                 productId: remoteProductId,
                 quantity: purchase.count,

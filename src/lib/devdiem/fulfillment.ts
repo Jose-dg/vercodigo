@@ -46,6 +46,7 @@ export type DiemHttpError = Error & {
     detail?: unknown;
     retryAfterSeconds?: number;
     reason?: string;
+    correlationId?: string;
 };
 
 function extractRetryAfterSeconds(response: Response, detail: unknown): number | undefined {
@@ -135,6 +136,16 @@ export function buildCommercialAccountCode(companyId: string): string {
 async function parse<T>(response: Response): Promise<T> {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
+        const responseCorrelationId = response.headers.get('X-Correlation-ID');
+        const bodyCorrelationId = typeof body?.correlation_id === 'string'
+            ? body.correlation_id
+            : typeof body?.request_id === 'string'
+                ? body.request_id
+                : undefined;
+        const correlationId = (responseCorrelationId || bodyCorrelationId || '').trim();
+        const safeCorrelationId = /^[A-Za-z0-9._:-]{1,100}$/.test(correlationId)
+            ? correlationId
+            : undefined;
         const detailText = typeof body?.detail === 'string'
             ? body.detail
             : `Diem respondió HTTP ${response.status}`;
@@ -150,6 +161,7 @@ async function parse<T>(response: Response): Promise<T> {
         error.status = response.status;
         error.detail = body;
         error.retryAfterSeconds = retryAfterSeconds;
+        error.correlationId = safeCorrelationId;
         if (typeof detailText === 'string' && detailText.toLowerCase().includes('commercial')) {
             error.reason = 'commercial_contract';
             if (detailText.toLowerCase().includes('not found')
@@ -159,6 +171,9 @@ async function parse<T>(response: Response): Promise<T> {
                     + 'account_code en la Store de DIEM_STORE_ID.'
                 );
             }
+        }
+        if (safeCorrelationId) {
+            error.message = `${error.message} (correlación: ${safeCorrelationId})`;
         }
         throw error;
     }
@@ -217,6 +232,7 @@ export async function createCodeRequest(params: {
         totalAmount: number;
     };
     metadata?: Record<string, unknown>;
+    correlationId?: string;
 }): Promise<CodeRequest> {
     const config = getDiemConfig();
     if (!params.commercial?.accountCode?.trim()) {
@@ -241,6 +257,7 @@ export async function createCodeRequest(params: {
         headers: headers(config, {
             'Content-Type': 'application/json',
             'Idempotency-Key': params.idempotencyKey,
+            'X-Correlation-ID': params.correlationId || params.externalReference,
         }),
         body: JSON.stringify({
             store_id: config.storeId,

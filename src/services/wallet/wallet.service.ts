@@ -65,6 +65,7 @@ export async function debit(params: {
                 createdById: params.createdById ?? null,
                 cardActivationId: params.cardActivationId,
                 codePurchaseId: params.codePurchaseId,
+                occurredAt: new Date(),
             },
         });
     }
@@ -89,6 +90,7 @@ export async function debit(params: {
             createdById: params.createdById ?? null,
             cardActivationId: params.cardActivationId,
             codePurchaseId: params.codePurchaseId,
+            occurredAt: new Date(),
         },
     });
 }
@@ -126,6 +128,7 @@ export async function recharge(params: {
                 externalReference: params.externalReference,
                 description: params.description,
                 createdById: params.actorId,
+                occurredAt: new Date(),
             },
         });
     });
@@ -191,16 +194,32 @@ export async function getWalletForCompany(companyId: string, opts?: { page?: num
     const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? 25));
 
     const wallet = await getOrCreateWallet(companyId);
+    const opening = await prisma.walletTransaction.findFirst({
+        where: { walletId: wallet.id, type: "OPENING_BALANCE", status: "CONFIRMED" },
+        orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
+        select: { occurredAt: true, occurredSequence: true, id: true },
+    });
     // FAILED se conserva en DB por auditoría (reclasificaciones) pero no se
     // muestra al cliente: solo CONFIRMED y PENDING (FX pendiente).
     const visibleWhere = {
         walletId: wallet.id,
         status: { in: ["CONFIRMED", "PENDING"] as ("CONFIRMED" | "PENDING")[] },
+        ...(opening ? {
+            OR: [
+                { occurredAt: { gt: opening.occurredAt } },
+                { occurredAt: opening.occurredAt, occurredSequence: { gt: opening.occurredSequence } },
+                {
+                    occurredAt: opening.occurredAt,
+                    occurredSequence: opening.occurredSequence,
+                    id: { gte: opening.id },
+                },
+            ],
+        } : {}),
     };
     const [transactions, total] = await Promise.all([
         prisma.walletTransaction.findMany({
             where: visibleWhere,
-            orderBy: { createdAt: "desc" },
+            orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
             skip: (page - 1) * pageSize,
             take: pageSize,
         }),

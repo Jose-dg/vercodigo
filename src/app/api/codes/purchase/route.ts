@@ -13,6 +13,10 @@ const PurchaseBody = z.object({
     storeId: z.string().optional(),
     /** Obligatorio cuando compra un admin de plataforma en nombre de una compañía. */
     companyId: z.string().optional(),
+    origin: z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("phone"), id: z.string().min(1) }),
+        z.object({ kind: z.literal("store"), id: z.string().min(1) }),
+    ]).optional(),
 });
 
 async function handler(
@@ -31,7 +35,7 @@ async function handler(
                 { status: 400 }
             );
         }
-        const { productId, denominationId, count, storeId, companyId } = parsed.data;
+        const { productId, denominationId, count, storeId, companyId, origin } = parsed.data;
         const idempotencyKey = req.headers.get("idempotency-key")?.trim();
         if (
             !idempotencyKey
@@ -53,6 +57,7 @@ async function handler(
             actorRole: user.role,
             targetCompanyId: companyId,
             storeId,
+            origin,
             productId,
             denominationId,
             count,

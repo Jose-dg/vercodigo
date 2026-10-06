@@ -8,6 +8,7 @@ export const CreateUserBody = z.object({
     role: z.nativeEnum(UserRole),
     companyId: z.string().optional().nullable(),
     storeId: z.string().optional().nullable(),
+    purchaseOriginPhoneId: z.string().optional().nullable(),
 });
 
 export const UpdateUserBody = z.object({
@@ -16,6 +17,7 @@ export const UpdateUserBody = z.object({
     role: z.nativeEnum(UserRole).optional(),
     companyId: z.string().optional().nullable(),
     storeId: z.string().optional().nullable(),
+    purchaseOriginPhoneId: z.string().optional().nullable(),
     isActive: z.boolean().optional(),
     // Password update usually handled separately or requiring current password
     password: z.string().min(8).optional(),

@@ -210,6 +210,21 @@ header {
   animation-name: slide-in-from-bottom-0;
 }
 
+/* Code purchase order: light sweep at the edge of the progress fill. */
+@keyframes order-shimmer {
+  0% {
+    opacity: 0;
+    transform: translateX(-60%);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(60%);
+  }
+}
+
 /* Public Vercode marketing layer. Kept scoped so the operational portal stays unchanged. */
 .marketing-page {
   min-height: 100vh;

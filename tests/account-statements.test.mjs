@@ -59,6 +59,17 @@ test("confirmed movement kinds reconcile from signed balance transitions", () =>
     assert.deepEqual(statementBalanceLabel(snapshot.closingBalance), { label: "Total pendiente", amount: "80.00" });
 });
 
+test("an opening balance anchors the statement without becoming an adjustment", () => {
+    const snapshot = buildFinancialSnapshot(0, [
+        movement("1", "OPENING_BALANCE", 1_679_200, -1_679_200),
+        movement("2", "RECHARGE", 1_400_000, -279_200),
+    ]);
+    assert.equal(snapshot.adjustments, "0.00");
+    assert.equal(snapshot.consumptions, "0.00");
+    assert.equal(snapshot.recharges, "1400000.00");
+    assert.equal(snapshot.closingBalance, "-279200.00");
+});
+
 test("fingerprint is deterministic and changes with the ledger", () => {
     const base = { companyId: "company", transactionIds: ["one", "two"], closing: "-10.00" };
     assert.equal(statementFingerprint(base), statementFingerprint(base));

@@ -21,7 +21,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { CreateUserBody, UpdateUserBody } from "@/services/users/dto";
 import { UserRole } from "@prisma/client";
 import { useCurrentUser } from "@/components/auth/ability-context";
 import { getAssignableRoles } from "@/lib/auth/abilities";
@@ -43,6 +42,12 @@ interface StoreOption {
     companyId: string;
 }
 
+interface OriginPhoneOption {
+    id: string;
+    phone: string;
+    label: string;
+}
+
 // Combine create and update for the form, making password optional for edit
 const UserFormSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -51,6 +56,7 @@ const UserFormSchema = z.object({
     role: z.nativeEnum(UserRole),
     companyId: z.string().optional(),
     storeId: z.string().optional(),
+    purchaseOriginPhoneId: z.string().optional(),
     isActive: z.boolean(),
 });
 
@@ -72,6 +78,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     const actorIsPlatform = currentUser ? PLATFORM_ROLES.includes(currentUser.role) : false;
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
     const [stores, setStores] = useState<StoreOption[]>([]);
+    const [originPhones, setOriginPhones] = useState<OriginPhoneOption[]>([]);
 
     useEffect(() => {
         if (actorIsPlatform) {
@@ -94,10 +101,26 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
             role: (user?.role as UserRole) || UserRole.OPERATOR,
             companyId: user?.companyId || undefined,
             storeId: user?.storeId || undefined,
+            purchaseOriginPhoneId: user?.purchaseOriginPhoneId || undefined,
             isActive: user?.isActive ?? true,
             password: "",
         },
     });
+
+    const selectedRole = form.watch("role");
+    const selectedCompanyId = actorIsPlatform ? form.watch("companyId") : currentUser?.companyId;
+
+    useEffect(() => {
+        if (!selectedCompanyId || PLATFORM_ROLES.includes(selectedRole)) {
+            setOriginPhones([]);
+            return;
+        }
+
+        fetch(`/api/purchase-origin-phones?companyId=${encodeURIComponent(selectedCompanyId)}`)
+            .then((r) => r.json())
+            .then((d) => Array.isArray(d) && setOriginPhones(d))
+            .catch(() => setOriginPhones([]));
+    }, [selectedCompanyId, selectedRole]);
 
     const onSubmit = async (data: FormData) => {
         setLoading(true);
@@ -130,6 +153,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                 ...(password ? { password } : {}),
                 companyId: targetIsPlatform ? null : effectiveCompanyId || null,
                 storeId: targetIsPlatform || targetIsCompanyWide ? null : data.storeId || null,
+                purchaseOriginPhoneId: targetIsPlatform ? null : data.purchaseOriginPhoneId || null,
             };
 
             const url = isEditing ? `/api/users/${user.id}` : "/api/users";
@@ -251,6 +275,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                                     onValueChange={(v) => {
                                         field.onChange(v);
                                         form.setValue("storeId", undefined);
+                                        form.setValue("purchaseOriginPhoneId", undefined);
                                     }}
                                     value={field.value ?? ""}
                                 >
@@ -317,6 +342,40 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                                 </FormItem>
                             );
                         }}
+                    />
+                )}
+
+                {!PLATFORM_ROLES.includes(form.watch("role")) && selectedCompanyId && (
+                    <FormField
+                        control={form.control}
+                        name="purchaseOriginPhoneId"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Número de origen de compras</FormLabel>
+                                <Select
+                                    onValueChange={(value) => field.onChange(value === "__none__" ? undefined : value)}
+                                    value={field.value ?? "__none__"}
+                                >
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Sin número asociado" />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">Sin número asociado</SelectItem>
+                                        {originPhones.map((origin) => (
+                                            <SelectItem key={origin.id} value={origin.id}>
+                                                {origin.label} · {origin.phone}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                    Identifica el origen comercial; no concede permiso para activar tarjetas.
+                                </FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
                 )}
 

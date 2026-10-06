@@ -18,7 +18,7 @@ import { formatWalletRunningBalance } from "@/lib/wallet/presentation";
 
 interface WalletTx {
     id: string;
-    type: "RECHARGE" | "CONSUMPTION" | "ADJUSTMENT" | "REFUND";
+    type: "OPENING_BALANCE" | "RECHARGE" | "CONSUMPTION" | "ADJUSTMENT" | "REFUND";
     status: "PENDING" | "CONFIRMED" | "FAILED";
     amount: number;
     balanceAfter: number | null;
@@ -28,6 +28,7 @@ interface WalletTx {
     displayDescription: string;
     externalReference: string | null;
     createdAt: string;
+    occurredAt: string;
 }
 
 interface WalletData {
@@ -37,6 +38,7 @@ interface WalletData {
 }
 
 const TYPE_LABELS: Record<WalletTx["type"], string> = {
+    OPENING_BALANCE: "Saldo anterior",
     RECHARGE: "Abono",
     CONSUMPTION: "Consumo",
     ADJUSTMENT: "Ajuste",
@@ -168,11 +170,11 @@ export default function CompanyWalletPage() {
                                 </TableRow>
                             ) : (
                                 data.transactions.map((tx) => {
-                                    const isDebit = tx.type === "CONSUMPTION";
+                                    const isDebit = tx.type === "CONSUMPTION" || tx.type === "OPENING_BALANCE";
                                     return (
                                         <TableRow key={tx.id}>
                                             <TableCell className="whitespace-nowrap">
-                                                {new Date(tx.createdAt).toLocaleString("es-CO")}
+                                                {new Date(tx.occurredAt).toLocaleString("es-CO")}
                                             </TableCell>
                                             <TableCell>
                                                 <span
@@ -194,7 +196,9 @@ export default function CompanyWalletPage() {
                                             <TableCell
                                                 className={`text-right tabular-nums ${isDebit ? "text-red-700" : "text-emerald-700"}`}
                                             >
-                                                {tx.status === "PENDING" && tx.originalAmount != null
+                                                {tx.type === "OPENING_BALANCE"
+                                                    ? formatMoney(tx.amount, data.wallet.currency)
+                                                    : tx.status === "PENDING" && tx.originalAmount != null
                                                     ? `${tx.originalAmount} ${tx.originalCurrency ?? ""} (sin tasa)`
                                                     : `${isDebit ? "−" : "+"}${formatMoney(tx.amount, data.wallet.currency)}`}
                                             </TableCell>

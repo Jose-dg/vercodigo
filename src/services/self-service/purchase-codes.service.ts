@@ -14,6 +14,8 @@ import {
 import { debit } from "@/services/wallet/wallet.service";
 import { resolveCost } from "@/services/costing/costing.service";
 import { summarizeCodeDelivery } from "@/lib/codes/delivery-counts";
+import { buildPurchaseTimeline } from "@/lib/codes/purchase-timeline";
+import { resolvePurchaseOrigin, type RequestedOrigin } from "@/services/purchases/purchase-origin";
 
 const TERMINAL_FAILURES = new Set(["failed", "cancelled"]);
 const PENDING_STATUSES = ["PENDING", "AWAITING_STOCK", "FINALIZING", "ACTION_REQUIRED"] as const;
@@ -120,7 +122,7 @@ export async function listCodePurchasesForUser(
     const purchases = await prisma.codePurchase.findMany({
         where,
         include: { denomination: true },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
         take: limit,
     });
     return enrichPurchases(purchases);
@@ -149,7 +151,7 @@ export async function processCodePurchase(purchaseId: string) {
 
     try {
         if (!purchase.diemRequestId) {
-            const [user, originCompany, originStore] = await Promise.all([
+            const [user, originCompany, originStore, originPhone] = await Promise.all([
                 prisma.user.findUnique({
                     where: { id: purchase.userId },
                     select: { email: true, name: true },
@@ -165,6 +167,15 @@ export async function processCodePurchase(purchaseId: string) {
                             companyId: purchase.companyId,
                         },
                         select: { name: true },
+                    })
+                    : Promise.resolve(null),
+                purchase.purchaseOriginPhoneId
+                    ? prisma.purchaseOriginPhone.findFirst({
+                        where: {
+                            id: purchase.purchaseOriginPhoneId,
+                            companyId: purchase.companyId,
+                        },
+                        select: { phone: true },
                     })
                     : Promise.resolve(null),
             ]);
@@ -194,6 +205,18 @@ export async function processCodePurchase(purchaseId: string) {
                     company_name: originCompany?.name ?? null,
                     store_id: purchase.storeId,
                     store_name: originStore?.name ?? null,
+                    purchase_origin: purchase.purchaseOriginPhoneId
+                        ? {
+                            kind: "phone",
+                            id: purchase.purchaseOriginPhoneId,
+                            label: purchase.originLabelSnapshot,
+                            phone: originPhone?.phone ?? null,
+                        }
+                        : purchase.storeId
+                            ? { kind: "store", id: purchase.storeId, label: originStore?.name ?? null }
+                            : null,
+                    commercial_occurred_at: purchase.occurredAt.toISOString(),
+                    commercial_sequence: purchase.occurredSequence,
                 },
             });
             purchase = await prisma.codePurchase.update({
@@ -345,6 +368,7 @@ export async function purchaseCodes(params: {
     actorRole: string;
     targetCompanyId?: string;
     storeId?: string;
+    origin?: RequestedOrigin;
     productId: string;
     denominationId?: string;
     count: number;
@@ -356,36 +380,17 @@ export async function purchaseCodes(params: {
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, companyId: true, storeId: true, email: true, role: true },
+        select: { id: true, companyId: true, storeId: true, email: true, role: true, purchaseOriginPhoneId: true },
     });
     if (!user?.email) throw badRequest("El usuario necesita un email para recibir códigos");
 
-    let companyId: string;
-    if (PLATFORM_ROLES.has(actorRole)) {
-        companyId = targetCompanyId?.trim() || "";
-        if (!companyId) {
-            throw badRequest("Selecciona la compañía a la que se cargará la compra");
-        }
-        const company = await prisma.company.findUnique({
-            where: { id: companyId },
-            select: { id: true },
-        });
-        if (!company) throw notFound("Compañía no encontrada");
-    } else {
-        if (!user.companyId) throw forbidden("Usuario inválido");
-        companyId = user.companyId;
-    }
-
-    let resolvedStoreId = storeId ?? null;
-    if (resolvedStoreId) {
-        const store = await prisma.store.findFirst({
-            where: { id: resolvedStoreId, companyId },
-            select: { id: true },
-        });
-        if (!store) throw badRequest("La tienda no pertenece a la compañía seleccionada");
-    } else if (!PLATFORM_ROLES.has(actorRole) && (actorRole === "ADMIN" || actorRole === "OPERATOR")) {
-        resolvedStoreId = user.storeId;
-    }
+    const resolvedOrigin = await resolvePurchaseOrigin({
+        actor: { ...user, role: actorRole },
+        targetCompanyId,
+        requestedOrigin: params.origin,
+        legacyStoreId: storeId,
+    });
+    const { companyId, storeId: resolvedStoreId } = resolvedOrigin;
 
     const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -430,6 +435,7 @@ export async function purchaseCodes(params: {
         count: number;
         storeId: string | null;
         companyId: string;
+        purchaseOriginPhoneId: string | null;
     }) => (
         existing.userId === userId
         && existing.productId === productId
@@ -437,6 +443,7 @@ export async function purchaseCodes(params: {
         && existing.count === count
         && existing.storeId === resolvedStoreId
         && existing.companyId === companyId
+        && existing.purchaseOriginPhoneId === resolvedOrigin.purchaseOriginPhoneId
     );
     let purchase;
     try {
@@ -462,6 +469,8 @@ export async function purchaseCodes(params: {
                     userId,
                     companyId,
                     storeId: resolvedStoreId,
+                    purchaseOriginPhoneId: resolvedOrigin.purchaseOriginPhoneId,
+                    originLabelSnapshot: resolvedOrigin.labelSnapshot,
                     productId,
                     denominationId: denomination?.id,
                     count,
@@ -527,16 +536,43 @@ export async function getCodePurchaseForUser(purchaseId: string, user: Actor) {
         include: { denomination: true },
     });
     if (!purchase) throw notFound("Compra no encontrada");
-    const product = await prisma.product.findUnique({
-        where: { id: purchase.productId },
-        select: { name: true },
-    });
-    const requester = await prisma.user.findUnique({
-        where: { id: purchase.userId },
-        select: { name: true, email: true },
-    });
-    return serializePurchase(purchase, {
-        productName: product?.name,
-        requesterLabel: requester?.name?.trim() || requester?.email,
-    });
+    const [product, requester, walletTransactions] = await Promise.all([
+        prisma.product.findUnique({
+            where: { id: purchase.productId },
+            select: { name: true, brand: true, category: true, imageUrl: true },
+        }),
+        prisma.user.findUnique({
+            where: { id: purchase.userId },
+            select: { name: true, email: true },
+        }),
+        prisma.walletTransaction.findMany({
+            where: { codePurchaseId: purchase.id, status: { in: ["CONFIRMED", "PENDING"] } },
+            orderBy: { createdAt: "asc" },
+            select: {
+                id: true,
+                type: true,
+                status: true,
+                amount: true,
+                balanceAfter: true,
+                description: true,
+                createdAt: true,
+                wallet: { select: { currency: true } },
+            },
+        }),
+    ]);
+    return {
+        ...serializePurchase(purchase, {
+            productName: product?.name,
+            requesterLabel: requester?.name?.trim() || requester?.email,
+        }),
+        productBrand: product?.brand ?? null,
+        productCategory: product?.category ?? null,
+        productImageUrl: product?.imageUrl ?? null,
+        unitPrice: purchase.count > 0 ? purchase.totalAmount / purchase.count : purchase.totalAmount,
+        timeline: buildPurchaseTimeline(purchase),
+        walletTransactions: walletTransactions.map(({ wallet, ...transaction }) => ({
+            ...transaction,
+            currency: wallet.currency,
+        })),
+    };
 }

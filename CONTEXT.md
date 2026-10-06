@@ -19,3 +19,15 @@ _Avoid_: Estado de cuenta, reporte de movimientos
 **Corte**:
 Límite temporal hasta el cual se incluyen movimientos confirmados en un estado de cuenta. Un movimiento pertenece como máximo a un corte.
 _Avoid_: Ajuste, cierre contable
+
+**Saldo inicial**:
+Hecho autoritativo que inicia un tramo vigente del ledger con un saldo conocido. No compensa movimientos anteriores y no es ajuste, pago ni nota crédito.
+_Avoid_: Ajuste, refund, nota crédito
+
+**Número de origen**:
+Número asociado a la procedencia comercial de una compra dentro de una empresa. Puede existir sin sede y no autoriza por sí mismo activaciones de tarjetas.
+_Avoid_: Número autorizado, sede, wallet
+
+**Sede de origen**:
+Local al que se atribuye una compra para operación y reportes. No posee una wallet independiente salvo decisión comercial explícita.
+_Avoid_: Empresa, número de origen

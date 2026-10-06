@@ -54,11 +54,16 @@ function emissionBlockers(company: { taxId: string }, issuer: ReturnType<typeof 
     return blockers;
 }
 
-function afterCursor(createdAt: Date, id: string): Prisma.WalletTransactionWhereInput {
+function afterCursor(
+    occurredAt: Date,
+    occurredSequence: number,
+    id: string,
+): Prisma.WalletTransactionWhereInput {
     return {
         OR: [
-            { createdAt: { gt: createdAt } },
-            { createdAt, id: { gt: id } },
+            { occurredAt: { gt: occurredAt } },
+            { occurredAt, occurredSequence: { gt: occurredSequence } },
+            { occurredAt, occurredSequence, id: { gt: id } },
         ],
     };
 }
@@ -121,9 +126,10 @@ async function enrichMovements(db: Db, transactions: SourceTransaction[]): Promi
             type: transaction.type,
             amount,
             balanceAfter: transaction.balanceAfter as number,
-            occurredAt: transaction.createdAt.toISOString(),
+            occurredAt: transaction.occurredAt.toISOString(),
             description:
-                transaction.type === "CONSUMPTION" ? (productDetail ?? "Consumo")
+                transaction.type === "OPENING_BALANCE" ? "Saldo anterior"
+                    : transaction.type === "CONSUMPTION" ? (productDetail ?? "Consumo")
                     : transaction.type === "RECHARGE" ? "Abono"
                         : transaction.type === "REFUND" ? "Reembolso"
                             : "Ajuste",
@@ -156,12 +162,18 @@ async function buildPreview(db: Db, companyId: string, cutoffAt: Date) {
     const previous = await db.accountStatement.findFirst({
         where: { walletId: company.wallet.id },
         orderBy: [{ periodEnd: "desc" }, { issuedAt: "desc" }],
-        include: { lines: { orderBy: { position: "desc" }, take: 1 } },
+        include: {
+            lines: {
+                orderBy: { position: "desc" },
+                take: 1,
+                include: { walletTransaction: { select: { occurredSequence: true } } },
+            },
+        },
     });
 
     let openingBalance = 0;
     let periodStart = company.wallet.createdAt;
-    let cursor: { createdAt: Date; id: string } | null = null;
+    let cursor: { occurredAt: Date; occurredSequence: number; id: string } | null = null;
 
     if (previous) {
         if (cutoffAt <= previous.periodEnd) {
@@ -171,22 +183,39 @@ async function buildPreview(db: Db, companyId: string, cutoffAt: Date) {
         if (!lastLine) throw conflict("El último estado no tiene una línea de cierre válida");
         openingBalance = Number(previous.closingBalance);
         periodStart = lastLine.occurredAt;
-        cursor = { createdAt: lastLine.occurredAt, id: lastLine.walletTransactionId };
+        cursor = {
+            occurredAt: lastLine.occurredAt,
+            occurredSequence: lastLine.walletTransaction.occurredSequence,
+            id: lastLine.walletTransactionId,
+        };
     } else {
-        const anchor = await db.walletTransaction.findFirst({
+        const explicitOpening = await db.walletTransaction.findFirst({
+            where: {
+                walletId: company.wallet.id,
+                type: "OPENING_BALANCE",
+                status: "CONFIRMED",
+                occurredAt: { lte: cutoffAt },
+            },
+            orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
+        });
+        const anchor = explicitOpening ?? await db.walletTransaction.findFirst({
             where: {
                 walletId: company.wallet.id,
                 type: "RECHARGE",
                 status: "CONFIRMED",
-                createdAt: { lte: cutoffAt },
+                occurredAt: { lte: cutoffAt },
             },
-            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
         });
         if (anchor) {
             if (anchor.balanceAfter == null) throw conflict("El último abono confirmado no tiene balance calculado");
             openingBalance = anchor.balanceAfter;
-            periodStart = anchor.createdAt;
-            cursor = { createdAt: anchor.createdAt, id: anchor.id };
+            periodStart = anchor.occurredAt;
+            cursor = {
+                occurredAt: anchor.occurredAt,
+                occurredSequence: anchor.occurredSequence,
+                id: anchor.id,
+            };
         }
     }
 
@@ -194,10 +223,10 @@ async function buildPreview(db: Db, companyId: string, cutoffAt: Date) {
         where: {
             walletId: company.wallet.id,
             status: "CONFIRMED",
-            createdAt: { lte: cutoffAt },
-            ...(cursor ? afterCursor(cursor.createdAt, cursor.id) : {}),
+            occurredAt: { lte: cutoffAt },
+            ...(cursor ? afterCursor(cursor.occurredAt, cursor.occurredSequence, cursor.id) : {}),
         },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],
     });
     if (transactions.some((transaction) => transaction.balanceAfter == null)) {
         throw conflict("Hay movimientos confirmados sin balance calculado");

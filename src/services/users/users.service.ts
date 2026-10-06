@@ -24,6 +24,24 @@ function assertRoleScopeIsCoherent(role: UserRole, companyId?: string | null, st
     }
 }
 
+async function assertPurchaseOriginPhoneBelongsToCompany(
+    purchaseOriginPhoneId: string | null | undefined,
+    companyId: string | null | undefined,
+) {
+    if (!purchaseOriginPhoneId) return;
+    if (!companyId) {
+        throw new AppError("An origin phone requires a company", 400, "BAD_REQUEST");
+    }
+
+    const originPhone = await prisma.purchaseOriginPhone.findFirst({
+        where: { id: purchaseOriginPhoneId, companyId, isActive: true },
+        select: { id: true },
+    });
+    if (!originPhone) {
+        throw new AppError("Origin phone does not belong to the user's company", 400, "BAD_REQUEST");
+    }
+}
+
 /**
  * Creates a new user with scope validation.
  */
@@ -33,6 +51,7 @@ export async function createUser(data: CreateUserInput, actor: User) {
         throw new AppError("Cannot assign this role", 403, "FORBIDDEN");
     }
     assertRoleScopeIsCoherent(data.role, data.companyId, data.storeId);
+    await assertPurchaseOriginPhoneBelongsToCompany(data.purchaseOriginPhoneId, data.companyId);
 
     if (COMPANY_WIDE_ROLES.includes(actor.role)) {
         if (data.companyId !== actor.companyId) {
@@ -59,6 +78,7 @@ export async function createUser(data: CreateUserInput, actor: User) {
             role: data.role,
             companyId: data.companyId,
             storeId: data.storeId,
+            purchaseOriginPhoneId: data.purchaseOriginPhoneId,
             isActive: true,
         },
     });
@@ -91,10 +111,12 @@ export async function getUsers(actor: User) {
             role: true,
             companyId: true,
             storeId: true,
+            purchaseOriginPhoneId: true,
             isActive: true,
             createdAt: true,
             company: { select: { name: true } },
-            store: { select: { name: true } }
+            store: { select: { name: true } },
+            purchaseOriginPhone: { select: { phone: true, label: true } },
         }
     });
 
@@ -132,6 +154,12 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
     } else if (actor.role === UserRole.OPERATOR) {
         throw new AppError("Operators cannot update users", 403, "FORBIDDEN");
     }
+
+    const resultingCompanyId = data.companyId !== undefined ? data.companyId : target.companyId;
+    const resultingOriginPhoneId = data.purchaseOriginPhoneId !== undefined
+        ? data.purchaseOriginPhoneId
+        : target.purchaseOriginPhoneId;
+    await assertPurchaseOriginPhoneBelongsToCompany(resultingOriginPhoneId, resultingCompanyId);
 
     // 2. Prepare update data
     const updateData: any = { ...data };

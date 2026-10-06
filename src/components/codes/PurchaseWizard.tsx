@@ -2,23 +2,8 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-    AlertCircle,
-    ArrowLeft,
-    ArrowRight,
-    Building2,
-    ChevronRight,
-    Hash,
-    Loader2,
-    Minus,
-    Package,
-    Phone,
-    Plus,
-} from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
     BuyRegion,
@@ -28,27 +13,22 @@ import {
     brandsInRegion,
     filterProductsByRegion,
     filterProductsByRegionAndBrand,
-    denominationStock,
     formatDenomAmount,
-    maxPurchasableQuantity,
     productRegions,
     productStock,
     stockLabel,
 } from '@/lib/codes/catalog-regions';
+import { CheckoutPanel, type OriginPhone, type PriceRow, type WalletBalance } from './CheckoutPanel';
 
-export type WizardStep = 'region' | 'brand' | 'product' | 'denomination' | 'quantity';
+export type { OriginPhone, PriceRow, WalletBalance } from './CheckoutPanel';
 
-export interface PriceRow {
-    productId: string;
-    denominationId: string | null;
-    salePrice: number | null;
-    currency: string | null;
-}
+export type WizardStep = 'region' | 'brand' | 'product' | 'order';
 
 export interface PurchaseWizardProps {
     products: CatalogProduct[];
     productsError: string | null;
     prices: PriceRow[];
+    balance: WalletBalance | null;
     isPlatform: boolean;
     companies: { companyId: string; companyName: string }[];
     storesForSelectedCompany: { id: string; name: string; companyId: string }[];
@@ -56,6 +36,9 @@ export interface PurchaseWizardProps {
     targetStoreId: string;
     onTargetCompanyChange: (companyId: string) => void;
     onTargetStoreChange: (storeId: string) => void;
+    targetOriginPhoneId: string;
+    originPhones: OriginPhone[];
+    onTargetOriginPhoneChange: (phoneId: string) => void;
     isPurchasing: boolean;
     onPurchase: (payload: {
         productId: string;
@@ -64,10 +47,16 @@ export interface PurchaseWizardProps {
     }) => void;
 }
 
-const STEP_ORDER: WizardStep[] = ['region', 'brand', 'product', 'denomination', 'quantity'];
+const PROGRESS_STEPS: { key: WizardStep; label: string }[] = [
+    { key: 'region', label: 'Región' },
+    { key: 'brand', label: 'Marca' },
+    { key: 'order', label: 'Orden' },
+];
 
-function stepIndex(step: WizardStep): number {
-    return STEP_ORDER.indexOf(step);
+function progressIndex(step: WizardStep): number {
+    // The optional product step sits between brand and order.
+    if (step === 'product') return 1;
+    return PROGRESS_STEPS.findIndex((s) => s.key === step);
 }
 
 function RegionFlag({ region, className }: { region: BuyRegion; className?: string }) {
@@ -115,10 +104,34 @@ function SelectionTile({
     );
 }
 
+function StepBar({ step }: { step: WizardStep }) {
+    const current = progressIndex(step);
+    return (
+        <ol className="grid grid-cols-3 gap-2" aria-label="Progreso de la compra">
+            {PROGRESS_STEPS.map((s, i) => (
+                <li key={s.key} className="space-y-1.5">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                            className={cn(
+                                'h-full rounded-full bg-primary transition-[width] duration-500 ease-out',
+                                i < current ? 'w-full opacity-50' : i === current ? 'w-full' : 'w-0',
+                            )}
+                        />
+                    </div>
+                    <p className={cn('text-xs', i === current ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                        {s.label}
+                    </p>
+                </li>
+            ))}
+        </ol>
+    );
+}
+
 export function PurchaseWizard({
     products,
     productsError,
     prices,
+    balance,
     isPlatform,
     companies,
     storesForSelectedCompany,
@@ -126,6 +139,9 @@ export function PurchaseWizard({
     targetStoreId,
     onTargetCompanyChange,
     onTargetStoreChange,
+    targetOriginPhoneId,
+    originPhones,
+    onTargetOriginPhoneChange,
     isPurchasing,
     onPurchase,
 }: PurchaseWizardProps) {
@@ -133,8 +149,6 @@ export function PurchaseWizard({
     const [region, setRegion] = useState<BuyRegion | null>(null);
     const [brand, setBrand] = useState<string | null>(null);
     const [productId, setProductId] = useState('');
-    const [denominationId, setDenominationId] = useState('');
-    const [quantity, setQuantity] = useState(1);
 
     const availableRegions = useMemo(() => {
         const present = new Set(products.flatMap(productRegions));
@@ -152,127 +166,94 @@ export function PurchaseWizard({
     );
 
     const selectedProduct = regionProducts.find((p) => p.id === productId);
-    const needsDenomination = (selectedProduct?.denominations.length ?? 0) > 1;
-    const effectiveDenominationId = needsDenomination
-        ? denominationId
-        : selectedProduct?.denominations[0]?.id ?? null;
-    const selectedDenomination = selectedProduct?.denominations.find(
-        (d) => d.id === effectiveDenominationId,
-    );
-
-    const referencePrice = prices.find(
-        (p) =>
-            p.productId === productId
-            && p.denominationId === (effectiveDenominationId ?? null),
-    );
-    const estimatedTotal =
-        referencePrice?.salePrice != null ? referencePrice.salePrice * quantity : null;
-
-    const selectedCompany = companies.find((c) => c.companyId === targetCompanyId);
-    const selectedStock = selectedDenomination
-        ? denominationStock(selectedDenomination)
-        : selectedProduct
-            ? productStock(selectedProduct)
-            : null;
-    const maxQuantity = maxPurchasableQuantity(selectedStock);
-    const outOfStock = selectedStock != null && selectedStock <= 0;
-    const exceedsStock = selectedStock != null && quantity > selectedStock;
-
-    const canConfirm =
-        Boolean(productId)
-        && (!needsDenomination || Boolean(denominationId))
-        && quantity >= 1
-        && quantity <= maxQuantity
-        && (!isPlatform || Boolean(targetCompanyId));
-
-    function resetFrom(from: WizardStep) {
-        if (stepIndex(from) <= stepIndex('region')) {
-            setRegion(null);
-            setBrand(null);
-            setProductId('');
-            setDenominationId('');
-        } else if (stepIndex(from) <= stepIndex('brand')) {
-            setBrand(null);
-            setProductId('');
-            setDenominationId('');
-        } else if (stepIndex(from) <= stepIndex('product')) {
-            setProductId('');
-            setDenominationId('');
-        } else if (stepIndex(from) <= stepIndex('denomination')) {
-            setDenominationId('');
-        }
-    }
 
     function goBack() {
-        if (step === 'quantity') {
-            setStep(needsDenomination ? 'denomination' : 'product');
-            return;
-        }
-        if (step === 'denomination') {
-            setStep('product');
-            return;
-        }
-        if (step === 'product') {
+        if (step === 'order') {
+            setStep(regionProducts.length > 1 ? 'product' : 'brand');
+        } else if (step === 'product') {
             setStep('brand');
-            return;
-        }
-        if (step === 'brand') {
+        } else if (step === 'brand') {
             setStep('region');
         }
     }
 
     function selectRegion(next: BuyRegion) {
-        resetFrom('region');
         setRegion(next);
         setBrand(null);
         setProductId('');
-        setDenominationId('');
         setStep('brand');
     }
 
     function selectBrand(next: string) {
-        resetFrom('brand');
         setBrand(next);
+        const options = region ? filterProductsByRegionAndBrand(products, region, next) : [];
+        if (options.length === 1) {
+            setProductId(options[0].id);
+            setStep('order');
+            return;
+        }
         setProductId('');
-        setDenominationId('');
         setStep('product');
     }
 
     function selectProduct(nextId: string) {
-        const product = regionProducts.find((p) => p.id === nextId);
         setProductId(nextId);
-        setDenominationId('');
-        if ((product?.denominations.length ?? 0) > 1) {
-            setStep('denomination');
-        } else {
-            setStep('quantity');
-        }
+        setStep('order');
     }
 
-    function selectDenomination(nextId: string) {
-        setDenominationId(nextId);
-        setStep('quantity');
+    if (step === 'order' && selectedProduct) {
+        const accent = brandAccent(brand ?? selectedProduct.brand);
+        return (
+            <div className="space-y-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
+                <button
+                    type="button"
+                    onClick={goBack}
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                    <ChevronLeft className="size-4" />
+                    {regionProducts.length > 1 ? `Productos de ${brand}` : 'Todas las marcas'}
+                </button>
+                <div className="flex items-center gap-4">
+                    <span
+                        className={cn(
+                            'flex size-14 shrink-0 items-center justify-center rounded-2xl shadow-inner sm:size-16',
+                            accent.bg,
+                            accent.fg,
+                        )}
+                    >
+                        {region ? <RegionFlag region={region} className="text-3xl" /> : <Package className="size-6" />}
+                    </span>
+                    <div className="min-w-0">
+                        <h2 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">{brand}</h2>
+                        <p className="truncate text-sm text-muted-foreground sm:text-base">{selectedProduct.name}</p>
+                    </div>
+                </div>
+                <CheckoutPanel
+                    key={selectedProduct.id}
+                    product={selectedProduct}
+                    region={region}
+                    prices={prices}
+                    balance={balance}
+                    isPlatform={isPlatform}
+                    companies={companies}
+                    storesForSelectedCompany={storesForSelectedCompany}
+                    targetCompanyId={targetCompanyId}
+                    targetStoreId={targetStoreId}
+                    onTargetCompanyChange={onTargetCompanyChange}
+                    onTargetStoreChange={onTargetStoreChange}
+                    targetOriginPhoneId={targetOriginPhoneId}
+                    originPhones={originPhones}
+                    onTargetOriginPhoneChange={onTargetOriginPhoneChange}
+                    isPurchasing={isPurchasing}
+                    onPurchase={onPurchase}
+                />
+            </div>
+        );
     }
-
-    function bumpQuantity(delta: number) {
-        setQuantity((q) => Math.min(Math.max(maxQuantity, 1), Math.max(1, q + delta)));
-    }
-
-    const progressLabel = (() => {
-        if (step === 'region') return 'Paso 1 · Región';
-        if (step === 'brand') return 'Paso 2 · Marca';
-        if (step === 'product') return 'Paso 3 · Producto';
-        if (step === 'denomination') return 'Paso 4 · Valor';
-        return 'Paso final · Cantidad';
-    })();
 
     const breadcrumb = [
         region ? `${REGION_META[region].flag} ${REGION_META[region].shortLabel}` : null,
         brand,
-        selectedProduct?.name ?? null,
-        selectedDenomination
-            ? formatDenomAmount(selectedDenomination.amount, selectedDenomination.currency)
-            : null,
     ].filter(Boolean) as string[];
 
     return (
@@ -280,20 +261,15 @@ export function PurchaseWizard({
             <CardHeader className="space-y-4 border-b bg-card pb-5">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <p className="text-xs font-medium text-muted-foreground">{progressLabel}</p>
-                        <CardTitle className="mt-1 text-xl sm:text-2xl">
+                        <CardTitle className="text-xl sm:text-2xl">
                             {step === 'region' && '¿Para qué región?'}
                             {step === 'brand' && '¿Qué marca?'}
                             {step === 'product' && 'Elige el producto'}
-                            {step === 'denomination' && 'Elige el valor'}
-                            {step === 'quantity' && 'Confirma la cantidad'}
                         </CardTitle>
                         <CardDescription className="mt-1">
                             {step === 'region' && 'Separa USA y Colombia para evitar compras en la región equivocada.'}
                             {step === 'brand' && region && `Marcas disponibles en ${REGION_META[region].label}.`}
                             {step === 'product' && brand && `Productos de ${brand}.`}
-                            {step === 'denomination' && 'Toca el monto exacto que necesitas.'}
-                            {step === 'quantity' && 'Revisa el resumen antes de confirmar.'}
                         </CardDescription>
                     </div>
                     {step !== 'region' && (
@@ -326,88 +302,10 @@ export function PurchaseWizard({
                     </nav>
                 )}
 
-                <ol className="flex gap-1.5" aria-hidden>
-                    {STEP_ORDER.filter((s) => s !== 'denomination' || needsDenomination || step === 'denomination').map(
-                        (s) => {
-                            const active = s === step;
-                            const done = stepIndex(s) < stepIndex(step);
-                            return (
-                                <li
-                                    key={s}
-                                    className={cn(
-                                        'h-1.5 flex-1 rounded-full transition-colors',
-                                        active ? 'bg-primary' : done ? 'bg-primary/40' : 'bg-muted',
-                                    )}
-                                />
-                            );
-                        },
-                    )}
-                </ol>
+                <StepBar step={step} />
             </CardHeader>
 
-            <CardContent className="space-y-6 pt-6">
-                {isPlatform && step === 'quantity' && (
-                    <section className="space-y-4" aria-labelledby="company-section">
-                        <div className="flex items-center gap-3">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-                                <Building2 className="size-5" />
-                            </div>
-                            <div>
-                                <h2 id="company-section" className="text-sm font-semibold">
-                                    Empresa que realiza la compra
-                                </h2>
-                                <p className="text-xs text-muted-foreground">
-                                    El cargo se aplica a la wallet seleccionada.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="grid gap-4 rounded-2xl border border-amber-200/80 bg-amber-50/60 p-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="target-company">Empresa</Label>
-                                <Select
-                                    value={targetCompanyId || undefined}
-                                    onValueChange={(value) => {
-                                        onTargetCompanyChange(value);
-                                        onTargetStoreChange('');
-                                    }}
-                                >
-                                    <SelectTrigger id="target-company" className="h-12 bg-background text-base">
-                                        <SelectValue placeholder="Seleccionar empresa..." />
-                                    </SelectTrigger>
-                                    <SelectContent position="popper" className="z-[100]">
-                                        {companies.map((company) => (
-                                            <SelectItem key={company.companyId} value={company.companyId}>
-                                                {company.companyName}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="target-store">
-                                    Tienda <span className="font-normal text-muted-foreground">(opcional)</span>
-                                </Label>
-                                <Select
-                                    value={targetStoreId || undefined}
-                                    onValueChange={onTargetStoreChange}
-                                    disabled={!targetCompanyId}
-                                >
-                                    <SelectTrigger id="target-store" className="h-12 bg-background text-base">
-                                        <SelectValue placeholder="Sin tienda específica" />
-                                    </SelectTrigger>
-                                    <SelectContent position="popper" className="z-[100]">
-                                        {storesForSelectedCompany.map((store) => (
-                                            <SelectItem key={store.id} value={store.id}>
-                                                {store.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </section>
-                )}
-
+            <CardContent key={step} className="space-y-6 pt-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
                 {step === 'region' && (
                     <div className="grid gap-3">
                         {availableRegions.length === 0 && (
@@ -533,210 +431,7 @@ export function PurchaseWizard({
                         })}
                     </div>
                 )}
-
-                {step === 'denomination' && selectedProduct && (
-                    <div className="grid grid-cols-2 gap-3">
-                        {selectedProduct.denominations.map((denom) => {
-                            const units = denominationStock(denom);
-                            const label = stockLabel(units);
-                            return (
-                                <SelectionTile
-                                    key={denom.id}
-                                    selected={denominationId === denom.id}
-                                    onClick={() => selectDenomination(denom.id)}
-                                    className="min-h-20 flex-col items-start justify-center gap-1 sm:min-h-24"
-                                >
-                                    <span className="text-lg font-bold tabular-nums sm:text-xl">
-                                        {formatDenomAmount(denom.amount, denom.currency)}
-                                    </span>
-                                    <span className={cn(
-                                        'text-xs',
-                                        units != null && units <= 0
-                                            ? 'font-medium text-amber-800'
-                                            : 'text-muted-foreground',
-                                    )}>
-                                        {label ?? denom.currency}
-                                    </span>
-                                </SelectionTile>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {step === 'quantity' && selectedProduct && (
-                    <section className="space-y-5" aria-labelledby="quantity-section">
-                        <div className="rounded-2xl border bg-muted/30 p-4">
-                            <div className="flex items-start gap-3">
-                                {region && <RegionFlag region={region} className="mt-0.5 text-3xl" />}
-                                <div className="min-w-0">
-                                    <p className="text-xs text-muted-foreground">Resumen</p>
-                                    <p className="font-semibold leading-snug">{selectedProduct.name}</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        {brand}
-                                        {selectedDenomination && (
-                                            <>
-                                                {' · '}
-                                                {formatDenomAmount(
-                                                    selectedDenomination.amount,
-                                                    selectedDenomination.currency,
-                                                )}
-                                            </>
-                                        )}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                    <Hash className="size-5" />
-                                </div>
-                                <div>
-                                    <h2 id="quantity-section" className="text-sm font-semibold">
-                                        Cantidad de códigos
-                                    </h2>
-                                    <p className="text-xs text-muted-foreground">
-                                        {selectedStock == null
-                                            ? 'Entre 1 y 100'
-                                            : outOfStock
-                                                ? 'Sin stock ahora · quedará en espera'
-                                                : `Entre 1 y ${maxQuantity}`}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center justify-center gap-3">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="size-14 rounded-2xl"
-                                    onClick={() => bumpQuantity(-1)}
-                                    disabled={quantity <= 1}
-                                    aria-label="Disminuir cantidad"
-                                >
-                                    <Minus className="size-6" />
-                                </Button>
-                                <Input
-                                    id="quantity"
-                                    type="number"
-                                    min={1}
-                                    max={Math.max(maxQuantity, 1)}
-                                    inputMode="numeric"
-                                    value={quantity}
-                                    onChange={(event) => {
-                                        const next = parseInt(event.target.value, 10);
-                                        if (Number.isNaN(next)) {
-                                            setQuantity(1);
-                                            return;
-                                        }
-                                        setQuantity(Math.min(Math.max(maxQuantity, 1), Math.max(1, next)));
-                                    }}
-                                    className="h-14 w-24 rounded-2xl text-center font-mono text-2xl font-semibold tabular-nums"
-                                />
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="size-14 rounded-2xl"
-                                    onClick={() => bumpQuantity(1)}
-                                    disabled={quantity >= Math.max(maxQuantity, 1)}
-                                    aria-label="Aumentar cantidad"
-                                >
-                                    <Plus className="size-6" />
-                                </Button>
-                            </div>
-                        </div>
-
-                        {outOfStock && (
-                            <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-                                <Phone className="mt-0.5 size-5 shrink-0 text-amber-700" />
-                                <div>
-                                    <p className="font-semibold">Sin stock ahora mismo</p>
-                                    <p className="mt-1 leading-relaxed text-amber-900">
-                                        Puedes confirmar igual: el pedido queda en espera y Diem lo
-                                        entrega automáticamente en cuanto haya códigos disponibles.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                        {exceedsStock && !outOfStock && (
-                            <p className="text-sm text-amber-800">
-                                Solo hay {selectedStock} código(s) disponibles ahora. El resto quedará
-                                en espera y se entrega en cuanto haya stock.
-                            </p>
-                        )}
-
-                        {referencePrice?.salePrice != null && (
-                            <div className="rounded-2xl border bg-muted/40 px-4 py-3">
-                                <p className="text-xs text-muted-foreground">Precio por unidad</p>
-                                <p className="mt-1 font-mono text-lg font-semibold tabular-nums">
-                                    {referencePrice.salePrice.toLocaleString('es-CO')}{' '}
-                                    {referencePrice.currency}
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="flex gap-3 rounded-2xl border border-blue-200/70 bg-blue-50/70 p-4 text-sm text-blue-900">
-                            <AlertCircle className="mt-0.5 size-5 shrink-0 text-blue-600" />
-                            <div>
-                                <p className="font-semibold">Entrega protegida por Diem</p>
-                                <p className="mt-1 leading-relaxed text-blue-800">
-                                    La wallet se debita solo cuando la entrega se completa.
-                                </p>
-                            </div>
-                        </div>
-                    </section>
-                )}
             </CardContent>
-
-            {step === 'quantity' && (
-                <CardFooter className="flex flex-col gap-4 border-t bg-muted/30 px-6 py-5">
-                    <div className="w-full text-sm">
-                        <p className="text-muted-foreground">
-                            {isPlatform
-                                ? (selectedCompany?.companyName ?? 'Selecciona una empresa')
-                                : 'Compra para tu empresa'}
-                        </p>
-                        {estimatedTotal != null && (
-                            <p className="mt-0.5 text-base font-semibold">
-                                Total estimado:{' '}
-                                <span className="font-mono tabular-nums">
-                                    {estimatedTotal.toLocaleString('es-CO')} {referencePrice?.currency}
-                                </span>
-                            </p>
-                        )}
-                    </div>
-                    <Button
-                        className="h-14 w-full rounded-2xl text-base font-semibold transition-transform active:scale-[0.98]"
-                        size="lg"
-                        disabled={isPurchasing || !canConfirm}
-                        onClick={() =>
-                            onPurchase({
-                                productId,
-                                denominationId: effectiveDenominationId,
-                                count: quantity,
-                            })
-                        }
-                    >
-                        {isPurchasing ? (
-                            <>
-                                <Loader2 className="mr-2 size-5 animate-spin" />
-                                Procesando...
-                            </>
-                        ) : outOfStock ? (
-                            <>
-                                Pedir (queda en espera de stock)
-                                <ArrowRight className="ml-2 size-5" />
-                            </>
-                        ) : (
-                            <>
-                                Confirmar compra
-                                <ArrowRight className="ml-2 size-5" />
-                            </>
-                        )}
-                    </Button>
-                </CardFooter>
-            )}
         </Card>
     );
 }

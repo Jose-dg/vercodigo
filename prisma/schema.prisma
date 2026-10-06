@@ -8,44 +8,48 @@ datasource db {
 }
 
 model User {
-  id                      String             @id @default(cuid())
-  email                   String             @unique
+  id                      String               @id @default(cuid())
+  email                   String               @unique
   passwordHash            String
   name                    String
   role                    UserRole
-  isActive                Boolean            @default(true)
+  isActive                Boolean              @default(true)
   companyId               String?
   storeId                 String?
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
-  company                 Company?           @relation(fields: [companyId], references: [id])
-  store                   Store?             @relation(fields: [storeId], references: [id])
-  accountStatementsIssued AccountStatement[] @relation("AccountStatementIssuer")
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  company                 Company?             @relation(fields: [companyId], references: [id])
+  store                   Store?               @relation(fields: [storeId], references: [id])
+  accountStatementsIssued AccountStatement[]   @relation("AccountStatementIssuer")
+  purchaseOriginPhoneId   String?
+  purchaseOriginPhone     PurchaseOriginPhone? @relation(fields: [purchaseOriginPhoneId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([storeId])
+  @@index([purchaseOriginPhoneId])
 }
 
 model Company {
-  id                String                @id @default(cuid())
-  name              String
-  taxId             String                @unique
-  email             String
-  phone             String
-  address           String?
-  isActive          Boolean               @default(true)
-  billingFrequency  BillingFrequency      @default(DAILY)
-  commissionRate    Float                 @default(0.05)
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  invoices          Invoice[]
-  stores            Store[]
-  users             User[]
-  authorizedPhones  AuthorizedPhone[]
-  wallet            Wallet?
-  productPrices     CompanyProductPrice[]
-  productCosts      ProductCost[]
-  accountStatements AccountStatement[]
+  id                   String                @id @default(cuid())
+  name                 String
+  taxId                String                @unique
+  email                String
+  phone                String
+  address              String?
+  isActive             Boolean               @default(true)
+  billingFrequency     BillingFrequency      @default(DAILY)
+  commissionRate       Float                 @default(0.05)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  invoices             Invoice[]
+  stores               Store[]
+  users                User[]
+  authorizedPhones     AuthorizedPhone[]
+  wallet               Wallet?
+  productPrices        CompanyProductPrice[]
+  productCosts         ProductCost[]
+  accountStatements    AccountStatement[]
+  purchaseOriginPhones PurchaseOriginPhone[]
 }
 
 model Wallet {
@@ -80,10 +84,13 @@ model WalletTransaction {
   cardActivationId     String?                 @unique
   codePurchaseId       String?
   createdAt            DateTime                @default(now())
+  occurredAt           DateTime                @default(now())
+  occurredSequence     Int                     @default(0)
   wallet               Wallet                  @relation(fields: [walletId], references: [id])
   accountStatementLine AccountStatementLine?
 
   @@index([walletId, createdAt])
+  @@index([walletId, occurredAt, occurredSequence, id])
   @@index([status])
   @@index([codePurchaseId])
 }
@@ -144,6 +151,7 @@ model AccountStatementLine {
 }
 
 enum WalletTransactionType {
+  OPENING_BALANCE
   RECHARGE
   CONSUMPTION
   ADJUSTMENT
@@ -163,23 +171,44 @@ enum WalletRechargeMethod {
 }
 
 model Store {
-  id               String            @id @default(cuid())
-  name             String
-  code             String            @unique
-  address          String
-  phone            String
-  isActive         Boolean           @default(true)
-  companyId        String
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  authorizedPhones AuthorizedPhone[]
-  cards            Card[]
-  activations      CardActivation[]
-  InvoiceItem      InvoiceItem[]
-  company          Company           @relation(fields: [companyId], references: [id])
-  users            User[]
+  id                   String                @id @default(cuid())
+  name                 String
+  code                 String                @unique
+  address              String
+  phone                String
+  isActive             Boolean               @default(true)
+  companyId            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  authorizedPhones     AuthorizedPhone[]
+  cards                Card[]
+  activations          CardActivation[]
+  InvoiceItem          InvoiceItem[]
+  company              Company               @relation(fields: [companyId], references: [id])
+  users                User[]
+  purchaseOriginPhones PurchaseOriginPhone[]
 
   @@index([companyId])
+}
+
+/// A commercial-origin number. It deliberately does not authorize QR/card
+/// activation; AuthorizedPhone owns that separate security decision.
+model PurchaseOriginPhone {
+  id        String         @id @default(cuid())
+  companyId String
+  storeId   String?
+  phone     String
+  label     String
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  store     Store?         @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  users     User[]
+  purchases CodePurchase[]
+
+  @@unique([companyId, phone])
+  @@index([storeId])
 }
 
 model AuthorizedPhone {
@@ -317,26 +346,31 @@ model Key {
 }
 
 model CodePurchase {
-  id                String               @id @default(cuid())
-  companyId         String
-  storeId           String?
-  userId            String
-  productId         String
-  denominationId    String?
-  count             Int
-  totalAmount       Float
-  currency          String               @default("USD")
-  status            String               @default("PENDING") // PENDING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
-  idempotencyKey    String               @unique
-  diemRequestId     String?              @unique
-  fulfillmentStatus String?
-  deliveredCodes    Json?
-  lastError         String?
-  attempts          Int                  @default(0)
-  nextRetryAt       DateTime?
-  completedAt       DateTime?
-  createdAt         DateTime             @default(now())
-  denomination      ProductDenomination? @relation(fields: [denominationId], references: [id])
+  id                    String               @id @default(cuid())
+  companyId             String
+  storeId               String?
+  userId                String
+  productId             String
+  denominationId        String?
+  count                 Int
+  totalAmount           Float
+  currency              String               @default("USD")
+  status                String               @default("PENDING") // PENDING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
+  idempotencyKey        String               @unique
+  diemRequestId         String?              @unique
+  fulfillmentStatus     String?
+  deliveredCodes        Json?
+  lastError             String?
+  attempts              Int                  @default(0)
+  nextRetryAt           DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime             @default(now())
+  occurredAt            DateTime             @default(now())
+  occurredSequence      Int                  @default(0)
+  purchaseOriginPhoneId String?
+  originLabelSnapshot   String?
+  denomination          ProductDenomination? @relation(fields: [denominationId], references: [id])
+  purchaseOriginPhone   PurchaseOriginPhone? @relation(fields: [purchaseOriginPhoneId], references: [id], onDelete: SetNull)
 
   keys Key[]
 
@@ -344,6 +378,8 @@ model CodePurchase {
   @@index([storeId])
   @@index([userId])
   @@index([createdAt])
+  @@index([occurredAt, occurredSequence, id])
+  @@index([purchaseOriginPhoneId])
   @@index([denominationId])
   @@index([status, nextRetryAt])
 }
@@ -578,22 +614,22 @@ model AuditLog {
 }
 
 model ActivationJob {
-  id                String    @id @default(cuid())
-  cardId            String
-  userId            String?
-  storeId           String?
-  status            String    @default("PENDING") // PENDING, PROCESSING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
-  attempts          Int       @default(0)
-  lastError         String?
-  idempotencyKey    String    @unique
-  diemRequestId     String?   @unique
-  fulfillmentStatus String?
-  commercialAmount  Float?
+  id                 String    @id @default(cuid())
+  cardId             String
+  userId             String?
+  storeId            String?
+  status             String    @default("PENDING") // PENDING, PROCESSING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
+  attempts           Int       @default(0)
+  lastError          String?
+  idempotencyKey     String    @unique
+  diemRequestId      String?   @unique
+  fulfillmentStatus  String?
+  commercialAmount   Float?
   commercialCurrency String?
-  deliveredCodes    Json?
-  nextRetryAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  deliveredCodes     Json?
+  nextRetryAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   card Card @relation(fields: [cardId], references: [id])
 

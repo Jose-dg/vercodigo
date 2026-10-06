@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +27,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { AlertCircle, Check, Copy, Eye, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, Copy, Eye, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export interface PurchaseHistoryItem {
@@ -38,6 +39,7 @@ export interface PurchaseHistoryItem {
     fulfillmentStatus?: string | null;
     lastError?: string | null;
     createdAt: string;
+    occurredAt?: string;
     completedAt?: string | null;
     productName?: string;
     requesterLabel?: string;
@@ -190,7 +192,7 @@ function PurchaseTable({
                 {rows.map((purchase) => (
                     <TableRow key={purchase.id}>
                         <TableCell className="whitespace-nowrap text-sm">
-                            {formatWhen(purchase.completedAt ?? purchase.createdAt)}
+                            {formatWhen(purchase.occurredAt ?? purchase.completedAt ?? purchase.createdAt)}
                         </TableCell>
                         <TableCell>
                             <div className="font-medium">{purchase.productName ?? "Producto"}</div>
@@ -238,6 +240,12 @@ function PurchaseTable({
                                         </div>
                                     )}
                                     <div className="flex flex-wrap justify-end gap-2">
+                                        <Button variant="outline" size="sm" asChild>
+                                            <Link href={`/codes/purchases/${purchase.id}`}>
+                                                Detalle
+                                                <ChevronRight className="ml-1 h-3 w-3" />
+                                            </Link>
+                                        </Button>
                                         {(purchase.isPending || purchase.needsAction) && onRetry ? (
                                             <Button
                                                 variant="outline"

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export type StatementMovementType = "RECHARGE" | "CONSUMPTION" | "ADJUSTMENT" | "REFUND";
+export type StatementMovementType = "OPENING_BALANCE" | "RECHARGE" | "CONSUMPTION" | "ADJUSTMENT" | "REFUND";
 
 export type StatementMovement = {
     id: string;
@@ -81,6 +81,8 @@ export function buildFinancialSnapshot(
         const credit = Math.max(0, delta);
 
         switch (movement.type) {
+            case "OPENING_BALANCE":
+                break;
             case "CONSUMPTION":
                 consumptions += debit - credit;
                 break;

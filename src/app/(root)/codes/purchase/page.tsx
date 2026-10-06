@@ -1,43 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { isPlatformRole } from '@/lib/auth/abilities';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Loader2, ShoppingCart, Check, AlertCircle, Copy, History } from 'lucide-react';
+import { Loader2, ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PurchaseHistoryPanel } from '@/components/codes/PurchaseHistoryPanel';
-import { PurchaseWizard } from '@/components/codes/PurchaseWizard';
+import { PurchaseWizard, type PriceRow, type WalletBalance } from '@/components/codes/PurchaseWizard';
 import type { CatalogProduct } from '@/lib/codes/catalog-regions';
 import type { UserRole } from '@prisma/client';
 
-interface PriceRow {
-    productId: string;
-    denominationId: string | null;
-    salePrice: number | null;
-    currency: string | null;
-}
-
-interface PurchaseResponse {
-    success: boolean;
-    purchase: {
-        id: string;
-        count: number;
-        totalAmount: number;
-        currency: string;
-        status: string;
-        fulfillmentStatus?: string | null;
-        isPending: boolean;
-        isSuccessful: boolean;
-        needsAction: boolean;
-        createdAt: string;
-        keys: { code: string }[];
-    };
-}
-
 export default function PurchaseCodesPage() {
+    const router = useRouter();
     const { data: session, status: sessionStatus } = useSession();
     const isPlatform =
         session?.user?.role != null && isPlatformRole(session.user.role as UserRole);
@@ -48,43 +24,26 @@ export default function PurchaseCodesPage() {
     const [isPurchasing, setIsPurchasing] = useState(false);
     const [prices, setPrices] = useState<PriceRow[]>([]);
 
-    const [purchaseResult, setPurchaseResult] = useState<PurchaseResponse | null>(null);
     const [activeTab, setActiveTab] = useState('order');
     const [historyTick, setHistoryTick] = useState(0);
     const purchaseInFlightKey = useRef<string | null>(null);
     const [targetCompanyId, setTargetCompanyId] = useState('');
     const [targetStoreId, setTargetStoreId] = useState('');
-    const [companies, setCompanies] = useState<{ companyId: string; companyName: string }[]>([]);
+    const [targetOriginPhoneId, setTargetOriginPhoneId] = useState('');
+    const [originPhones, setOriginPhones] = useState<{ id: string; phone: string; label: string }[]>([]);
+    const [companies, setCompanies] = useState<
+        { companyId: string; companyName: string; balance: number; currency: string }[]
+    >([]);
+    const [companyBalance, setCompanyBalance] = useState<WalletBalance | null>(null);
     const [platformStores, setPlatformStores] = useState<
         { id: string; name: string; companyId: string }[]
     >([]);
-    const [wizardKey, setWizardKey] = useState(0);
-    const pendingPurchaseId = purchaseResult?.purchase?.isPending
-        ? purchaseResult.purchase.id
-        : null;
-
+    // Back-link from an order detail opens the history tab (?tab=history).
     useEffect(() => {
-        if (!pendingPurchaseId) return;
-        const timer = window.setInterval(async () => {
-            const response = await fetch(`/api/codes/purchases/${pendingPurchaseId}`, { cache: 'no-store' });
-            const data = await response.json().catch(() => null);
-            if (response.ok && data?.purchase) {
-                setPurchaseResult(data);
-                if (data.purchase.status === 'COMPLETED') {
-                    toast.success('Códigos entregados');
-                    setHistoryTick((tick) => tick + 1);
-                    window.clearInterval(timer);
-                } else if (data.purchase.status === 'FAILED') {
-                    toast.error('La entrega falló y no se debitó la wallet.');
-                    window.clearInterval(timer);
-                } else if (data.purchase.status === 'ACTION_REQUIRED') {
-                    toast.error('La entrega necesita revisión manual.');
-                    window.clearInterval(timer);
-                }
-            }
-        }, 3000);
-        return () => window.clearInterval(timer);
-    }, [pendingPurchaseId]);
+        if (new URLSearchParams(window.location.search).get('tab') === 'history') {
+            setActiveTab('history');
+        }
+    }, []);
 
     useEffect(() => {
         if (sessionStatus === 'loading') return;
@@ -161,6 +120,17 @@ export default function PurchaseCodesPage() {
 
         loadCatalog();
 
+        if (session?.user?.role && !isPlatformRole(session.user.role as UserRole)) {
+            fetch('/api/wallets', { credentials: 'include' })
+                .then((res) => (res.ok ? res.json() : null))
+                .then((data) => {
+                    if (data?.wallet && typeof data.wallet.balance === 'number') {
+                        setCompanyBalance({ amount: data.wallet.balance, currency: data.wallet.currency });
+                    }
+                })
+                .catch(() => undefined);
+        }
+
         fetch('/api/prices', { credentials: 'include' })
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
@@ -171,7 +141,7 @@ export default function PurchaseCodesPage() {
         return () => {
             cancelled = true;
         };
-    }, [sessionStatus]);
+    }, [sessionStatus, session?.user?.role]);
 
     useEffect(() => {
         if (!isPlatform) return;
@@ -180,10 +150,14 @@ export default function PurchaseCodesPage() {
             .then((data) => {
                 if (data?.wallets) {
                     setCompanies(
-                        data.wallets.map((w: { companyId: string; companyName: string }) => ({
-                            companyId: w.companyId,
-                            companyName: w.companyName,
-                        })),
+                        data.wallets.map(
+                            (w: { companyId: string; companyName: string; balance: number; currency: string }) => ({
+                                companyId: w.companyId,
+                                companyName: w.companyName,
+                                balance: w.balance,
+                                currency: w.currency,
+                            }),
+                        ),
                     );
                 }
             })
@@ -204,9 +178,26 @@ export default function PurchaseCodesPage() {
             .catch(() => undefined);
     }, [isPlatform]);
 
+    const selectedCompany = companies.find((c) => c.companyId === targetCompanyId);
+    const balance: WalletBalance | null = isPlatform
+        ? selectedCompany
+            ? { amount: selectedCompany.balance, currency: selectedCompany.currency }
+            : null
+        : companyBalance;
+
     const storesForSelectedCompany = platformStores.filter(
         (store) => store.companyId === targetCompanyId,
     );
+
+    useEffect(() => {
+        setTargetOriginPhoneId('');
+        setOriginPhones([]);
+        if (!isPlatform || !targetCompanyId) return;
+        fetch(`/api/purchase-origin-phones?companyId=${encodeURIComponent(targetCompanyId)}`)
+            .then((res) => (res.ok ? res.json() : []))
+            .then((rows) => setOriginPhones(Array.isArray(rows) ? rows : []))
+            .catch(() => undefined);
+    }, [isPlatform, targetCompanyId]);
 
     const handlePurchase = async (payload: {
         productId: string;
@@ -223,6 +214,10 @@ export default function PurchaseCodesPage() {
         }
         if (isPlatform && !targetCompanyId) {
             toast.error('Selecciona la empresa que recibirá el cargo');
+            return;
+        }
+        if (isPlatform && !targetStoreId && !targetOriginPhoneId) {
+            toast.error('Selecciona una sede o un número de origen');
             return;
         }
 
@@ -245,7 +240,9 @@ export default function PurchaseCodesPage() {
                     ...(isPlatform
                         ? {
                               companyId: targetCompanyId,
-                              storeId: targetStoreId || undefined,
+                              origin: targetOriginPhoneId
+                                  ? { kind: 'phone', id: targetOriginPhoneId }
+                                  : { kind: 'store', id: targetStoreId },
                           }
                         : {}),
                 }),
@@ -270,16 +267,16 @@ export default function PurchaseCodesPage() {
                 return;
             }
 
-            setPurchaseResult(data);
             setHistoryTick((tick) => tick + 1);
-            if (data.purchase?.isPending) {
-                setActiveTab('history');
-                toast.success('Solicitud recibida. Quedó pendiente de entrega.');
-            } else if (data.purchase?.status === 'COMPLETED') {
-                setActiveTab('history');
+            if (data.purchase?.status === 'COMPLETED') {
                 toast.success('Compra exitosa');
+            } else if (data.purchase?.isPending) {
+                toast.success('Orden registrada. Te mostramos su estado en vivo.');
             } else {
                 toast.error('La solicitud necesita revisión.');
+            }
+            if (data.purchase?.id) {
+                router.push(`/codes/purchases/${data.purchase.id}`);
             }
         } catch (error) {
             console.error('Purchase error:', error);
@@ -290,20 +287,6 @@ export default function PurchaseCodesPage() {
         }
     };
 
-    const handleReset = () => {
-        setPurchaseResult(null);
-        purchaseInFlightKey.current = null;
-        setWizardKey((k) => k + 1);
-        setActiveTab('order');
-    };
-
-    const copyAllCodes = () => {
-        if (!purchaseResult) return;
-        const codes = purchaseResult.purchase.keys.map((k) => k.code).join('\n');
-        navigator.clipboard.writeText(codes);
-        toast.success('Códigos copiados al portapapeles');
-    };
-
     if (loadingProducts) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
@@ -311,12 +294,6 @@ export default function PurchaseCodesPage() {
             </div>
         );
     }
-
-    const pendingResult = purchaseResult?.purchase.isPending;
-    const successfulResult = purchaseResult?.purchase.isSuccessful;
-    const needsActionResult = purchaseResult?.purchase.needsAction;
-    const pendingManualReview =
-        purchaseResult?.purchase.fulfillmentStatus === 'pending_review';
 
     return (
         <main className="min-h-full bg-muted/20">
@@ -340,73 +317,24 @@ export default function PurchaseCodesPage() {
                     </TabsList>
 
                     <TabsContent value="order" className="space-y-6">
-                        {purchaseResult && (
-                            <Card className="mx-auto max-w-xl overflow-hidden border-emerald-200 shadow-sm">
-                                <CardHeader className="border-b border-emerald-100 bg-emerald-50/70">
-                                    <CardTitle className="flex items-center gap-2 text-lg text-emerald-900">
-                                        {pendingResult
-                                            ? <Loader2 className="size-5 animate-spin text-blue-600" />
-                                            : successfulResult
-                                                ? <Check className="size-5 text-emerald-600" />
-                                                : <AlertCircle className="size-5 text-red-600" />}
-                                        {pendingResult
-                                            ? pendingManualReview ? 'Confirmación operativa pendiente' : 'Solicitud pendiente en Diem'
-                                            : successfulResult ? 'Compra entregada'
-                                            : needsActionResult ? 'Revisión requerida' : 'Entrega fallida'}
-                                    </CardTitle>
-                                    <CardDescription>
-                                        {pendingResult
-                                            ? 'La solicitud ya está registrada. Puedes seguirla desde Mis solicitudes.'
-                                            : successfulResult
-                                                ? `Se entregaron ${purchaseResult.purchase.count} código(s).`
-                                                : 'No se debitó la wallet.'}
-                                    </CardDescription>
-                                </CardHeader>
-                                {successfulResult && (
-                                    <CardContent className="space-y-4 pt-6">
-                                        <ol className="max-h-52 divide-y divide-dashed overflow-y-auto rounded-lg border bg-muted/40 px-4 font-mono text-sm">
-                                            {purchaseResult.purchase.keys.map((key, index) => (
-                                                <li key={index} className="flex items-center gap-4 py-3">
-                                                    <span className="w-6 text-muted-foreground">{index + 1}.</span>
-                                                    <span className="select-all font-semibold">{key.code}</span>
-                                                </li>
-                                            ))}
-                                        </ol>
-                                        <Button variant="outline" className="h-12 w-full sm:w-auto" onClick={copyAllCodes}>
-                                            <Copy className="mr-2 size-4" />
-                                            Copiar códigos
-                                        </Button>
-                                    </CardContent>
-                                )}
-                                <CardFooter className="flex-wrap gap-2 pt-6">
-                                    <Button variant="outline" className="h-12" onClick={() => setActiveTab('history')}>
-                                        <History className="mr-2 size-4" />
-                                        Ver mis solicitudes
-                                    </Button>
-                                    <Button className="h-12" onClick={handleReset} disabled={pendingResult}>
-                                        Nueva compra
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        )}
-
-                        {!purchaseResult && (
-                            <PurchaseWizard
-                                key={wizardKey}
-                                products={products}
-                                productsError={productsError}
-                                prices={prices}
-                                isPlatform={isPlatform}
-                                companies={companies}
-                                storesForSelectedCompany={storesForSelectedCompany}
-                                targetCompanyId={targetCompanyId}
-                                targetStoreId={targetStoreId}
-                                onTargetCompanyChange={setTargetCompanyId}
-                                onTargetStoreChange={setTargetStoreId}
-                                isPurchasing={isPurchasing}
-                                onPurchase={handlePurchase}
-                            />
-                        )}
+                        <PurchaseWizard
+                            products={products}
+                            productsError={productsError}
+                            prices={prices}
+                            balance={balance}
+                            isPlatform={isPlatform}
+                            companies={companies}
+                            storesForSelectedCompany={storesForSelectedCompany}
+                            targetCompanyId={targetCompanyId}
+                            targetStoreId={targetStoreId}
+                            onTargetCompanyChange={setTargetCompanyId}
+                            onTargetStoreChange={setTargetStoreId}
+                            targetOriginPhoneId={targetOriginPhoneId}
+                            originPhones={originPhones}
+                            onTargetOriginPhoneChange={setTargetOriginPhoneId}
+                            isPurchasing={isPurchasing}
+                            onPurchase={handlePurchase}
+                        />
                     </TabsContent>
 
                     <TabsContent value="history">

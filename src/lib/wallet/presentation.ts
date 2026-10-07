@@ -12,6 +12,22 @@ export function walletMovementDescription(input: WalletMovementPresentationInput
     return input.description ?? input.externalReference ?? "—";
 }
 
+export function walletPurchaseDescription(count: number, productName: string): string {
+    return `Compra de ${count} código(s) ${productName}`;
+}
+
+export function walletPurchaseOriginDescription(input: {
+    phone?: string | null;
+    label?: string | null;
+    storeName?: string | null;
+}): string | null {
+    const phone = input.phone?.trim();
+    const label = input.label?.trim();
+    if (phone) return `Número: ${phone}${label ? ` · ${label}` : ""}`;
+    const store = label || input.storeName?.trim();
+    return store ? `Sede: ${store}` : null;
+}
+
 export function formatWalletRunningBalance(balance: number, currency: string): string {
     const amount = new Intl.NumberFormat("es-CO", {
         style: "currency",

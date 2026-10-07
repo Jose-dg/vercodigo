@@ -18,6 +18,7 @@
     "test:purchase-origin": "node --test --experimental-strip-types tests/purchase-origin.test.mjs",
     "history:blue-panther": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-blue-panther-history.ts",
     "repair:virtual-zone": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/repair-virtual-zone-ledger.ts",
+    "normalize:virtual-zone-descriptions": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/normalize-virtual-zone-wallet-descriptions.ts",
     "reconciliation:export": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/export-commercial-reconciliation-manifest.ts",
     "postinstall": "prisma generate"
   },

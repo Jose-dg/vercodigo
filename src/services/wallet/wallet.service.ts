@@ -1,5 +1,9 @@
 import prisma from "@/lib/prisma";
-import { walletMovementDescription } from "@/lib/wallet/presentation";
+import {
+    walletMovementDescription,
+    walletPurchaseDescription,
+    walletPurchaseOriginDescription,
+} from "@/lib/wallet/presentation";
 import { Prisma, WalletRechargeMethod } from "@prisma/client";
 import { badRequest, conflict, notFound } from "@/lib/errors";
 
@@ -229,31 +233,80 @@ export async function getWalletForCompany(companyId: string, opts?: { page?: num
     const purchaseIds = transactions.flatMap((transaction) =>
         transaction.codePurchaseId ? [transaction.codePurchaseId] : []
     );
-    const historicalPurchases = purchaseIds.length
+    const purchases = purchaseIds.length
         ? await prisma.codePurchase.findMany({
             where: {
                 id: { in: purchaseIds },
-                idempotencyKey: { startsWith: "history:blue-panther:" },
+                companyId,
             },
-            select: { id: true },
+            select: {
+                id: true,
+                count: true,
+                productId: true,
+                storeId: true,
+                idempotencyKey: true,
+                originLabelSnapshot: true,
+                purchaseOriginPhone: {
+                    select: { phone: true, companyId: true },
+                },
+            },
         })
         : [];
-    const historicalPurchaseIds = new Set(historicalPurchases.map((purchase) => purchase.id));
+    const productIds = [...new Set(purchases.map((purchase) => purchase.productId))];
+    const storeIds = [...new Set(purchases.flatMap((purchase) => purchase.storeId ? [purchase.storeId] : []))];
+    const [products, stores] = await Promise.all([
+        productIds.length
+            ? prisma.product.findMany({
+                where: { id: { in: productIds } },
+                select: { id: true, name: true },
+            })
+            : [],
+        storeIds.length
+            ? prisma.store.findMany({
+                where: { id: { in: storeIds }, companyId },
+                select: { id: true, name: true },
+            })
+            : [],
+    ]);
+    const purchaseMap = new Map(purchases.map((purchase) => [purchase.id, purchase]));
+    const productMap = new Map(products.map((product) => [product.id, product.name]));
+    const storeMap = new Map(stores.map((store) => [store.id, store.name]));
     const presentedTransactions = transactions.map((transaction) => {
-        const isHistoricalPurchase = Boolean(
-            transaction.codePurchaseId && historicalPurchaseIds.has(transaction.codePurchaseId)
-        );
+        const purchase = transaction.codePurchaseId
+            ? purchaseMap.get(transaction.codePurchaseId)
+            : undefined;
+        const isHistoricalPurchase = purchase?.idempotencyKey.startsWith("history:blue-panther:") ?? false;
         const isHistoricalRecharge = transaction.id.startsWith("bp-hist-wallet-recharge-");
         const historicalAction = isHistoricalPurchase ? "Buy" : isHistoricalRecharge ? "Payment" : null;
-
-        return {
-            ...transaction,
-            displayDescription: walletMovementDescription({
+        const productName = purchase ? productMap.get(purchase.productId) : undefined;
+        const displayDescription = historicalAction
+            ? walletMovementDescription({
                 description: transaction.description,
                 externalReference: transaction.externalReference,
                 historicalAction,
-                historicalBuyerName: historicalAction ? "Blue Panther" : null,
-            }),
+                historicalBuyerName: "Blue Panther",
+            })
+            : purchase && productName
+                ? walletPurchaseDescription(purchase.count, productName)
+                : walletMovementDescription({
+                    description: transaction.description,
+                    externalReference: transaction.externalReference,
+                });
+        const hasValidPhoneOrigin = purchase?.purchaseOriginPhone?.companyId === companyId;
+        const validStoreName = purchase?.storeId ? storeMap.get(purchase.storeId) : undefined;
+
+        return {
+            ...transaction,
+            displayDescription,
+            originDescription: purchase
+                ? walletPurchaseOriginDescription({
+                    phone: hasValidPhoneOrigin ? purchase.purchaseOriginPhone?.phone : null,
+                    label: hasValidPhoneOrigin || validStoreName
+                        ? purchase.originLabelSnapshot
+                        : null,
+                    storeName: validStoreName,
+                })
+                : null,
         };
     });
 

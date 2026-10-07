@@ -26,6 +26,7 @@ interface WalletTx {
     originalCurrency: string | null;
     description: string | null;
     displayDescription: string;
+    originDescription: string | null;
     externalReference: string | null;
     createdAt: string;
     occurredAt: string;
@@ -190,8 +191,13 @@ export default function CompanyWalletPage() {
                                                     {tx.status === "PENDING" && " (pendiente)"}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="max-w-md truncate" title={tx.description ?? tx.externalReference ?? undefined}>
-                                                {tx.displayDescription}
+                                            <TableCell className="max-w-md" title={tx.description ?? tx.externalReference ?? undefined}>
+                                                <div>{tx.displayDescription}</div>
+                                                {tx.originDescription ? (
+                                                    <div className="mt-0.5 text-xs text-muted-foreground">
+                                                        {tx.originDescription}
+                                                    </div>
+                                                ) : null}
                                             </TableCell>
                                             <TableCell
                                                 className={`text-right tabular-nums ${isDebit ? "text-red-700" : "text-emerald-700"}`}

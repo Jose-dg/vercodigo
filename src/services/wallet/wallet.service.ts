@@ -46,13 +46,17 @@ export async function debit(params: {
     createdById?: string | null;
     cardActivationId?: string;
     codePurchaseId?: string;
+    sourceAmount?: number;
+    sourceCurrency?: string;
+    appliedExchangeRate?: number;
     tx?: Db;
 }) {
     const { companyId, amount, currency, tx = prisma } = params;
     if (!(amount > 0)) return null;
 
     const wallet = await getOrCreateWallet(companyId, tx);
-    const rate = await getFxRate(currency, wallet.currency, tx);
+    const rate = params.appliedExchangeRate
+        ?? await getFxRate(currency, wallet.currency, tx);
 
     if (rate === null) {
         return tx.walletTransaction.create({
@@ -61,8 +65,8 @@ export async function debit(params: {
                 type: "CONSUMPTION",
                 status: "PENDING",
                 amount: 0,
-                originalAmount: amount,
-                originalCurrency: currency,
+                originalAmount: params.sourceAmount ?? amount,
+                originalCurrency: params.sourceCurrency ?? currency,
                 description:
                     params.description ??
                     `Consumo pendiente de tasa FX_${currency}_${wallet.currency}`,
@@ -74,7 +78,9 @@ export async function debit(params: {
         });
     }
 
-    const converted = amount * rate;
+    const converted = params.appliedExchangeRate != null
+        ? amount
+        : amount * rate;
     const updated = await tx.wallet.update({
         where: { id: wallet.id },
         data: { balance: { decrement: converted } },
@@ -87,8 +93,8 @@ export async function debit(params: {
             status: "CONFIRMED",
             amount: converted,
             balanceAfter: updated.balance,
-            originalAmount: amount,
-            originalCurrency: currency,
+            originalAmount: params.sourceAmount ?? amount,
+            originalCurrency: params.sourceCurrency ?? currency,
             exchangeRate: rate,
             description: params.description,
             createdById: params.createdById ?? null,

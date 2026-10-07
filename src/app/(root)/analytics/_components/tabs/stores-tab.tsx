@@ -23,7 +23,7 @@ export function StoresTab({ data }: StoresTabProps) {
 
     return (
         <div className="grid gap-6">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Activaciones por Tienda</CardTitle>
                     <CardDescription>Comparativa del volumen de activaciones entre las diferentes tiendas.</CardDescription>
@@ -50,7 +50,7 @@ export function StoresTab({ data }: StoresTabProps) {
                 </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Detalle de Rendimiento por Tienda</CardTitle>
                     <CardDescription>Métricas detalladas de ventas y utilidad por punto de venta.</CardDescription>
@@ -76,7 +76,7 @@ export function StoresTab({ data }: StoresTabProps) {
                             ))}
                             {data.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-4 text-gray-500">
+                                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">
                                         No hay datos disponibles para el periodo seleccionado.
                                     </TableCell>
                                 </TableRow>

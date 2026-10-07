@@ -22,7 +22,7 @@ export function LifecycleTab({ data }: LifecycleTabProps) {
 
     return (
         <div className="grid gap-6 md:grid-cols-2">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Embudo de Ciclo de Vida</CardTitle>
                     <CardDescription>Visualización del flujo desde la generación hasta el canje.</CardDescription>
@@ -46,7 +46,7 @@ export function LifecycleTab({ data }: LifecycleTabProps) {
                 </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Métricas de Conversión</CardTitle>
                     <CardDescription>Porcentaje de tarjetas que avanzan a la siguiente etapa.</CardDescription>
@@ -60,12 +60,12 @@ export function LifecycleTab({ data }: LifecycleTabProps) {
                             return (
                                 <div key={item.stage} className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                        <p className="text-sm font-medium text-gray-500">{item.stage}</p>
-                                        <p className="text-2xl font-bold text-gray-900">{item.count.toLocaleString()}</p>
+                                        <p className="text-sm font-medium text-muted-foreground">{item.stage}</p>
+                                        <p className="text-2xl font-bold text-foreground">{item.count.toLocaleString()}</p>
                                     </div>
                                     {rate !== null && (
                                         <div className="text-right">
-                                            <p className="text-xs text-gray-400 uppercase tracking-wider">Tasa de Conversión</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Tasa de Conversión</p>
                                             <p className="text-lg font-semibold text-blue-600">{rate.toFixed(1)}%</p>
                                         </div>
                                     )}

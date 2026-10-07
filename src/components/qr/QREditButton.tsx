@@ -124,7 +124,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button variant="ghost" size="icon">
-                    <Pencil className="h-4 w-4 text-gray-500" />
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
                     <span className="sr-only">Editar QR</span>
                 </Button>
             </DialogTrigger>
@@ -155,7 +155,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
                             </SidebarGroup>
                         </SidebarContent>
                     </Sidebar>
-                    <main className="flex h-[480px] flex-1 flex-col overflow-hidden bg-white">
+                    <main className="flex h-[480px] flex-1 flex-col overflow-hidden bg-card">
                         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-6">
                             <Breadcrumb>
                                 <BreadcrumbList>
@@ -186,7 +186,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
                                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                     <div className="space-y-2">
                                         <h3 className="text-lg font-medium">Información General</h3>
-                                        <p className="text-sm text-gray-500">
+                                        <p className="text-sm text-muted-foreground">
                                             Configura los datos básicos del código QR.
                                         </p>
                                     </div>
@@ -236,7 +236,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
                                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                     <div className="space-y-2">
                                         <h3 className="text-lg font-medium">Límites de Escaneo</h3>
-                                        <p className="text-sm text-gray-500">
+                                        <p className="text-sm text-muted-foreground">
                                             Controla cuántas veces se puede escanear este código.
                                         </p>
                                     </div>
@@ -250,7 +250,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
                                                 value={formData.scanCount}
                                                 onChange={(e) => handleChange("scanCount", e.target.value)}
                                             />
-                                            <p className="text-xs text-gray-500">
+                                            <p className="text-xs text-muted-foreground">
                                                 Número de veces que ya ha sido escaneado.
                                             </p>
                                         </div>
@@ -262,7 +262,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
                                                 value={formData.maxScans}
                                                 onChange={(e) => handleChange("maxScans", e.target.value)}
                                             />
-                                            <p className="text-xs text-gray-500">
+                                            <p className="text-xs text-muted-foreground">
                                                 Límite total de escaneos permitidos antes de bloquearse.
                                             </p>
                                         </div>
@@ -274,7 +274,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
                                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                     <div className="space-y-2">
                                         <h3 className="text-lg font-medium">Costos de Fabricación</h3>
-                                        <p className="text-sm text-gray-500">
+                                        <p className="text-sm text-muted-foreground">
                                             Gestiona los costos asociados a la producción de este QR.
                                         </p>
                                     </div>
@@ -283,7 +283,7 @@ export function QREditButton({ id, uuid, initialData, stores, products }: QREdit
                                         <div className="grid gap-2">
                                             <Label htmlFor="cost">Costo Unitario</Label>
                                             <div className="relative">
-                                                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                                                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                                 <Input
                                                     id="cost"
                                                     type="number"

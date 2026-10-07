@@ -69,7 +69,7 @@ export function AccountStatementsPanel() {
                 ) : loading ? (
                     <div className="py-8 text-center text-sm text-muted-foreground" role="status">Cargando estados de cuenta…</div>
                 ) : statements.length === 0 ? (
-                    <div className="border-l-2 border-[#123f68] bg-slate-50 px-5 py-4">
+                    <div className="border-l-2 border-primary bg-muted/50 px-5 py-4">
                         <p className="font-medium text-foreground">El primer estado todavía no ha sido emitido.</p>
                         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                             Cuando Vercode cierre el periodo, el documento aparecerá aquí para consulta y descarga.

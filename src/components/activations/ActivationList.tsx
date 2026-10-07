@@ -51,7 +51,7 @@ export function ActivationList({ activations }: { activations: Activation[] }) {
     };
 
     return (
-        <Card className="bg-white shadow-sm border-gray-200">
+        <Card className="bg-card shadow-sm border-border">
             <CardHeader>
                 <CardTitle>Listado de Activaciones</CardTitle>
                 <CardDescription>Total de activaciones: {activations.length}</CardDescription>
@@ -75,7 +75,7 @@ export function ActivationList({ activations }: { activations: Activation[] }) {
                         <TableBody>
                             {activations.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="h-24 text-center text-gray-500">
+                                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                                         No hay activaciones registradas.
                                     </TableCell>
                                 </TableRow>
@@ -86,8 +86,8 @@ export function ActivationList({ activations }: { activations: Activation[] }) {
                                         <TableRow key={activation.id}>
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                                        <Zap className="w-5 h-5 text-gray-500" />
+                                                    <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                                        <Zap className="w-5 h-5 text-muted-foreground" />
                                                     </div>
                                                     <Badge variant="outline" className="font-mono text-xs">
                                                         {activation.card.uuid}
@@ -99,11 +99,11 @@ export function ActivationList({ activations }: { activations: Activation[] }) {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="text-sm">
-                                                    <div className="text-gray-900">{activation.store.name}</div>
-                                                    <div className="text-gray-500">{activation.store.company.name}</div>
+                                                    <div className="text-foreground">{activation.store.name}</div>
+                                                    <div className="text-muted-foreground">{activation.store.company.name}</div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-gray-600">
+                                            <TableCell className="text-muted-foreground">
                                                 {activation.activatedBy}
                                             </TableCell>
                                             <TableCell className="font-medium">
@@ -112,7 +112,7 @@ export function ActivationList({ activations }: { activations: Activation[] }) {
                                                     activation.card.denomination?.currency || 'USD'
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-gray-600">
+                                            <TableCell className="text-muted-foreground">
                                                 {activation.commissionAmount
                                                     ? formatCurrency(activation.commissionAmount, 'USD')
                                                     : '-'}
@@ -131,13 +131,13 @@ export function ActivationList({ activations }: { activations: Activation[] }) {
                                                     {status.text}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-gray-500 text-sm">
+                                            <TableCell className="text-muted-foreground text-sm">
                                                 {format(new Date(activation.activatedAt), 'PPP p', { locale: es })}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button variant="ghost" size="icon" asChild>
                                                     <Link href={`/activations/${activation.id}`}>
-                                                        <Eye className="h-4 w-4 text-gray-500" />
+                                                        <Eye className="h-4 w-4 text-muted-foreground" />
                                                         <span className="sr-only">Ver detalles</span>
                                                     </Link>
                                                 </Button>

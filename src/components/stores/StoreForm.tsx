@@ -49,15 +49,15 @@ export default function StoreForm() {
   }, [state?.message, toast]);
 
   return (
-    <Card className="bg-white shadow-sm border-gray-200">
+    <Card className="bg-card shadow-sm border-border">
       <CardHeader>
-        <CardTitle className="text-xl font-semibold text-gray-900">Crear Nueva Tienda</CardTitle>
+        <CardTitle className="text-xl font-semibold text-foreground">Crear Nueva Tienda</CardTitle>
         <CardDescription>Ingresa la información de la nueva tienda.</CardDescription>
       </CardHeader>
       <form action={formAction}>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-gray-700 font-medium">
+            <Label htmlFor="name" className="text-foreground font-medium">
               Nombre de la Tienda
             </Label>
             <Input
@@ -65,11 +65,11 @@ export default function StoreForm() {
               name="name"
               placeholder="Ej: Tienda Centro"
               required
-              className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+              className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="address" className="text-gray-700 font-medium">
+            <Label htmlFor="address" className="text-foreground font-medium">
               Dirección
             </Label>
             <Input
@@ -78,11 +78,11 @@ export default function StoreForm() {
               type="text"
               placeholder="Ej: Calle 123 #45-67, Medellín"
               required
-              className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+              className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
             />
           </div>
         </CardContent>
-        <CardFooter className="bg-gray-50/50 border-t border-gray-100 p-6">
+        <CardFooter className="bg-muted/40/50 border-t border-gray-100 p-6">
           <SubmitButton />
         </CardFooter>
         <p aria-live="polite" className="sr-only" role="status">

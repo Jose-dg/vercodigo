@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
                 },
             });
 
+            // Resuelve la fotografía comercial antes de crear la activación.
+            const cost = await resolveCost(card.store.companyId, card.productId, card.denominationId, tx);
             const activation = await tx.cardActivation.create({
                 data: {
                     cardId: card.id,
@@ -103,19 +105,26 @@ export async function POST(req: NextRequest) {
                     activatedBy: phone,
                     matrixResponse: { timestamp },
                     activationAmount,
+                    commercialAmount: cost?.amount ?? activationAmount,
+                    commercialCurrency: cost?.currency ?? card.denomination?.currency ?? 'USD',
+                    sourceAmount: cost?.sourceAmount ?? null,
+                    sourceCurrency: cost?.sourceCurrency ?? null,
+                    appliedExchangeRate: cost?.exchangeRate ?? null,
                     activatedAt: updated.activatedAt ?? new Date(),
                 },
             });
 
             // Se debita el COSTO para la compañía (tarifa negociada → global →
             // nominal); activationAmount conserva el valor nominal de la tarjeta.
-            const cost = await resolveCost(card.store.companyId, card.productId, card.denominationId, tx);
             await debit({
                 companyId: card.store.companyId,
                 amount: cost?.amount ?? activationAmount,
                 currency: cost?.currency ?? card.denomination?.currency ?? 'USD',
                 description: `Activación ${card.product.name} (${card.uuid}) vía WhatsApp`,
                 cardActivationId: activation.id,
+                sourceAmount: cost?.sourceAmount,
+                sourceCurrency: cost?.sourceCurrency,
+                appliedExchangeRate: cost?.exchangeRate,
                 tx,
             });
 

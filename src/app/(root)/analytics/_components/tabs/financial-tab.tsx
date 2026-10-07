@@ -21,7 +21,7 @@ export function FinancialTab({ data }: FinancialTabProps) {
 
     return (
         <div className="grid gap-6">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Tendencia de Ingresos y Utilidad</CardTitle>
                     <CardDescription>Evolución diaria de las ventas y el margen bruto.</CardDescription>
@@ -73,7 +73,7 @@ export function FinancialTab({ data }: FinancialTabProps) {
                 </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Comisiones Generadas</CardTitle>
                     <CardDescription>Seguimiento de las comisiones acumuladas por periodo.</CardDescription>

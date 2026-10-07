@@ -94,9 +94,9 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl mx-auto">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
-                    <CardTitle className="text-xl font-semibold text-gray-900">
+                    <CardTitle className="text-xl font-semibold text-foreground">
                         {initialData?.id ? 'Editar Compañía' : 'Nueva Compañía'}
                     </CardTitle>
                     <CardDescription>
@@ -108,7 +108,7 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                 <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <Label htmlFor="name" className="text-gray-700 font-medium">
+                            <Label htmlFor="name" className="text-foreground font-medium">
                                 Nombre de la Compañía *
                             </Label>
                             <Input
@@ -116,12 +116,12 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 required
-                                className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                                className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                                 placeholder="Ej: Acme Corporation"
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="taxId" className="text-gray-700 font-medium">
+                            <Label htmlFor="taxId" className="text-foreground font-medium">
                                 Tax ID (RUC/NIT) *
                             </Label>
                             <Input
@@ -130,7 +130,7 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                                 onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
                                 required
                                 disabled={!!initialData?.id}
-                                className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors font-mono"
+                                className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors font-mono"
                                 placeholder="Ej: 123456789-1"
                             />
                         </div>
@@ -138,7 +138,7 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-gray-700 font-medium">
+                            <Label htmlFor="email" className="text-foreground font-medium">
                                 Email *
                             </Label>
                             <Input
@@ -147,12 +147,12 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 required
-                                className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                                className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                                 placeholder="contacto@empresa.com"
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="phone" className="text-gray-700 font-medium">
+                            <Label htmlFor="phone" className="text-foreground font-medium">
                                 Teléfono *
                             </Label>
                             <Input
@@ -160,28 +160,28 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                                 value={formData.phone}
                                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                 required
-                                className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                                className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                                 placeholder="+57 300 123 4567"
                             />
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="address" className="text-gray-700 font-medium">
+                        <Label htmlFor="address" className="text-foreground font-medium">
                             Dirección
                         </Label>
                         <Input
                             id="address"
                             value={formData.address}
                             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                            className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                            className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                             placeholder="Calle 123 #45-67, Ciudad"
                         />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <Label htmlFor="billingFrequency" className="text-gray-700 font-medium">
+                            <Label htmlFor="billingFrequency" className="text-foreground font-medium">
                                 Frecuencia de Facturación *
                             </Label>
                             <Select
@@ -190,7 +190,7 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                                     setFormData({ ...formData, billingFrequency: value })
                                 }
                             >
-                                <SelectTrigger className="bg-gray-50 border-gray-300 focus:ring-blue-500">
+                                <SelectTrigger className="bg-muted/40 border-border focus:ring-blue-500">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -203,7 +203,7 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="commissionRate" className="text-gray-700 font-medium">
+                            <Label htmlFor="commissionRate" className="text-foreground font-medium">
                                 Tasa de Comisión (%) *
                             </Label>
                             <div className="relative">
@@ -218,18 +218,18 @@ export function CompanyForm({ initialData }: CompanyFormProps) {
                                         setFormData({ ...formData, commissionRate: e.target.value })
                                     }
                                     required
-                                    className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                                    className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                                     placeholder="0.05"
                                 />
-                                <span className="absolute right-3 top-2.5 text-gray-500">%</span>
+                                <span className="absolute right-3 top-2.5 text-muted-foreground">%</span>
                             </div>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                                 Ej: 0.05 = 5%, 0.10 = 10%
                             </p>
                         </div>
                     </div>
                 </CardContent>
-                <CardFooter className="bg-gray-50/50 border-t border-gray-100 p-6">
+                <CardFooter className="bg-muted/40/50 border-t border-gray-100 p-6">
                     <div className="flex gap-4 w-full">
                         <Button
                             type="button"

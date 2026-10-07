@@ -75,7 +75,7 @@ export function FiltersBar({ onFiltersChange, stores }: FiltersBarProps) {
     };
 
     return (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-white p-4 rounded-lg border shadow-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-card p-4 rounded-lg border shadow-sm">
             <div className="grid gap-2">
                 <Popover>
                     <PopoverTrigger asChild>
@@ -132,7 +132,7 @@ export function FiltersBar({ onFiltersChange, stores }: FiltersBarProps) {
 
             <div className="flex items-center gap-2 ml-auto">
                 <Button variant="ghost" size="icon" onClick={handleReset} title="Restablecer filtros">
-                    <RotateCcw className="h-4 w-4 text-gray-500" />
+                    <RotateCcw className="h-4 w-4 text-muted-foreground" />
                 </Button>
                 <Button
                     variant="outline"

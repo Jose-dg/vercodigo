@@ -4,9 +4,11 @@ import { extractRequestContext } from "@/lib/request-context";
 import { activateCard } from "@/services/self-service/activate-card.service";
 import { ActivateCardBody } from "@/services/self-service/dto";
 import { withAuth } from "@/lib/auth/guard";
+import type { AppAbility } from "@/lib/auth/abilities";
+import type { TokenPayload } from "@/lib/auth";
 
 // Wrapped Handler
-async function handler(req: NextRequest, ctx: any, ability: any, user: any) {
+async function handler(req: NextRequest, _ctx: unknown, _ability: AppAbility, user: TokenPayload) {
     try {
         // 2) Contexto de request (IP, UA, deviceId, requestId)
         const reqCtx = extractRequestContext(req);
@@ -35,6 +37,9 @@ async function handler(req: NextRequest, ctx: any, ability: any, user: any) {
             deviceId: body.deviceId ?? reqCtx.deviceId,
             ipAddress: reqCtx.ipAddress,
             userAgent: reqCtx.userAgent,
+            quotedAmount: body.quotedAmount,
+            quotedCurrency: body.quotedCurrency,
+            quotedRate: body.quotedRate,
         });
 
         return NextResponse.json(result, { status: result.success ? 200 : 409 });

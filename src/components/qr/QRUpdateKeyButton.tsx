@@ -58,7 +58,7 @@ export function QRUpdateKeyButton({ id, uuid, currentKey }: QRUpdateKeyButtonPro
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon">
-          <KeyRound className="h-4 w-4 text-gray-500" />
+          <KeyRound className="h-4 w-4 text-muted-foreground" />
           <span className="sr-only">Actualizar Clave</span>
         </Button>
       </DialogTrigger>
@@ -67,7 +67,7 @@ export function QRUpdateKeyButton({ id, uuid, currentKey }: QRUpdateKeyButtonPro
           <DialogTitle>Actualizar Clave del QR</DialogTitle>
           <DialogDescription>
             Introduce la clave proporcionada por el proveedor para el código QR con UUID:{" "}
-            <span className="font-mono text-sm bg-gray-100 p-1 rounded">{uuid}</span>
+            <span className="font-mono text-sm bg-muted p-1 rounded">{uuid}</span>
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">

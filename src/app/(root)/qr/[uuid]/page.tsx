@@ -90,14 +90,14 @@ export default async function QRDetailPage({ params }: PageProps) {
                             </Link>
                         </Button>
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Detalle del QR</h1>
-                            <p className="text-gray-500 mt-2">Información completa del código QR</p>
+                            <h1 className="text-3xl font-bold tracking-tight text-foreground">Detalle del QR</h1>
+                            <p className="text-muted-foreground mt-2">Información completa del código QR</p>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* QR Code Display */}
-                        <Card className="bg-white shadow-sm border-gray-200">
+                        <Card className="bg-card shadow-sm border-border">
                             <CardHeader>
                                 <CardTitle>Código QR</CardTitle>
                                 <CardDescription>Escanea este código con tu teléfono</CardDescription>
@@ -105,7 +105,7 @@ export default async function QRDetailPage({ params }: PageProps) {
                             <CardContent className="flex flex-col items-center space-y-4">
                                 <QRCodeDisplay uuid={qr.uuid} qrData={qr.qrData} />
                                 <div className="text-center space-y-2">
-                                    <p className="text-sm font-mono text-gray-600 bg-gray-50 px-4 py-2 rounded-full">
+                                    <p className="text-sm font-mono text-muted-foreground bg-muted/40 px-4 py-2 rounded-full">
                                         {qr.uuid}
                                     </p>
                                     <div className="grid grid-cols-2 gap-2 w-full">
@@ -117,38 +117,38 @@ export default async function QRDetailPage({ params }: PageProps) {
                         </Card>
 
                         {/* QR Information */}
-                        <Card className="bg-white shadow-sm border-gray-200">
+                        <Card className="bg-card shadow-sm border-border">
                             <CardHeader>
                                 <CardTitle>Información</CardTitle>
                                 <CardDescription>Detalles del código QR</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500">Producto</label>
-                                    <p className="text-lg font-semibold text-gray-900">{qr.product.name}</p>
+                                    <label className="text-sm font-medium text-muted-foreground">Producto</label>
+                                    <p className="text-lg font-semibold text-foreground">{qr.product.name}</p>
                                 </div>
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500">Tienda</label>
-                                    <p className="text-lg font-semibold text-gray-900">{qr.store.name}</p>
+                                    <label className="text-sm font-medium text-muted-foreground">Tienda</label>
+                                    <p className="text-lg font-semibold text-foreground">{qr.store.name}</p>
                                 </div>
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500">Monto</label>
-                                    <p className="text-lg font-semibold text-gray-900">
+                                    <label className="text-sm font-medium text-muted-foreground">Monto</label>
+                                    <p className="text-lg font-semibold text-foreground">
                                         ${(qr.customAmount ?? qr.denomination?.amount ?? 0).toFixed(2)}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500 block mb-2">Estado</label>
+                                    <label className="text-sm font-medium text-muted-foreground block mb-2">Estado</label>
                                     <div className="flex gap-2">
                                         {qr.isActivated ? (
                                             <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
                                                 Activado
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                            <Badge variant="outline" className="text-muted-foreground border-border">
                                                 Inactivo
                                             </Badge>
                                         )}
@@ -161,23 +161,23 @@ export default async function QRDetailPage({ params }: PageProps) {
                                 </div>
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500">Escaneos</label>
-                                    <p className="text-lg font-semibold text-gray-900">
+                                    <label className="text-sm font-medium text-muted-foreground">Escaneos</label>
+                                    <p className="text-lg font-semibold text-foreground">
                                         {qr.scanCount} / {qr.maxScans}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500">Fecha de creación</label>
-                                    <p className="text-gray-900">
+                                    <label className="text-sm font-medium text-muted-foreground">Fecha de creación</label>
+                                    <p className="text-foreground">
                                         {format(new Date(qr.createdAt), "PPP 'a las' p", { locale: es })}
                                     </p>
                                 </div>
 
                                 {qr.activatedAt && (
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500">Fecha de activación</label>
-                                        <p className="text-gray-900">
+                                        <label className="text-sm font-medium text-muted-foreground">Fecha de activación</label>
+                                        <p className="text-foreground">
                                             {format(new Date(qr.activatedAt), "PPP 'a las' p", { locale: es })}
                                         </p>
                                     </div>
@@ -185,15 +185,15 @@ export default async function QRDetailPage({ params }: PageProps) {
 
                                 {qr.redeemedAt && (
                                     <div>
-                                        <label className="text-sm font-medium text-gray-500">Fecha de canje</label>
-                                        <p className="text-gray-900">
+                                        <label className="text-sm font-medium text-muted-foreground">Fecha de canje</label>
+                                        <p className="text-foreground">
                                             {format(new Date(qr.redeemedAt), "PPP 'a las' p", { locale: es })}
                                         </p>
                                     </div>
                                 )}
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500">URL de escaneo</label>
+                                    <label className="text-sm font-medium text-muted-foreground">URL de escaneo</label>
                                     <p className="text-sm text-blue-600 break-all font-mono bg-blue-50 p-2 rounded">
                                         {qr.qrData}
                                     </p>

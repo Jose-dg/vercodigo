@@ -31,7 +31,7 @@ interface ScanLog {
 
 export function ScanLogList({ scanLogs }: { scanLogs: ScanLog[] }) {
     return (
-        <Card className="bg-white shadow-sm border-gray-200">
+        <Card className="bg-card shadow-sm border-border">
             <CardHeader>
                 <CardTitle>Listado de Logs</CardTitle>
                 <CardDescription>Total de escaneos: {scanLogs.length}</CardDescription>
@@ -53,7 +53,7 @@ export function ScanLogList({ scanLogs }: { scanLogs: ScanLog[] }) {
                         <TableBody>
                             {scanLogs.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                         No hay logs de escaneo registrados.
                                     </TableCell>
                                 </TableRow>
@@ -62,8 +62,8 @@ export function ScanLogList({ scanLogs }: { scanLogs: ScanLog[] }) {
                                     <TableRow key={log.id}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                                    <Scan className="w-5 h-5 text-gray-500" />
+                                                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                                    <Scan className="w-5 h-5 text-muted-foreground" />
                                                 </div>
                                                 <Badge variant="outline" className="font-mono text-xs">
                                                     {log.card.uuid}
@@ -75,8 +75,8 @@ export function ScanLogList({ scanLogs }: { scanLogs: ScanLog[] }) {
                                         </TableCell>
                                         <TableCell>
                                             <div className="text-sm">
-                                                <div className="text-gray-900">{log.card.store.name}</div>
-                                                <div className="text-gray-500">{log.card.store.company.name}</div>
+                                                <div className="text-foreground">{log.card.store.name}</div>
+                                                <div className="text-muted-foreground">{log.card.store.company.name}</div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -92,13 +92,13 @@ export function ScanLogList({ scanLogs }: { scanLogs: ScanLog[] }) {
                                                 </Badge>
                                             )}
                                         </TableCell>
-                                        <TableCell className="text-gray-600 text-sm">
+                                        <TableCell className="text-muted-foreground text-sm">
                                             {log.reason || '-'}
                                         </TableCell>
-                                        <TableCell className="text-gray-500 text-xs font-mono">
+                                        <TableCell className="text-muted-foreground text-xs font-mono">
                                             {log.ipAddress || '-'}
                                         </TableCell>
-                                        <TableCell className="text-gray-500 text-sm">
+                                        <TableCell className="text-muted-foreground text-sm">
                                             {format(new Date(log.scannedAt), 'PPP p', { locale: es })}
                                         </TableCell>
                                     </TableRow>

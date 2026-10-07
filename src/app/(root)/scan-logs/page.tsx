@@ -41,10 +41,10 @@ export default async function ScanLogsPage() {
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                 <div className="space-y-8">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground">
                             Logs de Escaneo
                         </h1>
-                        <p className="text-gray-500 mt-2">
+                        <p className="text-muted-foreground mt-2">
                             Monitorea todos los intentos de escaneo de códigos QR.
                         </p>
                     </div>

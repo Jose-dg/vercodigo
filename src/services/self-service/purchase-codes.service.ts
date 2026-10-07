@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
-import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
+import { badRequest, conflict, notFound } from "@/lib/errors";
 import type { TokenPayload } from "@/lib/auth";
 import {
     buildCommercialAccountCode,
@@ -331,6 +331,9 @@ export async function processCodePurchase(purchaseId: string) {
                 description: `Compra de ${current.count} código(s) ${product.name}`,
                 createdById: current.userId,
                 codePurchaseId: current.id,
+                sourceAmount: current.sourceAmount ?? undefined,
+                sourceCurrency: current.sourceCurrency ?? undefined,
+                appliedExchangeRate: current.appliedExchangeRate ?? undefined,
                 tx,
             });
             return tx.codePurchase.update({
@@ -374,6 +377,9 @@ export async function purchaseCodes(params: {
     denominationId?: string;
     count: number;
     idempotencyKey: string;
+    quotedUnitAmount?: number;
+    quotedCurrency?: string;
+    quotedRate?: number | null;
 }) {
     const { userId, storeId, productId, denominationId, count, actorRole, targetCompanyId } = params;
     if (count <= 0) throw badRequest("Cantidad debe ser mayor a 0");
@@ -465,6 +471,19 @@ export async function purchaseCodes(params: {
             if (!(unitAmount && unitAmount > 0)) {
                 throw conflict("No existe un costo válido para este producto");
             }
+            const billingCurrency = unitCost?.currency ?? denomination?.currency ?? "USD";
+            if (
+                params.quotedUnitAmount != null
+                && (
+                    Math.abs(params.quotedUnitAmount - unitAmount) > 0.005
+                    || params.quotedCurrency?.toUpperCase() !== billingCurrency.toUpperCase()
+                    || (params.quotedRate != null
+                        && (unitCost?.exchangeRate == null
+                            || Math.abs(params.quotedRate - unitCost.exchangeRate) > 0.0001))
+                )
+            ) {
+                throw conflict("La tarifa cambió después de mostrar el total. Revisa el valor y confirma nuevamente.");
+            }
             return tx.codePurchase.create({
                 data: {
                     userId,
@@ -476,7 +495,13 @@ export async function purchaseCodes(params: {
                     denominationId: denomination?.id,
                     count,
                     totalAmount: unitAmount * count,
-                    currency: unitCost?.currency ?? denomination?.currency ?? "USD",
+                    currency: billingCurrency,
+                    sourceAmount: unitCost?.sourceAmount != null
+                        ? unitCost.sourceAmount * count
+                        : null,
+                    sourceCurrency: unitCost?.sourceCurrency ?? null,
+                    appliedExchangeRate: unitCost?.exchangeRate ?? null,
+                    billingUnitAmount: unitAmount,
                     status: "PENDING",
                     idempotencyKey: durableIdempotencyKey,
                 },

@@ -35,7 +35,7 @@ export default function StoreList({ stores }: { stores: any[] }) {
     };
 
     return (
-        <Card className="bg-white shadow-sm border-gray-200">
+        <Card className="bg-card shadow-sm border-border">
             <CardHeader>
                 <CardTitle>Listado de Tiendas</CardTitle>
                 <CardDescription>
@@ -61,7 +61,7 @@ export default function StoreList({ stores }: { stores: any[] }) {
                         <TableBody>
                             {stores.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                         No hay tiendas registradas.
                                     </TableCell>
                                 </TableRow>
@@ -69,20 +69,20 @@ export default function StoreList({ stores }: { stores: any[] }) {
                                 stores.map((store) => (
                                     <TableRow key={store.id}>
                                         <TableCell className="font-medium">{store.name}</TableCell>
-                                        <TableCell className="text-gray-600">{store.address}</TableCell>
+                                        <TableCell className="text-muted-foreground">{store.address}</TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className="font-mono text-xs">
                                                 {store.code}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-gray-500">{store.phone || "N/A"}</TableCell>
+                                        <TableCell className="text-muted-foreground">{store.phone || "N/A"}</TableCell>
                                         <TableCell>
                                             <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
                                                 Activa
                                             </Badge>
                                         </TableCell>
                                         {store.createdAt && (
-                                            <TableCell className="text-gray-500 text-sm">
+                                            <TableCell className="text-muted-foreground text-sm">
                                                 {format(new Date(store.createdAt), "PPP", { locale: es })}
                                             </TableCell>
                                         )}

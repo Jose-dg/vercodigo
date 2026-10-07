@@ -84,6 +84,7 @@ export function defineAbilitiesFor(user: User) {
         // plataforma; recarga self-service de GENERAL_ADMIN es fase futura.
         can('read', ['Wallet', 'WalletTransaction'], { companyId } as any);
         can('read', 'AccountStatement', { companyId } as any);
+        can('read', 'ProductCost', { companyId } as any);
 
         // Precios de venta: OWNER y GENERAL_ADMIN los configuran para su compañía.
         can(['read', 'create', 'update', 'delete'], 'CompanyProductPrice', { companyId } as any);
@@ -111,6 +112,7 @@ export function defineAbilitiesFor(user: User) {
 
         // Precio de venta como referencia al vender (scope de compañía)
         can('read', 'CompanyProductPrice', { companyId: user.companyId || 'NULL' } as any);
+        can('read', 'ProductCost', { companyId: user.companyId || 'NULL' } as any);
 
         cannot('delete', 'Card');
         cannot('update', 'Card', ['fabricationUnitCost', 'batchId']);
@@ -135,6 +137,7 @@ export function defineAbilitiesFor(user: User) {
 
         // Precio de venta como referencia al vender (scope de compañía)
         can('read', 'CompanyProductPrice', { companyId: user.companyId || 'NULL' } as any);
+        can('read', 'ProductCost', { companyId: user.companyId || 'NULL' } as any);
 
         cannot('delete', 'Card');
         cannot('update', 'Card', ['fabricationUnitCost', 'batchId']);

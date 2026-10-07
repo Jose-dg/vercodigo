@@ -15,10 +15,10 @@ export function KeyDisplay({ code: keyCode }: { code: string }) {
     return (
         <div className="flex flex-col items-center gap-6 p-8">
             <CheckCircle2 className="w-16 h-16 text-green-500" />
-            <h2 className="text-2xl font-bold text-gray-900">¡Código Activado!</h2>
+            <h2 className="text-2xl font-bold text-foreground">¡Código Activado!</h2>
 
-            <div className="bg-gray-100 p-6 rounded-xl w-full text-center border-2 border-dashed border-gray-300">
-                <p className="text-3xl font-mono font-bold tracking-wider text-gray-800 break-all">
+            <div className="bg-muted p-6 rounded-xl w-full text-center border-2 border-dashed border-border">
+                <p className="text-3xl font-mono font-bold tracking-wider text-foreground break-all">
                     {keyCode}
                 </p>
             </div>
@@ -31,7 +31,7 @@ export function KeyDisplay({ code: keyCode }: { code: string }) {
                 {copied ? '¡Copiado!' : 'Copiar código'}
             </button>
 
-            <p className="text-sm text-gray-500 text-center max-w-xs">
+            <p className="text-sm text-muted-foreground text-center max-w-xs">
                 Guarda este código. Solo puedes verlo un número limitado de veces por seguridad.
             </p>
         </div>

@@ -317,6 +317,47 @@ export async function revealCodeRequest(
     return body.items.flatMap((item) => item.codes);
 }
 
+export async function correctCodeRequestCommercialPrice(params: {
+    requestId: string;
+    idempotencyKey: string;
+    expectedUnitPrice: number;
+    expectedTotalAmount: number;
+    newUnitPrice: number;
+    newTotalAmount: number;
+    currencyCode: string;
+    reason: string;
+    correlationId: string;
+}) {
+    const config = getDiemConfig();
+    const response = await fetch(
+        `${config.baseUrl}/api/v1/code-requests/${encodeURIComponent(params.requestId)}/commercial-correction/`,
+        {
+            method: 'POST',
+            headers: headers(config, {
+                'Content-Type': 'application/json',
+                'Idempotency-Key': params.idempotencyKey,
+                'X-Correlation-ID': params.correlationId,
+            }),
+            body: JSON.stringify({
+                expected_unit_price: params.expectedUnitPrice.toFixed(2),
+                expected_total_amount: params.expectedTotalAmount.toFixed(2),
+                new_unit_price: params.newUnitPrice.toFixed(2),
+                new_total_amount: params.newTotalAmount.toFixed(2),
+                currency_code: params.currencyCode,
+                reason: params.reason,
+            }),
+            cache: 'no-store',
+        },
+    );
+    return parse<{
+        request_id: string;
+        commercial_order_id: string;
+        unit_price: string;
+        total_amount: string;
+        currency_code: string;
+    }>(response);
+}
+
 export async function checkDiemConnection(): Promise<{
     ok: true;
     storeId: string;

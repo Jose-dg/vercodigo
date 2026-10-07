@@ -45,7 +45,7 @@ export default function CreateProductPage() {
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                 <div className="space-y-6">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Crear Nuevo Producto</h1>
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">Crear Nuevo Producto</h1>
                     <ProductForm />
                 </div>
             </div>

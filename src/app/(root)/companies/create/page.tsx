@@ -39,7 +39,7 @@ export default function CreateCompanyPage() {
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                 <div className="space-y-6">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">
                         Crear Nueva Compañía
                     </h1>
                     <CompanyForm />

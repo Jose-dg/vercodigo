@@ -42,6 +42,9 @@ export interface PriceRow {
     denominationId: string | null;
     salePrice: number | null;
     currency: string | null;
+    rateCopPerUsd?: number | null;
+    effectiveRateCopPerUsd?: number | null;
+    nominalAmount?: number | null;
 }
 
 export interface OriginPhone {
@@ -130,7 +133,14 @@ export function CheckoutPanel({
     originPhones: OriginPhone[];
     onTargetOriginPhoneChange: (phoneId: string) => void;
     isPurchasing: boolean;
-    onPurchase: (payload: { productId: string; denominationId: string | null; count: number }) => void;
+    onPurchase: (payload: {
+        productId: string;
+        denominationId: string | null;
+        count: number;
+        quotedUnitAmount: number;
+        quotedCurrency: string;
+        quotedRate?: number | null;
+    }) => void;
 }) {
     const rows = useMemo<CheckoutRow[]>(() => {
         const priceFor = (denominationId: string | null) =>
@@ -391,6 +401,13 @@ export function CheckoutPanel({
 
                 <div className="mt-3">
                     <SummaryRow icon={<Gift className="size-4" />} label="Denominación" value={selected?.label ?? '—'} />
+                    {selected?.price?.effectiveRateCopPerUsd != null && (
+                        <SummaryRow
+                            icon={<Wallet className="size-4" />}
+                            label="Tasa aplicada"
+                            value={<span className="font-mono">{formatMoney(selected.price.effectiveRateCopPerUsd, 'COP')} / USD</span>}
+                        />
+                    )}
                     <SummaryRow
                         icon={<Gift className="size-4" />}
                         label="Por unidad"
@@ -424,7 +441,14 @@ export function CheckoutPanel({
                         size="lg"
                         disabled={isPurchasing || !canConfirm}
                         onClick={() =>
-                            selected && onPurchase({ productId: product.id, denominationId: selected.id, count: quantity })
+                            selected && unitPrice != null && onPurchase({
+                                productId: product.id,
+                                denominationId: selected.id,
+                                count: quantity,
+                                quotedUnitAmount: unitPrice,
+                                quotedCurrency: priceCurrency,
+                                quotedRate: selected.price?.rateCopPerUsd,
+                            })
                         }
                     >
                         {isPurchasing ? (

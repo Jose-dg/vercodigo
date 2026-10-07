@@ -29,7 +29,7 @@ export function ProductsTab({ data }: ProductsTabProps) {
 
     return (
         <div className="grid gap-6 md:grid-cols-2">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Top Productos por Activaciones</CardTitle>
                     <CardDescription>Los 10 productos con más tarjetas activadas en el periodo.</CardDescription>
@@ -57,7 +57,7 @@ export function ProductsTab({ data }: ProductsTabProps) {
                 </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Distribución de Activaciones</CardTitle>
                     <CardDescription>Proporción de activaciones por producto.</CardDescription>
@@ -88,7 +88,7 @@ export function ProductsTab({ data }: ProductsTabProps) {
                 </CardContent>
             </Card>
 
-            <Card className="md:col-span-2 bg-white shadow-sm border-gray-200">
+            <Card className="md:col-span-2 bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Ingresos por Producto</CardTitle>
                     <CardDescription>Comparativa de ingresos generados por cada producto.</CardDescription>

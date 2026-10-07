@@ -127,9 +127,9 @@ export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
 
                 <div className="relative w-full">
                     {isStarting && (
-                        <div className="flex flex-col items-center justify-center h-64 bg-gray-100 rounded-lg">
-                            <Camera className="h-10 w-10 text-gray-400 animate-pulse mb-2" />
-                            <p className="text-sm text-gray-500">Iniciando cámara...</p>
+                        <div className="flex flex-col items-center justify-center h-64 bg-muted rounded-lg">
+                            <Camera className="h-10 w-10 text-muted-foreground animate-pulse mb-2" />
+                            <p className="text-sm text-muted-foreground">Iniciando cámara...</p>
                         </div>
                     )}
 

@@ -46,8 +46,8 @@ export function AnalyticsDashboard({ initialData, stores }: AnalyticsDashboardPr
     return (
         <div className="space-y-8">
             <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold tracking-tight text-gray-900">Analytics & Insights</h1>
-                <p className="text-gray-500">Monitorea el rendimiento y las métricas clave de tu negocio.</p>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">Analytics & Insights</h1>
+                <p className="text-muted-foreground">Monitorea el rendimiento y las métricas clave de tu negocio.</p>
             </div>
 
             <FiltersBar onFiltersChange={handleFiltersChange} stores={stores} />

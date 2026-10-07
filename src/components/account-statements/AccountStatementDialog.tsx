@@ -142,7 +142,7 @@ export function AccountStatementDialog({ companyId, companyName }: { companyId: 
 
                 {preview ? (
                     <div className="space-y-5">
-                        <div className="border-y border-slate-200 bg-slate-50/70 px-4 py-4">
+                        <div className="border-y border-border bg-muted/50 px-4 py-4">
                             <div className="grid gap-4 sm:grid-cols-4">
                                 <div>
                                     <p className="text-xs text-muted-foreground">Saldo anterior</p>

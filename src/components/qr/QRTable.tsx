@@ -72,7 +72,7 @@ export function QRTable({ qrs, stores, products, readOnly = false }: QRTableProp
                 />
             )}
 
-            <div className="rounded-md border bg-white">
+            <div className="rounded-md border bg-card">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -95,7 +95,7 @@ export function QRTable({ qrs, stores, products, readOnly = false }: QRTableProp
                     <TableBody>
                         {qrs.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="h-24 text-center text-gray-500">
+                                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                     No hay códigos QR generados.
                                 </TableCell>
                             </TableRow>
@@ -126,7 +126,7 @@ export function QRTable({ qrs, stores, products, readOnly = false }: QRTableProp
                                                     Activado
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                <Badge variant="outline" className="text-muted-foreground border-border">
                                                     Inactivo
                                                 </Badge>
                                             )}
@@ -137,7 +137,7 @@ export function QRTable({ qrs, stores, products, readOnly = false }: QRTableProp
                                             )}
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-gray-500 text-sm">
+                                    <TableCell className="text-muted-foreground text-sm">
                                         {format(new Date(qr.createdAt), "PPP p", { locale: es })}
                                     </TableCell>
 
@@ -171,7 +171,7 @@ export function QRTable({ qrs, stores, products, readOnly = false }: QRTableProp
                                             <QRDownloadSVGButton uuid={qr.uuid} qrData={qr.qrData} />
                                             <Button variant="ghost" size="icon" asChild>
                                                 <Link href={`/qr/${qr.uuid}`}>
-                                                    <QrCode className="h-4 w-4 text-gray-500" />
+                                                    <QrCode className="h-4 w-4 text-muted-foreground" />
                                                     <span className="sr-only">Ver detalles</span>
                                                 </Link>
                                             </Button>

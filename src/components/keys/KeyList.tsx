@@ -34,7 +34,7 @@ interface KeyItem {
 
 export function KeyList({ keys }: { keys: KeyItem[] }) {
     return (
-        <Card className="bg-white shadow-sm border-gray-200">
+        <Card className="bg-card shadow-sm border-border">
             <CardHeader>
                 <CardTitle>Listado de Claves</CardTitle>
                 <CardDescription>Total de claves: {keys.length}</CardDescription>
@@ -56,7 +56,7 @@ export function KeyList({ keys }: { keys: KeyItem[] }) {
                         <TableBody>
                             {keys.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                         No hay claves registradas.
                                     </TableCell>
                                 </TableRow>
@@ -65,8 +65,8 @@ export function KeyList({ keys }: { keys: KeyItem[] }) {
                                     <TableRow key={keyItem.id}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                                    <Key className="w-5 h-5 text-gray-500" />
+                                                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                                    <Key className="w-5 h-5 text-muted-foreground" />
                                                 </div>
                                                 <Badge variant="outline" className="font-mono text-xs">
                                                     {keyItem.code}
@@ -82,7 +82,7 @@ export function KeyList({ keys }: { keys: KeyItem[] }) {
                                                     Verificada
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                <Badge variant="outline" className="text-muted-foreground border-border">
                                                     No verificada
                                                 </Badge>
                                             )}
@@ -93,16 +93,16 @@ export function KeyList({ keys }: { keys: KeyItem[] }) {
                                                     Sí
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                <Badge variant="outline" className="text-muted-foreground border-border">
                                                     No
                                                 </Badge>
                                             )}
                                         </TableCell>
-                                        <TableCell className="text-gray-600">
+                                        <TableCell className="text-muted-foreground">
                                             {keyItem.card ? (
                                                 <div className="text-sm">
                                                     <div>{keyItem.card.store.name}</div>
-                                                    <div className="text-xs text-gray-500">
+                                                    <div className="text-xs text-muted-foreground">
                                                         {keyItem.card.store.company.name}
                                                     </div>
                                                 </div>
@@ -110,13 +110,13 @@ export function KeyList({ keys }: { keys: KeyItem[] }) {
                                                 '-'
                                             )}
                                         </TableCell>
-                                        <TableCell className="text-gray-500 text-sm">
+                                        <TableCell className="text-muted-foreground text-sm">
                                             {format(new Date(keyItem.createdAt), 'PPP', { locale: es })}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" asChild>
                                                 <Link href={`/keys/${keyItem.id}`}>
-                                                    <Eye className="h-4 w-4 text-gray-500" />
+                                                    <Eye className="h-4 w-4 text-muted-foreground" />
                                                     <span className="sr-only">Ver detalles</span>
                                                 </Link>
                                             </Button>

@@ -30,7 +30,7 @@ export function BillingTab({ data }: BillingTabProps) {
 
     return (
         <div className="grid gap-6 md:grid-cols-2">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Distribución de Facturación</CardTitle>
                     <CardDescription>Monto total por estado de facturación.</CardDescription>
@@ -63,7 +63,7 @@ export function BillingTab({ data }: BillingTabProps) {
                 </CardContent>
             </Card>
 
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Resumen de Estados</CardTitle>
                     <CardDescription>Conteo y montos acumulados por cada estado.</CardDescription>

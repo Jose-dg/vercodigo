@@ -283,7 +283,7 @@ export default function OpsDiemPage() {
         return (
             <div className="flex flex-1 flex-col gap-4 p-6">
                 <h1 className="text-2xl font-semibold">Ops Diem</h1>
-                <p className="text-gray-500">Solo roles de plataforma pueden usar esta herramienta.</p>
+                <p className="text-muted-foreground">Solo roles de plataforma pueden usar esta herramienta.</p>
             </div>
         );
     }
@@ -311,7 +311,7 @@ export default function OpsDiemPage() {
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Ops Diem</h1>
-                    <p className="text-gray-500">
+                    <p className="text-muted-foreground">
                         Clasifica clientes sin LegalParty y activa fulfillment del surtido Diem.
                     </p>
                 </div>
@@ -329,7 +329,7 @@ export default function OpsDiemPage() {
                     </TabsList>
 
                     <TabsContent value="clients" className="space-y-4">
-                        <Card className="border-gray-200 bg-white shadow-sm">
+                        <Card className="border-border bg-card shadow-sm">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-lg">Identidad comercial</CardTitle>
                                 <CardDescription>
@@ -339,7 +339,7 @@ export default function OpsDiemPage() {
                             <CardContent className="space-y-3">
                                 <div className="flex flex-col gap-2 md:flex-row">
                                     <div className="relative flex-1">
-                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             className="pl-8"
                                             placeholder="Teléfono, cédula o nombre…"
@@ -388,7 +388,7 @@ export default function OpsDiemPage() {
                                     <TableBody>
                                         {clients.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={6} className="text-center text-gray-500">
+                                                <TableCell colSpan={6} className="text-center text-muted-foreground">
                                                     Sin resultados
                                                 </TableCell>
                                             </TableRow>
@@ -400,7 +400,7 @@ export default function OpsDiemPage() {
                                                         <div className="font-medium">
                                                             {row.name} {row.last_name}
                                                         </div>
-                                                        <div className="text-xs text-gray-500">
+                                                        <div className="text-xs text-muted-foreground">
                                                             {[row.document_type, row.document_number]
                                                                 .filter(Boolean)
                                                                 .join(" ")}
@@ -408,7 +408,7 @@ export default function OpsDiemPage() {
                                                     </TableCell>
                                                     <TableCell>
                                                         <div>{row.phone || "—"}</div>
-                                                        <div className="text-xs text-gray-500">{row.email}</div>
+                                                        <div className="text-xs text-muted-foreground">{row.email}</div>
                                                     </TableCell>
                                                     <TableCell>{statusBadge(row.ops_status)}</TableCell>
                                                     <TableCell>{row.order_count}</TableCell>
@@ -441,7 +441,7 @@ export default function OpsDiemPage() {
                     </TabsContent>
 
                     <TabsContent value="products" className="space-y-4">
-                        <Card className="border-gray-200 bg-white shadow-sm">
+                        <Card className="border-border bg-card shadow-sm">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-lg">Surtido fulfillment</CardTitle>
                                 <CardDescription>
@@ -451,7 +451,7 @@ export default function OpsDiemPage() {
                             <CardContent className="space-y-3">
                                 <div className="flex flex-col gap-2 md:flex-row">
                                     <div className="relative flex-1">
-                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             className="pl-8"
                                             placeholder="Nombre, SKU o brand…"
@@ -501,7 +501,7 @@ export default function OpsDiemPage() {
                                     <TableBody>
                                         {products.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={7} className="text-center text-gray-500">
+                                                <TableCell colSpan={7} className="text-center text-muted-foreground">
                                                     Sin resultados
                                                 </TableCell>
                                             </TableRow>
@@ -512,7 +512,7 @@ export default function OpsDiemPage() {
                                                     <TableRow key={row.store_product_id}>
                                                         <TableCell>
                                                             <div className="font-medium">{row.name}</div>
-                                                            <div className="text-xs text-gray-500">
+                                                            <div className="text-xs text-muted-foreground">
                                                                 {row.brand}
                                                             </div>
                                                         </TableCell>

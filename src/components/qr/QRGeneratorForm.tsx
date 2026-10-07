@@ -127,43 +127,43 @@ export function QRGeneratorForm() {
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
-                    <CardTitle className="text-xl font-semibold text-gray-900">Configuración de Generación</CardTitle>
+                    <CardTitle className="text-xl font-semibold text-foreground">Configuración de Generación</CardTitle>
                     <CardDescription>Selecciona los parámetros para generar los códigos QR.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <Label className="text-gray-700 font-medium">Producto</Label>
+                            <Label className="text-foreground font-medium">Producto</Label>
                             <Select onValueChange={setSelectedDenomination} value={selectedDenomination}>
-                                <SelectTrigger className="bg-gray-50 border-gray-300 focus:ring-blue-500">
+                                <SelectTrigger className="bg-muted/40 border-border focus:ring-blue-500">
                                     <SelectValue placeholder="Seleccionar producto" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {catalog.map((item) => (
                                         <SelectItem key={item.denominationId} value={item.denominationId}>
                                             <span className="font-medium">{item.name}</span>
-                                            <span className="text-gray-600 text-xs ml-2">
+                                            <span className="text-muted-foreground text-xs ml-2">
                                                 {item.currency} {new Intl.NumberFormat("es-CO").format(item.amount)}
                                             </span>
-                                            <span className="text-gray-500 text-xs ml-2">({item.sku})</span>
+                                            <span className="text-muted-foreground text-xs ml-2">({item.sku})</span>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-gray-700 font-medium">Tienda</Label>
+                            <Label className="text-foreground font-medium">Tienda</Label>
                             <Select onValueChange={setSelectedStore} value={selectedStore}>
-                                <SelectTrigger className="bg-gray-50 border-gray-300 focus:ring-blue-500">
+                                <SelectTrigger className="bg-muted/40 border-border focus:ring-blue-500">
                                     <SelectValue placeholder="Seleccionar tienda" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {stores.map((store) => (
                                         <SelectItem key={store.id} value={store.id}>
                                             <span className="font-medium">{store.name}</span>
-                                            <span className="text-gray-500 text-xs ml-2">({store.code})</span>
+                                            <span className="text-muted-foreground text-xs ml-2">({store.code})</span>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -172,7 +172,7 @@ export function QRGeneratorForm() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <Label className="text-gray-700 font-medium">Monto</Label>
+                            <Label className="text-foreground font-medium">Monto</Label>
                             <div className="relative">
                                 <Input
                                     type="text"
@@ -181,24 +181,24 @@ export function QRGeneratorForm() {
                                         ? `${selectedItem.currency} ${new Intl.NumberFormat("es-CO").format(selectedItem.amount)}`
                                         : ""}
                                     readOnly
-                                    className="bg-gray-100 border-gray-300"
+                                    className="bg-muted border-border"
                                 />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-gray-700 font-medium">Cantidad a Generar</Label>
+                            <Label className="text-foreground font-medium">Cantidad a Generar</Label>
                             <Input
                                 type="number"
                                 min="1"
                                 max="100"
                                 value={quantity}
                                 onChange={(e) => setQuantity(Number(e.target.value))}
-                                className="bg-gray-50 border-gray-300 focus:bg-white transition-colors"
+                                className="bg-muted/40 border-border focus:bg-card transition-colors"
                             />
                         </div>
                     </div>
                 </CardContent>
-                <CardFooter className="bg-gray-50/50 border-t border-gray-100 p-6">
+                <CardFooter className="bg-muted/40/50 border-t border-gray-100 p-6">
                     <Button
                         onClick={handleGenerate}
                         disabled={
@@ -217,9 +217,9 @@ export function QRGeneratorForm() {
             </Card>
 
             {generatedQRs.length > 0 && (
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader>
-                        <CardTitle className="text-xl font-semibold text-gray-900">Códigos Generados</CardTitle>
+                        <CardTitle className="text-xl font-semibold text-foreground">Códigos Generados</CardTitle>
                         <CardDescription>Haz clic en un código para ver detalles y descargar.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -227,11 +227,11 @@ export function QRGeneratorForm() {
                             {generatedQRs.map((qr) => (
                                 <Dialog key={qr.id}>
                                     <DialogTrigger asChild>
-                                        <div className="group relative border border-gray-200 rounded-lg p-4 flex flex-col items-center bg-white hover:shadow-md transition-shadow cursor-pointer">
-                                            <div className="bg-white p-2 rounded-md">
+                                        <div className="group relative border border-border rounded-lg p-4 flex flex-col items-center bg-card hover:shadow-md transition-shadow cursor-pointer">
+                                            <div className="bg-card p-2 rounded-md">
                                                 <QRCodeCanvas value={qr.qrData} size={128} />
                                             </div>
-                                            <span className="text-[10px] mt-3 font-mono text-gray-500 truncate w-full text-center bg-gray-50 py-1 px-2 rounded">
+                                            <span className="text-[10px] mt-3 font-mono text-muted-foreground truncate w-full text-center bg-muted/40 py-1 px-2 rounded">
                                                 {qr.uuid}
                                             </span>
                                         </div>
@@ -241,7 +241,7 @@ export function QRGeneratorForm() {
                                             <DialogTitle>Código QR</DialogTitle>
                                         </DialogHeader>
                                         <div className="flex flex-col items-center space-y-4 py-4">
-                                            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                            <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
                                                 <QRCodeCanvas
                                                     id={`qr-canvas-${qr.uuid}`}
                                                     value={qr.qrData}
@@ -250,7 +250,7 @@ export function QRGeneratorForm() {
                                                     includeMargin={true}
                                                 />
                                             </div>
-                                            <p className="text-sm font-mono text-gray-500 bg-gray-50 px-3 py-1 rounded-full">
+                                            <p className="text-sm font-mono text-muted-foreground bg-muted/40 px-3 py-1 rounded-full">
                                                 {qr.uuid}
                                             </p>
                                             <Button onClick={() => handleDownload(qr.uuid)} className="w-full sm:w-auto">

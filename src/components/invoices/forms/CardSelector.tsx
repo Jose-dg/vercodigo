@@ -53,7 +53,7 @@ export function CardSelector({ products, onSelect, selectedCardId }: CardSelecto
     );
 
     return (
-        <div className="space-y-3 border p-3 rounded-md bg-slate-50/50">
+        <div className="space-y-3 rounded-md border bg-muted/50 p-3">
             <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                     <label className="text-xs font-medium text-muted-foreground">Producto</label>
@@ -105,7 +105,7 @@ export function CardSelector({ products, onSelect, selectedCardId }: CardSelecto
                     />
                 </div>
 
-                <div className="max-h-40 overflow-y-auto border rounded-md bg-white">
+                <div className="max-h-40 overflow-y-auto border rounded-md bg-card">
                     {isLoading ? (
                         <div className="p-4 flex justify-center">
                             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -120,7 +120,7 @@ export function CardSelector({ products, onSelect, selectedCardId }: CardSelecto
                                 <button
                                     key={card.id}
                                     type="button"
-                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors flex justify-between items-center ${selectedCardId === card.id ? "bg-blue-50 ring-1 ring-blue-200" : ""
+                                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${selectedCardId === card.id ? "bg-primary/10 ring-1 ring-primary/30" : ""
                                         }`}
                                     onClick={() => {
                                         const selectedDenom = denominations.find((d) => d.id === selectedDenominationId);

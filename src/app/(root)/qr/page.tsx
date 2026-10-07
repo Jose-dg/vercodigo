@@ -114,8 +114,8 @@ export default async function QRPage() {
                 <div className="space-y-8">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Códigos QR</h1>
-                            <p className="mt-2 text-gray-500">
+                            <h1 className="text-3xl font-bold tracking-tight text-foreground">Códigos QR</h1>
+                            <p className="mt-2 text-muted-foreground">
                                 {showCreate
                                     ? "Gestiona y monitorea los códigos QR generados."
                                     : "Consulta los códigos QR de tu ámbito."}
@@ -131,7 +131,7 @@ export default async function QRPage() {
                         )}
                     </div>
 
-                    <Card className="border-gray-200 bg-white shadow-sm">
+                    <Card className="border-border bg-card shadow-sm">
                         <CardHeader>
                             <CardTitle>Listado de códigos</CardTitle>
                             <CardDescription>Total: {qrs.length}</CardDescription>

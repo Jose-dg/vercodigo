@@ -87,53 +87,53 @@ export function ProductForm() {
         <form onSubmit={handleSubmit} className="space-y-8 max-w-5xl mx-auto">
             <div className="grid gap-8 md:grid-cols-[2fr,1fr]">
                 <div className="space-y-8">
-                    <Card className="bg-white shadow-sm border-gray-200">
+                    <Card className="bg-card shadow-sm border-border">
                         <CardHeader>
-                            <CardTitle className="text-xl font-semibold text-gray-900">Detalles del Producto</CardTitle>
+                            <CardTitle className="text-xl font-semibold text-foreground">Detalles del Producto</CardTitle>
                             <CardDescription>Información básica del producto.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="name" className="text-gray-700 font-medium">Nombre del Producto</Label>
+                                <Label htmlFor="name" className="text-foreground font-medium">Nombre del Producto</Label>
                                 <Input
                                     id="name"
                                     placeholder="Ej: Netflix Gift Card"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     required
-                                    className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                                    className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="brand" className="text-gray-700 font-medium">Marca</Label>
+                                    <Label htmlFor="brand" className="text-foreground font-medium">Marca</Label>
                                     <Input
                                         id="brand"
                                         placeholder="Ej: Netflix"
                                         value={brand}
                                         onChange={(e) => setBrand(e.target.value)}
                                         required
-                                        className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                                        className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="category" className="text-gray-700 font-medium">Categoría</Label>
+                                    <Label htmlFor="category" className="text-foreground font-medium">Categoría</Label>
                                     <Input
                                         id="category"
                                         placeholder="Ej: Entretenimiento"
                                         value={category}
                                         onChange={(e) => setCategory(e.target.value)}
-                                        className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors"
+                                        className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
                                     />
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card className="bg-white shadow-sm border-gray-200">
+                    <Card className="bg-card shadow-sm border-border">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                             <div className="space-y-1">
-                                <CardTitle className="text-xl font-semibold text-gray-900">Denominaciones</CardTitle>
+                                <CardTitle className="text-xl font-semibold text-foreground">Denominaciones</CardTitle>
                                 <CardDescription>Configura los montos disponibles.</CardDescription>
                             </div>
                             <Button type="button" variant="outline" size="sm" onClick={handleAddDenomination} className="border-blue-200 text-blue-700 hover:bg-blue-50">
@@ -143,30 +143,30 @@ export function ProductForm() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {denominations.map((denom, index) => (
-                                <div key={index} className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                                <div key={index} className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 bg-muted/40/50 hover:bg-muted/40 transition-colors">
                                     <div className="flex-1 space-y-1">
-                                        <Label className="text-xs text-gray-500">Monto</Label>
+                                        <Label className="text-xs text-muted-foreground">Monto</Label>
                                         <Input
                                             type="number"
                                             placeholder="0.00"
                                             value={denom.amount}
                                             onChange={(e) => handleDenominationChange(index, "amount", parseFloat(e.target.value))}
                                             required
-                                            className="bg-white border-gray-200 text-gray-900"
+                                            className="bg-card border-border text-foreground"
                                         />
                                     </div>
                                     <div className="w-32 space-y-1">
-                                        <Label className="text-xs text-gray-500">Moneda</Label>
+                                        <Label className="text-xs text-muted-foreground">Moneda</Label>
                                         <Input
                                             placeholder="USD"
                                             value={denom.currency}
                                             onChange={(e) => handleDenominationChange(index, "currency", e.target.value)}
                                             required
-                                            className="bg-white border-gray-200 text-gray-900"
+                                            className="bg-card border-border text-foreground"
                                         />
                                     </div>
                                     <div className="flex-[1.5] space-y-1">
-                                        <Label className="text-xs text-gray-500">Product ID en Diem</Label>
+                                        <Label className="text-xs text-muted-foreground">Product ID en Diem</Label>
                                         <Input
                                             placeholder="UUID del producto"
                                             value={denom.devDiemProductId}
@@ -177,7 +177,7 @@ export function ProductForm() {
                                                     e.target.value,
                                                 )
                                             }
-                                            className="bg-white border-gray-200 font-mono text-xs"
+                                            className="bg-card border-border font-mono text-xs"
                                         />
                                     </div>
                                     <div className="pt-5">
@@ -187,7 +187,7 @@ export function ProductForm() {
                                             size="icon"
                                             onClick={() => handleRemoveDenomination(index)}
                                             disabled={denominations.length === 1}
-                                            className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                            className="text-muted-foreground hover:text-red-600 hover:bg-red-50"
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -199,25 +199,25 @@ export function ProductForm() {
                 </div>
 
                 <div className="space-y-8">
-                    <Card className="bg-white shadow-sm border-gray-200">
+                    <Card className="bg-card shadow-sm border-border">
                         <CardHeader>
-                            <CardTitle className="text-xl font-semibold text-gray-900">Inventario</CardTitle>
+                            <CardTitle className="text-xl font-semibold text-foreground">Inventario</CardTitle>
                             <CardDescription>Identificadores únicos.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="sku" className="text-gray-700 font-medium">SKU (Stock Keeping Unit)</Label>
+                                <Label htmlFor="sku" className="text-foreground font-medium">SKU (Stock Keeping Unit)</Label>
                                 <Input
                                     id="sku"
                                     placeholder="Ej: NFLX-USD"
                                     value={sku}
                                     onChange={(e) => setSku(e.target.value)}
                                     required
-                                    className="bg-gray-50 border-gray-300 focus:ring-blue-500 focus:bg-white transition-colors font-mono"
+                                    className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors font-mono"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="devdiem-product-id" className="text-gray-700 font-medium">
+                                <Label htmlFor="devdiem-product-id" className="text-foreground font-medium">
                                     Product ID en Diem (fallback)
                                 </Label>
                                 <Input
@@ -225,7 +225,7 @@ export function ProductForm() {
                                     placeholder="UUID para productos sin denominaciones"
                                     value={devDiemProductId}
                                     onChange={(e) => setDevDiemProductId(e.target.value)}
-                                    className="bg-gray-50 border-gray-300 font-mono text-xs"
+                                    className="bg-muted/40 border-border font-mono text-xs"
                                 />
                             </div>
                         </CardContent>
@@ -235,7 +235,7 @@ export function ProductForm() {
                         <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm py-6 text-lg" disabled={loading}>
                             {loading ? "Creando..." : "Crear Producto"}
                         </Button>
-                        <Button type="button" variant="outline" className="w-full border-gray-300" onClick={() => router.back()}>
+                        <Button type="button" variant="outline" className="w-full border-border" onClick={() => router.back()}>
                             Cancelar
                         </Button>
                     </div>

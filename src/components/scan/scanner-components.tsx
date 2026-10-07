@@ -48,14 +48,14 @@ export function ActivationModal({
                         Acción Irreversible
                     </DialogTitle>
                     <DialogDescription className="space-y-2 pt-2 text-left">
-                        <p className="font-medium text-gray-900">
+                        <p className="font-medium text-foreground">
                             ¿Estás seguro de activar la tarjeta con ID: <span className="font-mono">{uuid.slice(0, 8)}...</span>?
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                             Esta acción no se puede deshacer. Los fondos serán activados y la tarjeta marcada como usada.
                             Verifique que el pago ha sido recibido.
                         </p>
-                        <p className="text-sm font-semibold text-gray-700 mt-2">
+                        <p className="text-sm font-semibold text-foreground mt-2">
                             Escribe "{requiredText}" para confirmar:
                         </p>
                     </DialogDescription>
@@ -123,28 +123,28 @@ export function ResultCard({ data, onReset }: ResultCardProps) {
                 <CardTitle className="text-green-700 text-xl">¡Activación Exitosa!</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
-                <div className="bg-gray-50 p-4 rounded-lg space-y-3 text-sm border border-gray-100">
+                <div className="bg-muted/40 p-4 rounded-lg space-y-3 text-sm border border-gray-100">
                     <div className="flex justify-between items-center border-b pb-2">
-                        <span className="text-gray-500">Producto</span>
-                        <span className="font-semibold text-gray-900">{data.card.product}</span>
+                        <span className="text-muted-foreground">Producto</span>
+                        <span className="font-semibold text-foreground">{data.card.product}</span>
                     </div>
                     <div className="flex justify-between items-center border-b pb-2">
-                        <span className="text-gray-500">Tienda</span>
-                        <span className="font-medium text-gray-900">{data.card.store}</span>
+                        <span className="text-muted-foreground">Tienda</span>
+                        <span className="font-medium text-foreground">{data.card.store}</span>
                     </div>
                     <div className="flex justify-between items-center border-b pb-2">
-                        <span className="text-gray-500">ID Tarjeta</span>
-                        <span className="font-mono text-gray-700">{data.card.uuid}</span>
+                        <span className="text-muted-foreground">ID Tarjeta</span>
+                        <span className="font-mono text-foreground">{data.card.uuid}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span className="text-gray-500">Fecha</span>
-                        <span className="font-medium text-gray-900">
+                        <span className="text-muted-foreground">Fecha</span>
+                        <span className="font-medium text-foreground">
                             {new Date(data.activation.activatedAt).toLocaleString()}
                         </span>
                     </div>
                 </div>
 
-                <div className="text-xs text-center text-gray-400">
+                <div className="text-xs text-center text-muted-foreground">
                     <span>Ref: {data.activation.id}</span>
                 </div>
             </CardContent>

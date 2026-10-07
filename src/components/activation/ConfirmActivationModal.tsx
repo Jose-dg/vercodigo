@@ -25,6 +25,9 @@ interface ConfirmActivationModalProps {
         company?: string;
         amount?: number | null;
         currency?: string | null;
+        billingAmount?: number | null;
+        billingCurrency?: string | null;
+        appliedExchangeRate?: number | null;
         canActivate?: boolean;
         blockReason?: string | null;
     } | null;
@@ -72,34 +75,53 @@ export function ConfirmActivationModal({
                 </DialogHeader>
 
                 {cardInfo && (
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-2 border">
+                    <div className="bg-muted/40 rounded-lg p-4 space-y-2 border">
                         <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">UUID:</span>
+                            <span className="text-muted-foreground">UUID:</span>
                             <span className="font-mono font-medium">{cardInfo.uuid}</span>
                         </div>
                         {cardInfo.product && (
                             <div className="flex justify-between text-sm">
-                                <span className="text-gray-500">Producto:</span>
+                                <span className="text-muted-foreground">Producto:</span>
                                 <span className="font-medium">{cardInfo.product}</span>
                             </div>
                         )}
                         {cardInfo.store && (
                             <div className="flex justify-between text-sm">
-                                <span className="text-gray-500">Tienda:</span>
+                                <span className="text-muted-foreground">Tienda:</span>
                                 <span className="font-medium">{cardInfo.store}</span>
                             </div>
                         )}
                         {cardInfo.company && (
                             <div className="flex justify-between text-sm">
-                                <span className="text-gray-500">Compañía:</span>
+                                <span className="text-muted-foreground">Compañía:</span>
                                 <span className="font-medium">{cardInfo.company}</span>
                             </div>
                         )}
                         {cardInfo.amount != null && (
                             <div className="flex justify-between text-sm">
-                                <span className="text-gray-500">Valor:</span>
+                                <span className="text-muted-foreground">Denominación:</span>
                                 <span className="font-medium">
                                     {cardInfo.amount} {cardInfo.currency ?? ''}
+                                </span>
+                            </div>
+                        )}
+                        {cardInfo.appliedExchangeRate != null && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Tasa aplicada:</span>
+                                <span className="font-mono font-medium">
+                                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(cardInfo.appliedExchangeRate)} / USD
+                                </span>
+                            </div>
+                        )}
+                        {cardInfo.billingAmount != null && (
+                            <div className="flex justify-between border-t pt-2 text-sm">
+                                <span className="font-medium">Total a debitar:</span>
+                                <span className="font-mono font-semibold">
+                                    {new Intl.NumberFormat('es-CO', {
+                                        style: 'currency',
+                                        currency: cardInfo.billingCurrency ?? 'COP',
+                                    }).format(cardInfo.billingAmount)}
                                 </span>
                             </div>
                         )}

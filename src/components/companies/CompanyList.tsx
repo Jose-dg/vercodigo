@@ -76,7 +76,7 @@ export function CompanyList({ companies }: { companies: Company[] }) {
     };
 
     return (
-        <Card className="bg-white shadow-sm border-gray-200">
+        <Card className="bg-card shadow-sm border-border">
             <CardHeader>
                 <CardTitle>Listado de Compañías</CardTitle>
                 <CardDescription>Total de compañías: {companies.length}</CardDescription>
@@ -99,7 +99,7 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                         <TableBody>
                             {companies.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="h-24 text-center text-gray-500">
+                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                         No hay compañías registradas.
                                     </TableCell>
                                 </TableRow>
@@ -108,13 +108,13 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                                     <TableRow key={company.id}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                                    <Building2 className="w-5 h-5 text-gray-500" />
+                                                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                                    <Building2 className="w-5 h-5 text-muted-foreground" />
                                                 </div>
                                                 <div>
-                                                    <div className="font-medium text-gray-900">{company.name}</div>
+                                                    <div className="font-medium text-foreground">{company.name}</div>
                                                     {company.address && (
-                                                        <div className="text-sm text-gray-500">{company.address}</div>
+                                                        <div className="text-sm text-muted-foreground">{company.address}</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -126,29 +126,29 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                                         </TableCell>
                                         <TableCell>
                                             <div className="text-sm">
-                                                <div className="text-gray-900">{company.email}</div>
-                                                <div className="text-gray-500">{company.phone}</div>
+                                                <div className="text-foreground">{company.email}</div>
+                                                <div className="text-muted-foreground">{company.phone}</div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="text-sm">
-                                                <div className="text-gray-600">
+                                                <div className="text-muted-foreground">
                                                     Facturación: {getBillingFrequencyLabel(company.billingFrequency)}
                                                 </div>
-                                                <div className="text-gray-500">
+                                                <div className="text-muted-foreground">
                                                     Comisión: {(company.commissionRate * 100).toFixed(1)}%
                                                 </div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="text-sm space-y-1">
-                                                <div className="text-gray-600">
+                                                <div className="text-muted-foreground">
                                                     <span className="font-medium">{company._count.stores}</span> tiendas
                                                 </div>
-                                                <div className="text-gray-500">
+                                                <div className="text-muted-foreground">
                                                     <span className="font-medium">{company._count.users}</span> usuarios
                                                 </div>
-                                                <div className="text-gray-500">
+                                                <div className="text-muted-foreground">
                                                     <span className="font-medium">{company._count.invoices}</span> facturas
                                                 </div>
                                             </div>
@@ -159,25 +159,25 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                                                     Activa
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                <Badge variant="outline" className="text-muted-foreground border-border">
                                                     Inactiva
                                                 </Badge>
                                             )}
                                         </TableCell>
-                                        <TableCell className="text-gray-500 text-sm">
+                                        <TableCell className="text-muted-foreground text-sm">
                                             {format(new Date(company.createdAt), 'PPP', { locale: es })}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end items-center gap-2">
                                                 <Button variant="ghost" size="icon" asChild>
                                                     <Link href={`/companies/${company.id}`}>
-                                                        <Eye className="h-4 w-4 text-gray-500" />
+                                                        <Eye className="h-4 w-4 text-muted-foreground" />
                                                         <span className="sr-only">Ver detalles</span>
                                                     </Link>
                                                 </Button>
                                                 <Button variant="ghost" size="icon" asChild>
                                                     <Link href={`/companies/${company.id}/edit`}>
-                                                        <Edit className="h-4 w-4 text-gray-500" />
+                                                        <Edit className="h-4 w-4 text-muted-foreground" />
                                                         <span className="sr-only">Editar</span>
                                                     </Link>
                                                 </Button>

@@ -9,7 +9,7 @@ interface QRCodeDisplayProps {
 
 export function QRCodeDisplay({ uuid, qrData }: QRCodeDisplayProps) {
     return (
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+        <div className="bg-card p-6 rounded-lg border border-border shadow-sm">
             <QRCodeCanvas
                 id={`qr-${uuid}`}
                 value={qrData}

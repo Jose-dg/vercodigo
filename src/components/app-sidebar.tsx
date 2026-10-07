@@ -28,6 +28,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 const data = {
   navMain: [
@@ -104,11 +105,11 @@ const data = {
           url: "/wallets",
         },
         {
-          title: "Precios",
+          title: "Precio de reventa",
           url: "/prices",
         },
         {
-          title: "Costos",
+          title: "Tarifas a compañías",
           url: "/costs",
         },
       ],
@@ -295,7 +296,7 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
       "/wallets": ["manage", "Wallet"],
       "/wallet": ["read", "Wallet"],
       "/prices": ["read", "CompanyProductPrice"],
-      "/costs": ["manage", "ProductCost"],
+      "/costs": ["read", "ProductCost"],
       "/overview": ["read", "Company"],
       "/analytics": ["read", "AuditLog"],
       "/admin": ["manage", "all"],
@@ -348,6 +349,9 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
+        <div className="flex justify-end px-2 group-data-[collapsible=icon]:justify-center">
+          <ThemeToggle />
+        </div>
         <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />

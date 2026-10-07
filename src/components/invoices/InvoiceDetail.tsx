@@ -58,7 +58,7 @@ export default function InvoiceDetail({ id }: InvoiceDetailProps) {
         );
       case "CANCELLED":
         return (
-          <Badge variant="outline" className="text-gray-500 border-gray-200">
+          <Badge variant="outline" className="text-muted-foreground border-border">
             Cancelada
           </Badge>
         );
@@ -84,7 +84,7 @@ export default function InvoiceDetail({ id }: InvoiceDetailProps) {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-2xl">Invoice {invoice.invoiceNumber}</CardTitle>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {format(new Date(invoice.createdAt), "PPP", { locale: es })}
           </p>
         </div>
@@ -93,11 +93,11 @@ export default function InvoiceDetail({ id }: InvoiceDetailProps) {
       <CardContent className="grid gap-6">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-sm font-medium text-gray-500">Company</p>
+            <p className="text-sm font-medium text-muted-foreground">Company</p>
             <p>{invoice.company.name}</p>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-500">Period</p>
+            <p className="text-sm font-medium text-muted-foreground">Period</p>
             <p>
               {format(new Date(invoice.periodStart), "P", { locale: es })} -{" "}
               {format(new Date(invoice.periodEnd), "P", { locale: es })}
@@ -106,21 +106,21 @@ export default function InvoiceDetail({ id }: InvoiceDetailProps) {
         </div>
         <div className="grid grid-cols-3 gap-4 border-t pt-4">
           <div>
-            <p className="text-sm font-medium text-gray-500">Total Sales</p>
+            <p className="text-sm font-medium text-muted-foreground">Total Sales</p>
             <p className="font-semibold">{formatCurrency(invoice.totalSales, "USD")}</p>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-500">Commission</p>
+            <p className="text-sm font-medium text-muted-foreground">Commission</p>
             <p className="font-semibold">{formatCurrency(invoice.commissionAmount, "USD")}</p>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-500">Total Amount</p>
+            <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
             <p className="font-semibold">{formatCurrency(invoice.totalAmount, "USD")}</p>
           </div>
         </div>
         {invoice.paidAt && (
           <div className="border-t pt-4">
-            <p className="text-sm font-medium text-gray-500">Paid At</p>
+            <p className="text-sm font-medium text-muted-foreground">Paid At</p>
             <p>{format(new Date(invoice.paidAt), "PPP p", { locale: es })}</p>
           </div>
         )}

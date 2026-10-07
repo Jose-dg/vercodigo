@@ -47,10 +47,10 @@ export default async function KeysPage() {
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                 <div className="space-y-8">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground">
                             Claves Digitales
                         </h1>
-                        <p className="text-gray-500 mt-2">
+                        <p className="text-muted-foreground mt-2">
                             Gestiona y monitorea las claves digitales generadas.
                         </p>
                     </div>

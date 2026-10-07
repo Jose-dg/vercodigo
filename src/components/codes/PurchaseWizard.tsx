@@ -44,6 +44,9 @@ export interface PurchaseWizardProps {
         productId: string;
         denominationId: string | null;
         count: number;
+        quotedUnitAmount: number;
+        quotedCurrency: string;
+        quotedRate?: number | null;
     }) => void;
 }
 

@@ -20,7 +20,7 @@ export function InventoryTab({ data }: InventoryTabProps) {
 
     return (
         <div className="grid gap-6">
-            <Card className="bg-white shadow-sm border-gray-200">
+            <Card className="bg-card shadow-sm border-border">
                 <CardHeader>
                     <CardTitle>Estado del Inventario por Producto</CardTitle>
                     <CardDescription>Comparativa entre tarjetas disponibles y activadas por cada categoría.</CardDescription>

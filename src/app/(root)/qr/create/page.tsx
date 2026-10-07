@@ -45,8 +45,8 @@ export default async function CreateQRPage() {
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                 <div className="space-y-6">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Generar códigos QR</h1>
-                    <p className="text-sm text-gray-500">
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">Generar códigos QR</h1>
+                    <p className="text-sm text-muted-foreground">
                         Solo administradores de plataforma pueden crear lotes de tarjetas físicas.
                     </p>
                     <QRGeneratorForm />

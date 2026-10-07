@@ -131,17 +131,25 @@ export default function PurchaseCodesPage() {
                 .catch(() => undefined);
         }
 
-        fetch('/api/prices', { credentials: 'include' })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data?.rows) setPrices(data.rows);
-            })
-            .catch(() => { });
-
         return () => {
             cancelled = true;
         };
     }, [sessionStatus, session?.user?.role]);
+
+    useEffect(() => {
+        if (sessionStatus !== 'authenticated') return;
+        if (isPlatform && !targetCompanyId) {
+            setPrices([]);
+            return;
+        }
+        const query = isPlatform
+            ? `?companyId=${encodeURIComponent(targetCompanyId)}`
+            : '';
+        fetch(`/api/billing-rates${query}`, { credentials: 'include', cache: 'no-store' })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => setPrices(Array.isArray(data?.rows) ? data.rows : []))
+            .catch(() => setPrices([]));
+    }, [sessionStatus, isPlatform, targetCompanyId]);
 
     useEffect(() => {
         if (!isPlatform) return;
@@ -203,6 +211,9 @@ export default function PurchaseCodesPage() {
         productId: string;
         denominationId: string | null;
         count: number;
+        quotedUnitAmount: number;
+        quotedCurrency: string;
+        quotedRate?: number | null;
     }) => {
         if (!payload.productId) {
             toast.error('Seleccione un producto');
@@ -237,6 +248,9 @@ export default function PurchaseCodesPage() {
                     productId: payload.productId,
                     denominationId: payload.denominationId || undefined,
                     count: payload.count,
+                    quotedUnitAmount: payload.quotedUnitAmount,
+                    quotedCurrency: payload.quotedCurrency,
+                    quotedRate: payload.quotedRate,
                     ...(isPlatform
                         ? {
                               companyId: targetCompanyId,

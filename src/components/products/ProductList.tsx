@@ -21,7 +21,7 @@ interface ProductData {
 
 export function ProductList({ products }: { products: ProductData[] }) {
     return (
-        <Card className="bg-white shadow-sm border-gray-200">
+        <Card className="bg-card shadow-sm border-border">
             <CardHeader>
                 <CardTitle>Listado de Productos</CardTitle>
                 <CardDescription>
@@ -47,7 +47,7 @@ export function ProductList({ products }: { products: ProductData[] }) {
                         <TableBody>
                             {products.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                         No hay productos registrados.
                                     </TableCell>
                                 </TableRow>
@@ -56,20 +56,20 @@ export function ProductList({ products }: { products: ProductData[] }) {
                                     <TableRow key={product.id}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                                    <Package className="w-5 h-5 text-gray-500" />
+                                                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                                    <Package className="w-5 h-5 text-muted-foreground" />
                                                 </div>
-                                                <span className="font-medium text-gray-900">{product.name}</span>
+                                                <span className="font-medium text-foreground">{product.name}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-gray-600">{product.brand}</TableCell>
+                                        <TableCell className="text-muted-foreground">{product.brand}</TableCell>
                                         <TableCell>
                                             {product.category ? (
-                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                <Badge variant="outline" className="text-muted-foreground border-border">
                                                     {product.category}
                                                 </Badge>
                                             ) : (
-                                                <span className="text-gray-400">-</span>
+                                                <span className="text-muted-foreground">-</span>
                                             )}
                                         </TableCell>
                                         <TableCell>
@@ -89,7 +89,7 @@ export function ProductList({ products }: { products: ProductData[] }) {
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-gray-400 text-sm">Sin denominaciones</span>
+                                                    <span className="text-muted-foreground text-sm">Sin denominaciones</span>
                                                 )}
                                             </div>
                                         </TableCell>
@@ -99,13 +99,13 @@ export function ProductList({ products }: { products: ProductData[] }) {
                                                     Activo
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                                <Badge variant="outline" className="text-muted-foreground border-border">
                                                     Inactivo
                                                 </Badge>
                                             )}
                                         </TableCell>
                                         {product.createdAt && (
-                                            <TableCell className="text-gray-500 text-sm">
+                                            <TableCell className="text-muted-foreground text-sm">
                                                 {format(new Date(product.createdAt), "PPP", { locale: es })}
                                             </TableCell>
                                         )}

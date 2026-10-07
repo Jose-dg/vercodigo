@@ -74,6 +74,9 @@ export async function processActivationJob(jobId: string) {
                 commercialAmount,
                 commercialCurrency:
                     configuredCost?.currency ?? effectiveDenomination?.currency ?? "USD",
+                sourceAmount: configuredCost?.sourceAmount ?? null,
+                sourceCurrency: configuredCost?.sourceCurrency ?? null,
+                appliedExchangeRate: configuredCost?.exchangeRate ?? null,
             },
             include: {
                 card: {
@@ -275,6 +278,11 @@ export async function processActivationJob(jobId: string) {
                     storeId: card.storeId,
                     activatedBy: job!.userId!,
                     activationAmount,
+                    commercialAmount: job!.commercialAmount,
+                    commercialCurrency: job!.commercialCurrency,
+                    sourceAmount: job!.sourceAmount,
+                    sourceCurrency: job!.sourceCurrency,
+                    appliedExchangeRate: job!.appliedExchangeRate,
                 },
             });
             const debitAmount = job!.commercialAmount ?? 0;
@@ -288,6 +296,9 @@ export async function processActivationJob(jobId: string) {
                 description: `Activación ${job!.card.product.name} (${job!.card.uuid})`,
                 createdById: job!.userId,
                 cardActivationId: activation.id,
+                sourceAmount: job!.sourceAmount ?? undefined,
+                sourceCurrency: job!.sourceCurrency ?? undefined,
+                appliedExchangeRate: job!.appliedExchangeRate ?? undefined,
                 tx,
             });
             await tx.activationAttempt.create({
@@ -371,6 +382,9 @@ export async function activateCard(params: {
     ipAddress?: string | null;
     userAgent?: string | null;
     deviceId?: string | null;
+    quotedAmount?: number;
+    quotedCurrency?: string;
+    quotedRate?: number | null;
 }) {
     await checkRateLimit({ userId: params.userId, action: "ACTIVATION" });
     const uuid = extractCardUuid(params.qr);
@@ -404,6 +418,20 @@ export async function activateCard(params: {
     if (!((configuredCost?.amount ?? fallbackAmount ?? 0) > 0)) {
         throw conflict("No existe un costo válido para esta activación");
     }
+    const billingAmount = configuredCost?.amount ?? fallbackAmount!;
+    const billingCurrency = configuredCost?.currency ?? effectiveDenomination?.currency ?? "USD";
+    if (
+        params.quotedAmount != null
+        && (
+            Math.abs(params.quotedAmount - billingAmount) > 0.005
+            || params.quotedCurrency?.toUpperCase() !== billingCurrency.toUpperCase()
+            || (params.quotedRate != null
+                && (configuredCost?.exchangeRate == null
+                    || Math.abs(params.quotedRate - configuredCost.exchangeRate) > 0.0001))
+        )
+    ) {
+        throw conflict("La tarifa cambió después de mostrar el total. Revisa el valor y confirma nuevamente.");
+    }
 
     const job = await prisma.$transaction(async (tx) => {
         const existing = await tx.activationJob.findFirst({
@@ -432,9 +460,11 @@ export async function activateCard(params: {
                 storeId: card.storeId,
                 status: "PENDING",
                 idempotencyKey: `diem-sas-activation:${crypto.randomUUID()}`,
-                commercialAmount: configuredCost?.amount ?? fallbackAmount!,
-                commercialCurrency:
-                    configuredCost?.currency ?? effectiveDenomination?.currency ?? "USD",
+                commercialAmount: billingAmount,
+                commercialCurrency: billingCurrency,
+                sourceAmount: configuredCost?.sourceAmount ?? null,
+                sourceCurrency: configuredCost?.sourceCurrency ?? null,
+                appliedExchangeRate: configuredCost?.exchangeRate ?? null,
             },
         });
     });
@@ -515,6 +545,9 @@ export async function previewCardActivation(params: { qr: string; userId: string
         company: card.store.company.name,
         amount: resolveCardDenomination(card)?.amount ?? card.customAmount,
         currency: resolveCardDenomination(card)?.currency ?? card.denomination?.currency ?? null,
+        billingAmount: null as number | null,
+        billingCurrency: null as string | null,
+        appliedExchangeRate: null as number | null,
         canActivate: true as boolean,
         blockReason: null as string | null,
     };
@@ -531,6 +564,12 @@ export async function previewCardActivation(params: { qr: string; userId: string
         resolveCardDenomination(card)?.id ?? card.denominationId,
     );
     const fallbackAmount = resolveCardDenomination(card)?.amount ?? card.customAmount;
+    preview.billingAmount = configuredCost?.amount ?? fallbackAmount ?? null;
+    preview.billingCurrency = configuredCost?.currency
+        ?? resolveCardDenomination(card)?.currency
+        ?? card.denomination?.currency
+        ?? null;
+    preview.appliedExchangeRate = configuredCost?.exchangeRate ?? null;
     if (!((configuredCost?.amount ?? fallbackAmount ?? 0) > 0)) {
         preview.canActivate = false;
         preview.blockReason = "No existe un costo válido para esta activación";

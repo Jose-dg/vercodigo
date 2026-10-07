@@ -21,8 +21,8 @@ export default function Error({
                 <AlertCircle className="h-10 w-10 text-red-600" />
             </div>
             <div className="space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight text-gray-900">Algo salió mal</h2>
-                <p className="text-gray-500 max-w-md mx-auto">
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">Algo salió mal</h2>
+                <p className="text-muted-foreground max-w-md mx-auto">
                     Hubo un error al cargar los datos de analytics. Por favor, intenta de nuevo.
                 </p>
             </div>

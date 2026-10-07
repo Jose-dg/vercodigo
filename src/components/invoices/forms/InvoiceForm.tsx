@@ -172,7 +172,7 @@ export function InvoiceForm({ companies, products, onSubmit, isSubmitting }: Inv
                     {fields.map((field, index) => (
                         <div
                             key={field.id}
-                            className="grid gap-4 md:grid-cols-12 items-start border p-4 rounded-lg bg-white"
+                            className="grid gap-4 md:grid-cols-12 items-start border p-4 rounded-lg bg-card"
                         >
                             <div className="md:col-span-5 space-y-4">
                                 <FormField
@@ -207,7 +207,7 @@ export function InvoiceForm({ companies, products, onSubmit, isSubmitting }: Inv
                                         <FormItem>
                                             <FormLabel>Descripción</FormLabel>
                                             <FormControl>
-                                                <Input readOnly placeholder="Se generará al seleccionar un QR" {...field} className="bg-slate-50" />
+                                                <Input readOnly placeholder="Se generará al seleccionar un QR" {...field} className="bg-muted" />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>

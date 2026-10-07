@@ -20,7 +20,7 @@ const statusConfig = {
     },
     CANCELLED: {
         label: "Cancelado",
-        className: "bg-gray-100 text-gray-800 border-gray-200",
+        className: "bg-muted text-foreground border-border",
     },
 };
 

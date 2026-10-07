@@ -53,6 +53,9 @@ type CardPreview = {
     company: string;
     amount?: number | null;
     currency?: string | null;
+    billingAmount?: number | null;
+    billingCurrency?: string | null;
+    appliedExchangeRate?: number | null;
     canActivate: boolean;
     blockReason?: string | null;
 };
@@ -162,7 +165,12 @@ export default function ActivatePage() {
             const res = await fetch('/api/cards/activate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ qr: pendingQr }),
+                body: JSON.stringify({
+                    qr: pendingQr,
+                    quotedAmount: cardPreview?.billingAmount,
+                    quotedCurrency: cardPreview?.billingCurrency,
+                    quotedRate: cardPreview?.appliedExchangeRate,
+                }),
             });
 
             const data = await res.json();
@@ -234,11 +242,11 @@ export default function ActivatePage() {
 
             <div className="flex flex-1 flex-col gap-6 p-4 pt-0 max-w-3xl">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
                         <Zap className="h-8 w-8 text-amber-500" />
                         Activar Tarjeta
                     </h1>
-                    <p className="text-gray-500 mt-2">
+                    <p className="text-muted-foreground mt-2">
                         Escanea el QR o ingresa el UUID manualmente para activar una tarjeta fisica.
                     </p>
                 </div>
@@ -277,8 +285,8 @@ export default function ActivatePage() {
 
                     <Card className="border-2">
                         <CardHeader className="text-center pb-2">
-                            <div className="mx-auto bg-gray-50 rounded-full p-4 mb-2 w-fit">
-                                <Keyboard className="h-8 w-8 text-gray-600" />
+                            <div className="mx-auto bg-muted/40 rounded-full p-4 mb-2 w-fit">
+                                <Keyboard className="h-8 w-8 text-muted-foreground" />
                             </div>
                             <CardTitle className="text-lg">UUID Manual</CardTitle>
                             <CardDescription>

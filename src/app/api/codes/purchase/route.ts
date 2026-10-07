@@ -10,6 +10,9 @@ const PurchaseBody = z.object({
     productId: z.string().min(1),
     denominationId: z.string().optional(),
     count: z.number().int().min(1).max(100),
+    quotedUnitAmount: z.number().positive().optional(),
+    quotedCurrency: z.string().min(1).max(12).optional(),
+    quotedRate: z.number().positive().nullable().optional(),
     storeId: z.string().optional(),
     /** Obligatorio cuando compra un admin de plataforma en nombre de una compañía. */
     companyId: z.string().optional(),
@@ -61,6 +64,9 @@ async function handler(
             productId,
             denominationId,
             count,
+            quotedUnitAmount: parsed.data.quotedUnitAmount,
+            quotedCurrency: parsed.data.quotedCurrency,
+            quotedRate: parsed.data.quotedRate,
             idempotencyKey,
         });
 

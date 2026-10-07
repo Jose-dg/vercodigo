@@ -56,7 +56,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                 );
             case 'CANCELLED':
                 return (
-                    <Badge variant="outline" className="text-gray-500 border-gray-200">
+                    <Badge variant="outline" className="text-muted-foreground border-border">
                         Cancelada
                     </Badge>
                 );
@@ -70,7 +70,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
     };
 
     return (
-        <Card className="bg-white shadow-sm border-gray-200">
+        <Card className="bg-card shadow-sm border-border">
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                     <CardTitle>Listado de Facturas</CardTitle>
@@ -103,7 +103,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                         <TableBody>
                             {invoices.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={10} className="h-24 text-center text-gray-500">
+                                    <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                                         No hay facturas registradas.
                                     </TableCell>
                                 </TableRow>
@@ -112,12 +112,12 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                                     <TableRow
                                         key={invoice.id}
                                         onClick={() => handleRowClick(invoice.id)}
-                                        className="cursor-pointer hover:bg-gray-50"
+                                        className="cursor-pointer hover:bg-muted/40"
                                     >
                                         <TableCell>
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                                    <FileText className="w-5 h-5 text-gray-500" />
+                                                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                                                    <FileText className="w-5 h-5 text-muted-foreground" />
                                                 </div>
                                                 <Badge variant="outline" className="font-mono text-xs">
                                                     {invoice.invoiceNumber}
@@ -127,26 +127,26 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                                         <TableCell className="font-medium">
                                             {invoice.company.name}
                                         </TableCell>
-                                        <TableCell className="text-gray-600 text-sm">
+                                        <TableCell className="text-muted-foreground text-sm">
                                             {format(new Date(invoice.periodStart), 'dd/MM/yyyy', { locale: es })} -{' '}
                                             {format(new Date(invoice.periodEnd), 'dd/MM/yyyy', { locale: es })}
                                         </TableCell>
                                         <TableCell className="font-medium">
                                             {formatCurrency(invoice.totalSales, 'USD')}
                                         </TableCell>
-                                        <TableCell className="text-gray-600">
+                                        <TableCell className="text-muted-foreground">
                                             {formatCurrency(invoice.commissionAmount, 'USD')}
                                         </TableCell>
-                                        <TableCell className="font-bold text-gray-900">
+                                        <TableCell className="font-bold text-foreground">
                                             {formatCurrency(invoice.totalAmount, 'USD')}
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                            <Badge variant="outline" className="text-muted-foreground border-border">
                                                 {invoice._count.items} items
                                             </Badge>
                                         </TableCell>
                                         <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                                        <TableCell className="text-gray-500 text-sm">
+                                        <TableCell className="text-muted-foreground text-sm">
                                             {format(new Date(invoice.createdAt), 'PPP', { locale: es })}
                                         </TableCell>
                                         <TableCell className="text-right">
@@ -159,7 +159,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                                                         router.push(`/invoices/${invoice.id}`);
                                                     }}
                                                 >
-                                                    <Eye className="h-4 w-4 text-gray-500" />
+                                                    <Eye className="h-4 w-4 text-muted-foreground" />
                                                     <span className="sr-only">Ver detalles</span>
                                                 </Button>
                                                 {invoice.pdfUrl && (
@@ -170,7 +170,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         <a href={invoice.pdfUrl} target="_blank" rel="noopener noreferrer">
-                                                            <Download className="h-4 w-4 text-gray-500" />
+                                                            <Download className="h-4 w-4 text-muted-foreground" />
                                                             <span className="sr-only">Descargar PDF</span>
                                                         </a>
                                                     </Button>

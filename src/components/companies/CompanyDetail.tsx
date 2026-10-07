@@ -120,8 +120,8 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">{company.name}</h1>
-                    <p className="text-gray-500 mt-2">Información detallada de la compañía</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">{company.name}</h1>
+                    <p className="text-muted-foreground mt-2">Información detallada de la compañía</p>
                 </div>
                 <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
                     <Link href={`/companies/${company.id}/edit`}>
@@ -132,63 +132,63 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-gray-600">Tiendas</CardTitle>
-                        <Store className="h-4 w-4 text-gray-400" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Tiendas</CardTitle>
+                        <Store className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-gray-900">{stats.totalStores}</div>
+                        <div className="text-2xl font-bold text-foreground">{stats.totalStores}</div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-gray-600">Usuarios</CardTitle>
-                        <Users className="h-4 w-4 text-gray-400" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Usuarios</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-gray-900">{stats.totalUsers}</div>
+                        <div className="text-2xl font-bold text-foreground">{stats.totalUsers}</div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-gray-600">Facturas</CardTitle>
-                        <FileText className="h-4 w-4 text-gray-400" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Facturas</CardTitle>
+                        <FileText className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-gray-900">{stats.totalInvoices}</div>
+                        <div className="text-2xl font-bold text-foreground">{stats.totalInvoices}</div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-gray-600">Tarjetas</CardTitle>
-                        <Package className="h-4 w-4 text-gray-400" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Tarjetas</CardTitle>
+                        <Package className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-gray-900">{stats.totalCards}</div>
+                        <div className="text-2xl font-bold text-foreground">{stats.totalCards}</div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-gray-600">Activaciones</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-gray-400" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Activaciones</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-gray-900">{stats.totalActivations}</div>
+                        <div className="text-2xl font-bold text-foreground">{stats.totalActivations}</div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-gray-600">Ingresos Totales</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-gray-400" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos Totales</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-gray-900">
+                        <div className="text-2xl font-bold text-foreground">
                             {formatCurrency(stats.totalRevenue, 'USD')}
                         </div>
                     </CardContent>
@@ -196,43 +196,43 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader>
                         <CardTitle>Información General</CardTitle>
                         <CardDescription>Datos básicos de la compañía</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Tax ID</label>
-                            <p className="text-lg font-semibold text-gray-900">
+                            <label className="text-sm font-medium text-muted-foreground">Tax ID</label>
+                            <p className="text-lg font-semibold text-foreground">
                                 <Badge variant="outline" className="font-mono">
                                     {company.taxId}
                                 </Badge>
                             </p>
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Email</label>
-                            <p className="text-lg font-semibold text-gray-900">{company.email}</p>
+                            <label className="text-sm font-medium text-muted-foreground">Email</label>
+                            <p className="text-lg font-semibold text-foreground">{company.email}</p>
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Teléfono</label>
-                            <p className="text-lg font-semibold text-gray-900">{company.phone}</p>
+                            <label className="text-sm font-medium text-muted-foreground">Teléfono</label>
+                            <p className="text-lg font-semibold text-foreground">{company.phone}</p>
                         </div>
                         {company.address && (
                             <div>
-                                <label className="text-sm font-medium text-gray-500">Dirección</label>
-                                <p className="text-lg font-semibold text-gray-900">{company.address}</p>
+                                <label className="text-sm font-medium text-muted-foreground">Dirección</label>
+                                <p className="text-lg font-semibold text-foreground">{company.address}</p>
                             </div>
                         )}
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Estado</label>
+                            <label className="text-sm font-medium text-muted-foreground">Estado</label>
                             <p>
                                 {company.isActive ? (
                                     <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
                                         Activa
                                     </Badge>
                                 ) : (
-                                    <Badge variant="outline" className="text-gray-500 border-gray-200">
+                                    <Badge variant="outline" className="text-muted-foreground border-border">
                                         Inactiva
                                     </Badge>
                                 )}
@@ -241,33 +241,33 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader>
                         <CardTitle>Configuración de Facturación</CardTitle>
                         <CardDescription>Parámetros de cobro y comisiones</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Frecuencia de Facturación</label>
-                            <p className="text-lg font-semibold text-gray-900">
+                            <label className="text-sm font-medium text-muted-foreground">Frecuencia de Facturación</label>
+                            <p className="text-lg font-semibold text-foreground">
                                 {getBillingFrequencyLabel(company.billingFrequency)}
                             </p>
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Tasa de Comisión</label>
-                            <p className="text-lg font-semibold text-gray-900">
+                            <label className="text-sm font-medium text-muted-foreground">Tasa de Comisión</label>
+                            <p className="text-lg font-semibold text-foreground">
                                 {(company.commissionRate * 100).toFixed(1)}%
                             </p>
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Fecha de Creación</label>
-                            <p className="text-gray-900">
+                            <label className="text-sm font-medium text-muted-foreground">Fecha de Creación</label>
+                            <p className="text-foreground">
                                 {format(new Date(company.createdAt), "PPP 'a las' p", { locale: es })}
                             </p>
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-gray-500">Última Actualización</label>
-                            <p className="text-gray-900">
+                            <label className="text-sm font-medium text-muted-foreground">Última Actualización</label>
+                            <p className="text-foreground">
                                 {format(new Date(company.updatedAt), "PPP 'a las' p", { locale: es })}
                             </p>
                         </div>
@@ -276,7 +276,7 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
             </div>
 
             {company.stores && company.stores.length > 0 && (
-                <Card className="bg-white shadow-sm border-gray-200">
+                <Card className="bg-card shadow-sm border-border">
                     <CardHeader>
                         <CardTitle>Tiendas ({company.stores.length})</CardTitle>
                         <CardDescription>Tiendas asociadas a esta compañía</CardDescription>
@@ -286,19 +286,19 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
                             {company.stores.map((store: any) => (
                                 <div
                                     key={store.id}
-                                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                                    className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/40"
                                 >
                                     <div>
-                                        <div className="font-medium text-gray-900">{store.name}</div>
-                                        <div className="text-sm text-gray-500">
+                                        <div className="font-medium text-foreground">{store.name}</div>
+                                        <div className="text-sm text-muted-foreground">
                                             {store.address} • {store.code}
                                         </div>
                                     </div>
                                     <div className="text-right text-sm">
-                                        <div className="text-gray-600">
+                                        <div className="text-muted-foreground">
                                             <span className="font-medium">{store._count.cards}</span> tarjetas
                                         </div>
-                                        <div className="text-gray-500">
+                                        <div className="text-muted-foreground">
                                             <span className="font-medium">{store._count.activations}</span> activaciones
                                         </div>
                                     </div>

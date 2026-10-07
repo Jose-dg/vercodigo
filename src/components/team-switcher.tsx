@@ -43,7 +43,7 @@ export function TeamSwitcher({
         <SidebarMenuItem>
           <SidebarMenuButton size="lg" tooltip={activeTeam.name}>
             <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <ActiveLogo className="size-4" />
+              <ActiveLogo aria-hidden="true" className="size-4" />
             </div>
             <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold">{activeTeam.name}</span>

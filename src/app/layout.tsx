@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeColorSync } from "@/components/theme-color-sync";
 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -26,10 +27,6 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: "light dark",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#18181b" },
-  ],
 };
 
 import { Toaster } from "@/components/ui/sonner"
@@ -49,9 +46,11 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="theme-color" content="#ffffff" data-app-theme="true" />
       </head>
       <body className={inter.className}>
         <ThemeProvider>
+          <ThemeColorSync />
           <Providers>{children}</Providers>
           <Toaster />
         </ThemeProvider>

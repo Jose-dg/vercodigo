@@ -17,6 +17,14 @@ export type ResolvedPurchaseOrigin = {
     labelSnapshot: string | null;
 };
 
+export async function listPurchaseOriginPhones(companyId: string) {
+    return prisma.purchaseOriginPhone.findMany({
+        where: { companyId, isActive: true },
+        select: { id: true, phone: true, label: true, storeId: true },
+        orderBy: [{ label: "asc" }, { phone: "asc" }],
+    });
+}
+
 /** Resolve wallet ownership and optional commercial attribution in one place. */
 export async function resolvePurchaseOrigin(params: {
     actor: {

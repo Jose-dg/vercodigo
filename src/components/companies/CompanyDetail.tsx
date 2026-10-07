@@ -4,20 +4,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Building2, Edit, Store, Users, FileText, Package, TrendingUp } from 'lucide-react';
+import { Edit, Store, Users, FileText, Package, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface CompanyDetailProps {
+interface CompanyDetailProps { id: string; canEdit: boolean; }
+interface CompanyStore {
     id: string;
+    name: string;
+    code: string;
+    address: string;
+    phone: string;
+    isActive: boolean;
+    _count: { cards: number; activations: number };
+}
+interface CompanyDetailData {
+    id: string; name: string; taxId: string; email: string; phone: string; address: string | null;
+    isActive: boolean; billingFrequency: string; commissionRate: number; createdAt: string; updatedAt: string;
+    stores: CompanyStore[];
+}
+interface CompanyStats {
+    totalStores: number; totalUsers: number; totalInvoices: number; totalCards: number;
+    totalActivations: number; totalRevenue: number;
 }
 
-export function CompanyDetail({ id }: CompanyDetailProps) {
-    const [company, setCompany] = useState<any>(null);
-    const [stats, setStats] = useState<any>(null);
+export function CompanyDetail({ id, canEdit }: CompanyDetailProps) {
+    const [company, setCompany] = useState<CompanyDetailData | null>(null);
+    const [stats, setStats] = useState<CompanyStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -112,7 +128,7 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
         return <div className="text-red-500 text-center p-8">{error}</div>;
     }
 
-    if (!company) {
+    if (!company || !stats) {
         return <div className="text-center p-8">No se encontró la compañía.</div>;
     }
 
@@ -123,12 +139,12 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
                     <h1 className="text-3xl font-bold tracking-tight text-foreground">{company.name}</h1>
                     <p className="text-muted-foreground mt-2">Información detallada de la compañía</p>
                 </div>
-                <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                {canEdit && <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
                     <Link href={`/companies/${company.id}/edit`}>
                         <Edit className="mr-2 h-4 w-4" />
                         Editar
                     </Link>
-                </Button>
+                </Button>}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -283,7 +299,7 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            {company.stores.map((store: any) => (
+                            {company.stores.map((store) => (
                                 <div
                                     key={store.id}
                                     className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/40"
@@ -311,4 +327,3 @@ export function CompanyDetail({ id }: CompanyDetailProps) {
         </div>
     );
 }
-

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { defineAbilitiesFor, AppAbility, Actions, Subjects } from './abilities';
-import { verifyAuth } from '@/lib/auth'; // Ensure this exists from previous impl
+import { getAuthenticatedActor, type AuthenticatedActor } from './actor';
 
-type RouteHandler = (
+type RouteHandler<TContext> = (
     req: NextRequest,
-    context: any,
+    context: TContext,
     ability: AppAbility,
-    user: any // Typed as User from Prisma
+    user: AuthenticatedActor
 ) => Promise<NextResponse>;
 
 /**
@@ -15,20 +15,20 @@ type RouteHandler = (
  * @param subject The subject to check (e.g. 'Card', 'all')
  * @param handler The actual route handler
  */
-export function withAuth(
+export function withAuth<TContext>(
     action: Actions,
     subject: Subjects,
-    handler: RouteHandler
+    handler: RouteHandler<TContext>
 ) {
-    return async (req: NextRequest, context: any) => {
+    return async (req: NextRequest, context: TContext) => {
         try {
-            const user = await verifyAuth(req);
+            const user = await getAuthenticatedActor();
 
             if (!user) {
                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
             }
 
-            const ability = defineAbilitiesFor(user as any);
+            const ability = defineAbilitiesFor(user);
 
             if (ability.cannot(action, subject)) {
                 return NextResponse.json({

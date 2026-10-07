@@ -29,7 +29,7 @@ interface Company {
     };
 }
 
-export function CompanyList({ companies }: { companies: Company[] }) {
+export function CompanyList({ companies, canEdit, canDelete }: { companies: Company[]; canEdit: boolean; canDelete: boolean }) {
     const { toast } = useToast();
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                 description: `La compañía "${name}" ha sido eliminada exitosamente.`,
             });
             window.location.reload();
-        } catch (error) {
+        } catch {
             toast({
                 variant: 'destructive',
                 title: 'Error',
@@ -175,22 +175,22 @@ export function CompanyList({ companies }: { companies: Company[] }) {
                                                         <span className="sr-only">Ver detalles</span>
                                                     </Link>
                                                 </Button>
-                                                <Button variant="ghost" size="icon" asChild>
+                                                {canEdit && <Button variant="ghost" size="icon" asChild>
                                                     <Link href={`/companies/${company.id}/edit`}>
                                                         <Edit className="h-4 w-4 text-muted-foreground" />
                                                         <span className="sr-only">Editar</span>
                                                     </Link>
-                                                </Button>
-                                                <Button
+                                                </Button>}
+                                                {canDelete && <Button
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => handleDelete(company.id, company.name)}
                                                     disabled={deletingId === company.id}
                                                     className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Trash2 aria-hidden="true" className="h-4 w-4" />
                                                     <span className="sr-only">Eliminar</span>
-                                                </Button>
+                                                </Button>}
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -203,4 +203,3 @@ export function CompanyList({ companies }: { companies: Company[] }) {
         </Card>
     );
 }
-

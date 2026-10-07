@@ -1,5 +1,6 @@
 import { AbilityBuilder, createMongoAbility, MongoAbility } from '@casl/ability';
-import { User, UserRole } from '@prisma/client';
+import { UserRole } from '@prisma/client';
+import type { AuthenticatedActor } from './actor';
 
 export type Actions = 'manage' | 'create' | 'read' | 'update' | 'delete' | 'activate' | 'approve';
 export type Subjects =
@@ -28,7 +29,7 @@ export function isPlatformRole(role: UserRole): boolean {
     return PLATFORM_ROLES.includes(role);
 }
 
-export function defineAbilitiesFor(user: User) {
+export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'companyId' | 'storeId'>) {
     const { can, cannot, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
 
     if (user.role === 'SUPER_ADMIN') {

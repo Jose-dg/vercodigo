@@ -1,29 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { verifyAuth } from '@/lib/auth';
+import { getAuthenticatedActor } from '@/lib/auth/actor';
 
 export async function GET(req: NextRequest) {
     try {
-        const payload = await verifyAuth(req);
-
-        if (!payload) {
-            return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { id: payload.userId },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-                companyId: true,
-                storeId: true,
-            },
-        });
+        void req;
+        const user = await getAuthenticatedActor();
 
         if (!user) {
-            return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+            return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
         }
 
         return NextResponse.json({ user });

@@ -1,4 +1,6 @@
-import { getStores } from '@/services/store.service';
+import { getStoresForActor } from '@/services/store.service';
+import { getCompaniesForActor } from '@/services/company.service';
+import { actorIsPlatform, requireAuthenticatedActor } from '@/lib/auth/actor';
 import StoreList from '@/components/stores/StoreList';
 import StoreForm from '@/components/stores/StoreForm';
 import {
@@ -17,7 +19,12 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function StorePage() {
-    const stores = await getStores();
+    const actor = await requireAuthenticatedActor();
+    const stores = await getStoresForActor(actor);
+    const canManage = ["SUPER_ADMIN", "SYSTEM_ADMIN", "OWNER", "GENERAL_ADMIN"].includes(actor.role);
+    const companyOptions = actorIsPlatform(actor)
+        ? (await getCompaniesForActor(actor)).map(({ id, name }) => ({ id, name }))
+        : [];
 
     return (
         <>
@@ -52,8 +59,8 @@ export default async function StorePage() {
                         </div>
                     </div>
 
-                    <StoreForm />
-                    <StoreList stores={stores} />
+                    {canManage && <StoreForm companyOptions={companyOptions} />}
+                    <StoreList stores={stores} canDelete={canManage} />
                 </div>
             </div>
         </>

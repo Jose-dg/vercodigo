@@ -16,6 +16,7 @@
     "test:wallet": "node --test --experimental-strip-types tests/wallet-presentation.test.mjs",
     "test:wallet-ledger": "node --test --experimental-strip-types tests/wallet-ledger.test.mjs",
     "test:purchase-origin": "node --test --experimental-strip-types tests/purchase-origin.test.mjs",
+    "test:access": "node --test --experimental-strip-types tests/management-access.test.mjs",
     "history:blue-panther": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-blue-panther-history.ts",
     "repair:virtual-zone": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/repair-virtual-zone-ledger.ts",
     "normalize:virtual-zone-descriptions": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/normalize-virtual-zone-wallet-descriptions.ts",

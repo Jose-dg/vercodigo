@@ -27,7 +27,7 @@ function SubmitButton() {
   );
 }
 
-export default function StoreForm() {
+export default function StoreForm({ companyOptions = [] }: { companyOptions?: Array<{ id: string; name: string }> }) {
   const [state, formAction] = React.useActionState(createStore, initialState);
   const { toast } = useToast();
 
@@ -56,6 +56,15 @@ export default function StoreForm() {
       </CardHeader>
       <form action={formAction}>
         <CardContent className="space-y-6">
+          {companyOptions.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="companyId">Compañía</Label>
+              <select id="companyId" name="companyId" required defaultValue="" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="" disabled>Selecciona una compañía</option>
+                {companyOptions.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="name" className="text-foreground font-medium">
               Nombre de la Tienda
@@ -63,8 +72,9 @@ export default function StoreForm() {
             <Input
               id="name"
               name="name"
-              placeholder="Ej: Tienda Centro"
+              placeholder="Ej.: Tienda Centro…"
               required
+              autoComplete="organization"
               className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
             />
           </div>
@@ -76,10 +86,15 @@ export default function StoreForm() {
               id="address"
               name="address"
               type="text"
-              placeholder="Ej: Calle 123 #45-67, Medellín"
+              placeholder="Ej.: Calle 123 #45-67, Medellín…"
               required
+              autoComplete="street-address"
               className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-foreground font-medium">Teléfono</Label>
+            <Input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="Ej.: 300 123 4567…" required className="bg-muted/40 border-border focus:ring-blue-500 focus:bg-card transition-colors" />
           </div>
         </CardContent>
         <CardFooter className="bg-muted/40/50 border-t border-gray-100 p-6">

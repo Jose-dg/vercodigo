@@ -1,7 +1,6 @@
-import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from './auth-options';
+import { getAuthenticatedActor } from './auth/actor';
+export { hashPassword, verifyPassword } from './auth/password';
 
 export interface TokenPayload {
     id: string;
@@ -12,37 +11,21 @@ export interface TokenPayload {
     storeId: string | null;
 }
 
-export function hashPassword(password: string): string {
-    return bcrypt.hashSync(password, 10);
-}
-
-export function verifyPassword(password: string, hash: string): boolean {
-    return bcrypt.compareSync(password, hash);
-}
-
 export async function verifyAuth(req: NextRequest): Promise<TokenPayload | null> {
-    console.log('🔍 [AUTH] verifyAuth called');
-
     try {
-        const session = await getServerSession(authOptions);
-        console.log('📋 [AUTH] Session:', session ? 'exists' : 'null');
-        console.log('👤 [AUTH] Session user:', session?.user);
-
-        if (!session?.user) {
-            console.log('❌ [AUTH] No session or user found');
-            return null;
-        }
-
-        console.log('✅ [AUTH] User authenticated:', session.user.email);
+        void req;
+        const actor = await getAuthenticatedActor();
+        if (!actor) return null;
         return {
-            id: session.user.id,
-            email: session.user.email!,
-            role: session.user.role,
-            companyId: session.user.companyId ?? null,
-            storeId: session.user.storeId ?? null,
+            id: actor.id,
+            userId: actor.id,
+            email: actor.email,
+            role: actor.role,
+            companyId: actor.companyId,
+            storeId: actor.storeId,
         };
     } catch (error) {
-        console.error('❌ [AUTH] Error in verifyAuth:', error);
+        console.error('[auth] Unable to resolve authenticated actor', error);
         return null;
     }
 }

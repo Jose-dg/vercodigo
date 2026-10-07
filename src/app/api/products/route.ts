@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
+import { z } from "zod";
+import { getAuthenticatedActor } from "@/lib/auth/actor";
 import { checkDiemConnection } from "@/lib/devdiem/fulfillment";
+import { createProductForActor, getProductsForManagement, getPurchasableProducts } from "@/services/product.service";
+import { AppError } from "@/lib/errors";
+
+const ProductBody = z.object({
+    name: z.string().trim().min(1), sku: z.string().trim().min(1), brand: z.string().trim().min(1),
+    category: z.string().trim().optional().nullable(), devDiemProductId: z.string().trim().optional().nullable(),
+    denominations: z.array(z.object({ amount: z.number().positive(), currency: z.string().length(3), devDiemProductId: z.string().optional().nullable() })).default([]),
+});
 
 export async function GET(req: NextRequest) {
     try {
         const purchasableOnly = req.nextUrl.searchParams.get("purchasable") === "true";
         if (purchasableOnly) {
-            const session = await getServerSession(authOptions);
-            if (!session) {
+            const actor = await getAuthenticatedActor();
+            if (!actor) {
                 return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
             }
 
@@ -23,27 +30,7 @@ export async function GET(req: NextRequest) {
             }
 
             const enabledIds = catalog.catalogProductIds;
-            const products = await prisma.product.findMany({
-                where: {
-                    isActive: true,
-                    OR: [
-                        { devDiemProductId: { in: enabledIds } },
-                        { denominations: { some: { devDiemProductId: { in: enabledIds } } } },
-                    ],
-                },
-                include: {
-                    denominations: {
-                        where: {
-                            OR: [
-                                { devDiemProductId: { in: enabledIds } },
-                                { product: { devDiemProductId: { in: enabledIds } } },
-                            ],
-                        },
-                        orderBy: { amount: "asc" },
-                    },
-                },
-                orderBy: { name: "asc" },
-            });
+            const products = await getPurchasableProducts(enabledIds);
             const regions = catalog.catalogProductRegions;
             const stock = catalog.catalogProductStock;
             return NextResponse.json(products.map((product) => ({
@@ -67,11 +54,11 @@ export async function GET(req: NextRequest) {
             })));
         }
 
-        const products = await prisma.product.findMany({
-            include: { denominations: true },
-        });
-        return NextResponse.json(products);
+        const actor = await getAuthenticatedActor();
+        if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json(await getProductsForManagement(actor));
     } catch (error: unknown) {
+        if (error instanceof AppError) return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
         return NextResponse.json(
             { error: error instanceof Error ? error.message : "Internal Server Error" },
             { status: 500 },
@@ -81,45 +68,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-
-        if (!session || session.user.role !== "SUPER_ADMIN") {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        const body = await req.json();
-        const { name, sku, brand, category, devDiemProductId, denominations = [] } = body;
-
-        if (!name || !sku || !brand) {
-            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-        }
-
-        const product = await prisma.product.create({
-            data: {
-                name,
-                sku,
-                brand,
-                category,
-                devDiemProductId: devDiemProductId || null,
-                denominations: {
-                    create: denominations.map((denomination: {
-                        amount: number;
-                        currency: string;
-                        devDiemProductId?: string;
-                    }) => ({
-                        amount: denomination.amount,
-                        currency: denomination.currency,
-                        devDiemProductId: denomination.devDiemProductId || null,
-                    })),
-                },
-            },
-            include: {
-                denominations: true,
-            },
-        });
-
-        return NextResponse.json(product);
+        const actor = await getAuthenticatedActor();
+        if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const parsed = ProductBody.safeParse(await req.json());
+        if (!parsed.success) return NextResponse.json({ error: "BAD_REQUEST", details: parsed.error.issues }, { status: 400 });
+        return NextResponse.json(await createProductForActor(actor, parsed.data), { status: 201 });
     } catch (error: unknown) {
+        if (error instanceof AppError) return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
         console.error("Error creating product:", error);
         return NextResponse.json(
             { error: error instanceof Error ? error.message : "Internal Server Error" },

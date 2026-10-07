@@ -1,6 +1,5 @@
 "use client";
 
-import { deleteStore } from "@/services/store.service";
 import { Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,7 +9,12 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-export default function StoreList({ stores }: { stores: any[] }) {
+interface StoreRow {
+    id: string; name: string; address: string; code: string; phone: string; isActive: boolean;
+    createdAt?: Date | string;
+}
+
+export default function StoreList({ stores, canDelete }: { stores: StoreRow[]; canDelete: boolean }) {
     const { toast } = useToast();
 
     const handleDelete = async (id: string, name: string) => {
@@ -19,13 +23,14 @@ export default function StoreList({ stores }: { stores: any[] }) {
         }
 
         try {
-            await deleteStore(id);
+            const response = await fetch(`/api/stores/${encodeURIComponent(id)}`, { method: "DELETE" });
+            if (!response.ok) throw new Error("No se pudo eliminar la sede");
             toast({
                 title: "Tienda eliminada",
                 description: `La tienda "${name}" ha sido eliminada exitosamente.`,
             });
             window.location.reload();
-        } catch (error) {
+        } catch {
             toast({
                 variant: "destructive",
                 title: "Error",
@@ -55,7 +60,7 @@ export default function StoreList({ stores }: { stores: any[] }) {
                                 {stores.length > 0 && stores[0].createdAt && (
                                     <TableHead>Creado</TableHead>
                                 )}
-                                <TableHead className="text-right">Acciones</TableHead>
+                                {canDelete && <TableHead className="text-right">Acciones</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -77,8 +82,8 @@ export default function StoreList({ stores }: { stores: any[] }) {
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">{store.phone || "N/A"}</TableCell>
                                         <TableCell>
-                                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
-                                                Activa
+                                            <Badge className={store.isActive ? "bg-green-100 text-green-800 hover:bg-green-100 border-green-200" : "bg-red-100 text-red-800 hover:bg-red-100 border-red-200"}>
+                                                {store.isActive ? "Activa" : "Inactiva"}
                                             </Badge>
                                         </TableCell>
                                         {store.createdAt && (
@@ -86,17 +91,17 @@ export default function StoreList({ stores }: { stores: any[] }) {
                                                 {format(new Date(store.createdAt), "PPP", { locale: es })}
                                             </TableCell>
                                         )}
-                                        <TableCell className="text-right">
+                                        {canDelete && <TableCell className="text-right">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => handleDelete(store.id, store.name)}
                                                 className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                             >
-                                                <Trash2 className="h-4 w-4" />
+                                                <Trash2 aria-hidden="true" className="h-4 w-4" />
                                                 <span className="sr-only">Eliminar</span>
                                             </Button>
-                                        </TableCell>
+                                        </TableCell>}
                                     </TableRow>
                                 ))
                             )}

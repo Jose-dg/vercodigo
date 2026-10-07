@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import prisma from "@/lib/prisma";
 import { withAuth } from "@/lib/auth/guard";
+import type { AuthenticatedActor } from "@/lib/auth/actor";
+import { listPurchaseOriginPhones } from "@/services/purchases/purchase-origin";
 
-async function handler(req: NextRequest, _ctx: unknown, _ability: unknown, user: any) {
+async function handler(req: NextRequest, _ctx: unknown, _ability: unknown, user: AuthenticatedActor) {
     const isPlatform = user.role === "SUPER_ADMIN" || user.role === "SYSTEM_ADMIN";
     const companyId = isPlatform
         ? req.nextUrl.searchParams.get("companyId")?.trim()
@@ -11,11 +12,7 @@ async function handler(req: NextRequest, _ctx: unknown, _ability: unknown, user:
     if (!companyId) {
         return NextResponse.json({ error: "BAD_REQUEST", message: "companyId es requerido" }, { status: 400 });
     }
-    const rows = await prisma.purchaseOriginPhone.findMany({
-        where: { companyId, isActive: true },
-        select: { id: true, phone: true, label: true, storeId: true },
-        orderBy: [{ label: "asc" }, { phone: "asc" }],
-    });
+    const rows = await listPurchaseOriginPhones(companyId);
     return NextResponse.json(rows);
 }
 

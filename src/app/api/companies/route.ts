@@ -1,93 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { NextRequest, NextResponse } from "next/server";
+import { BillingFrequency } from "@prisma/client";
+import { z } from "zod";
+import { withAuth } from "@/lib/auth/guard";
+import type { AuthenticatedActor } from "@/lib/auth/actor";
+import { AppError } from "@/lib/errors";
+import { createCompanyForActor, getCompaniesForActor } from "@/services/company.service";
 
-export async function GET() {
-    try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+const CreateCompanyBody = z.object({
+    name: z.string().trim().min(1).max(160), taxId: z.string().trim().min(1).max(40),
+    email: z.string().trim().email(), phone: z.string().trim().min(1).max(40),
+    address: z.string().trim().max(240).optional().nullable(), billingFrequency: z.nativeEnum(BillingFrequency),
+    commissionRate: z.coerce.number().min(0).max(1),
+});
 
-        const companies = await prisma.company.findMany({
-            include: {
-                _count: {
-                    select: {
-                        stores: true,
-                        users: true,
-                        invoices: true,
-                    },
-                },
-            },
-            orderBy: {
-                createdAt: 'desc',
-            },
-        });
-
-        return NextResponse.json(companies);
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+function errorResponse(error: unknown) {
+    if (error instanceof AppError) return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
+    console.error("[companies]", error);
+    return NextResponse.json({ error: "INTERNAL", message: "Error inesperado" }, { status: 500 });
 }
-
-export async function POST(req: NextRequest) {
-    try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const body = await req.json();
-        const {
-            name,
-            taxId,
-            email,
-            phone,
-            address,
-            billingFrequency,
-            commissionRate,
-        } = body;
-
-        // Validate required fields
-        if (!name || !taxId || !email || !phone || !billingFrequency || commissionRate === undefined) {
-            return NextResponse.json(
-                { error: 'Missing required fields' },
-                { status: 400 }
-            );
-        }
-
-        // Check if taxId already exists
-        const existingCompany = await prisma.company.findUnique({
-            where: { taxId },
-        });
-
-        if (existingCompany) {
-            return NextResponse.json(
-                { error: 'A company with this Tax ID already exists' },
-                { status: 400 }
-            );
-        }
-
-        const company = await prisma.company.create({
-            data: {
-                name,
-                taxId,
-                email,
-                phone,
-                address,
-                billingFrequency,
-                commissionRate: parseFloat(commissionRate),
-            },
-        });
-
-        return NextResponse.json(company, { status: 201 });
-    } catch (error: any) {
-        console.error('Error creating company:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to create company' },
-            { status: 500 }
-        );
-    }
+async function listHandler(_req: NextRequest, _ctx: unknown, _ability: unknown, actor: AuthenticatedActor) {
+    try { return NextResponse.json(await getCompaniesForActor(actor)); } catch (error) { return errorResponse(error); }
 }
-
+async function createHandler(req: NextRequest, _ctx: unknown, _ability: unknown, actor: AuthenticatedActor) {
+    try {
+        const parsed = CreateCompanyBody.safeParse(await req.json());
+        if (!parsed.success) return NextResponse.json({ error: "BAD_REQUEST", details: parsed.error.issues }, { status: 400 });
+        return NextResponse.json(await createCompanyForActor(actor, parsed.data), { status: 201 });
+    } catch (error) { return errorResponse(error); }
+}
+export const GET = withAuth("read", "Company", listHandler);
+export const POST = withAuth("create", "Company", createHandler);

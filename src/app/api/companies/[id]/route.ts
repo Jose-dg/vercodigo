@@ -1,150 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { NextRequest, NextResponse } from "next/server";
+import { BillingFrequency } from "@prisma/client";
+import { z } from "zod";
+import type { AuthenticatedActor } from "@/lib/auth/actor";
+import { withAuth } from "@/lib/auth/guard";
+import { AppError } from "@/lib/errors";
+import { deleteCompanyForActor, getCompanyForActor, getCompanyStatsForActor, updateCompanyForActor } from "@/services/company.service";
 
-export async function GET(
-    req: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const { id } = await params;
-        const company = await prisma.company.findUnique({
-            where: { id },
-            include: {
-                stores: {
-                    include: {
-                        _count: {
-                            select: {
-                                cards: true,
-                                activations: true,
-                            },
-                        },
-                    },
-                },
-                users: true,
-                invoices: {
-                    take: 10,
-                    orderBy: {
-                        createdAt: 'desc',
-                    },
-                },
-                _count: {
-                    select: {
-                        stores: true,
-                        users: true,
-                        invoices: true,
-                    },
-                },
-            },
-        });
-
-        if (!company) {
-            return NextResponse.json({ error: 'Company not found' }, { status: 404 });
-        }
-
-        return NextResponse.json(company);
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+const UpdateCompanyBody = z.object({
+    name: z.string().trim().min(1).max(160).optional(), email: z.string().trim().email().optional(),
+    phone: z.string().trim().min(1).max(40).optional(), address: z.string().trim().max(240).optional().nullable(),
+    isActive: z.boolean().optional(), billingFrequency: z.nativeEnum(BillingFrequency).optional(),
+    commissionRate: z.coerce.number().min(0).max(1).optional(),
+}).strict();
+function errorResponse(error: unknown) {
+    if (error instanceof AppError) return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
+    console.error("[company]", error);
+    return NextResponse.json({ error: "INTERNAL", message: "Error inesperado" }, { status: 500 });
 }
-
-export async function PUT(
-    req: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
+async function getHandler(_req: NextRequest, context: { params: Promise<{ id: string }> }, _ability: unknown, actor: AuthenticatedActor) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const { id } = await params;
-        const body = await req.json();
-        const {
-            name,
-            email,
-            phone,
-            address,
-            isActive,
-            billingFrequency,
-            commissionRate,
-        } = body;
-
-        const company = await prisma.company.update({
-            where: { id },
-            data: {
-                ...(name && { name }),
-                ...(email && { email }),
-                ...(phone && { phone }),
-                ...(address !== undefined && { address }),
-                ...(isActive !== undefined && { isActive }),
-                ...(billingFrequency && { billingFrequency }),
-                ...(commissionRate !== undefined && { commissionRate: parseFloat(commissionRate) }),
-            },
-        });
-
-        return NextResponse.json(company);
-    } catch (error: any) {
-        console.error('Error updating company:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to update company' },
-            { status: 500 }
-        );
-    }
+        const { id } = await context.params;
+        const company = await getCompanyForActor(actor, id);
+        if (!company) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+        return NextResponse.json({ company, stats: await getCompanyStatsForActor(actor, id) });
+    } catch (error) { return errorResponse(error); }
 }
-
-export async function DELETE(
-    req: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
+async function putHandler(req: NextRequest, context: { params: Promise<{ id: string }> }, _ability: unknown, actor: AuthenticatedActor) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const { id } = await params;
-
-        // Check if company has stores
-        const company = await prisma.company.findUnique({
-            where: { id },
-            include: {
-                _count: {
-                    select: {
-                        stores: true,
-                    },
-                },
-            },
-        });
-
-        if (!company) {
-            return NextResponse.json({ error: 'Company not found' }, { status: 404 });
-        }
-
-        if (company._count.stores > 0) {
-            return NextResponse.json(
-                { error: 'Cannot delete company with associated stores' },
-                { status: 400 }
-            );
-        }
-
-        await prisma.company.delete({
-            where: { id },
-        });
-
-        return NextResponse.json({ success: true });
-    } catch (error: any) {
-        console.error('Error deleting company:', error);
-        return NextResponse.json(
-            { error: error.message || 'Failed to delete company' },
-            { status: 500 }
-        );
-    }
+        const parsed = UpdateCompanyBody.safeParse(await req.json());
+        if (!parsed.success) return NextResponse.json({ error: "BAD_REQUEST", details: parsed.error.issues }, { status: 400 });
+        const { id } = await context.params;
+        return NextResponse.json(await updateCompanyForActor(actor, id, parsed.data));
+    } catch (error) { return errorResponse(error); }
 }
-
+async function deleteHandler(_req: NextRequest, context: { params: Promise<{ id: string }> }, _ability: unknown, actor: AuthenticatedActor) {
+    try { const { id } = await context.params; await deleteCompanyForActor(actor, id); return NextResponse.json({ success: true }); }
+    catch (error) { return errorResponse(error); }
+}
+export const GET = withAuth("read", "Company", getHandler);
+export const PUT = withAuth("update", "Company", putHandler);
+export const DELETE = withAuth("delete", "Company", deleteHandler);

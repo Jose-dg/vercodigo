@@ -3,11 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import prisma from "@/lib/prisma";
+import { requireAuthenticatedActor } from "@/lib/auth/actor";
+import { createStoreForActor } from "@/services/store.service";
 
 const storeSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
   address: z.string().min(3, "Address must be at least 3 characters"),
+  phone: z.string().min(7, "Phone must be at least 7 characters"),
+  companyId: z.string().optional(),
 });
 
 export async function createStore(
@@ -19,6 +22,8 @@ export async function createStore(
   const validatedFields = storeSchema.safeParse({
     name: formData.get("name"),
     address: formData.get("address"),
+    phone: formData.get("phone"),
+    companyId: formData.get("companyId") || undefined,
   });
 
   if (!validatedFields.success) {
@@ -30,40 +35,13 @@ export async function createStore(
   }
 
   try {
-    // Get the first available company or create a default one
-    let company = await prisma.company.findFirst({
-      where: { isActive: true },
-    });
-
-    if (!company) {
-      // Create a default company if none exists
-      company = await prisma.company.create({
-        data: {
-          name: "Empresa Principal",
-          taxId: "000000000-0",
-          email: "contacto@empresa.com",
-          phone: "0000000000",
-          isActive: true,
-        },
-      });
-    }
-
-    const phone = "1234567890";
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-    await prisma.store.create({
-      data: {
-        ...validatedFields.data,
-        code: code,
-        companyId: company.id,
-        phone: phone,
-      },
-    });
+    const actor = await requireAuthenticatedActor();
+    await createStoreForActor(actor, validatedFields.data);
 
     revalidatePath("/store");
     return { message: "Store created successfully." };
   } catch (e) {
-    console.error(e);
-    return { message: "Failed to create store." };
+    console.error("[store/create]", e);
+    return { message: e instanceof Error ? e.message : "No se pudo crear la sede." };
   }
 }

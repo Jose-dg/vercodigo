@@ -1,7 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import prisma from "@/lib/prisma";
-import { verifyPassword } from "@/lib/auth";
+import { verifyPassword } from "@/lib/auth/password";
 
 export const authOptions: NextAuthOptions = {
     session: {
@@ -27,6 +27,10 @@ export const authOptions: NextAuthOptions = {
                 });
 
                 if (!user) {
+                    return null;
+                }
+
+                if (!user.isActive) {
                     return null;
                 }
 

@@ -1,4 +1,5 @@
-import prisma from "@/lib/prisma";
+import { requireAuthenticatedActor } from "@/lib/auth/actor";
+import { getProductsForManagement } from "@/services/product.service";
 import { ProductList } from "@/components/products/ProductList";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -19,14 +20,8 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
-    const products = await prisma.product.findMany({
-        include: {
-            denominations: true,
-        },
-        orderBy: {
-            createdAt: "desc",
-        },
-    });
+    const actor = await requireAuthenticatedActor();
+    const products = await getProductsForManagement(actor);
 
     return (
         <>

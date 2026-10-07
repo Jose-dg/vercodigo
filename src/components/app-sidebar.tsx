@@ -16,6 +16,7 @@ import {
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
 import { isPlatformRole, type Actions, type Subjects } from "@/lib/auth/abilities"
+import { homePathForRole, managementDestinationsForRole, type ManagementDestination } from "@/lib/auth/navigation"
 import type { UserRole } from "@prisma/client"
 
 import { NavMain } from "@/components/nav-main"
@@ -34,7 +35,7 @@ const data = {
   navMain: [
     {
       title: "Home",
-      url: "/",
+      url: "/admin",
       icon: Home,
       // isActive: true,
       // No items to make it non-collapsible
@@ -262,7 +263,7 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
   const isPlatform = currentUser?.role != null && isPlatformRole(currentUser.role);
   const teams = React.useMemo(
     () => [{
-      name: companyName,
+      name: isPlatform ? "Diem" : companyName,
       logo: isPlatform ? GalleryVerticalEnd : Building2,
       plan: isPlatform ? "Plataforma Diem" : "Empresa activa",
     }],
@@ -270,6 +271,15 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
   );
 
   const navMainWithError = React.useMemo(() => {
+    const managementByUrl: Record<string, ManagementDestination> = {
+      "/companies": "companies",
+      "/store": "stores",
+      "/products": "products",
+      "/users": "users",
+      "/wallets": "wallets",
+      "/prices": "prices",
+      "/costs": "rates",
+    };
     const PLATFORM_ONLY_URLS = new Set([
       "/qr",
       "/qr/create",
@@ -305,7 +315,7 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
     function isNavItemVisible(url: string, role: UserRole | undefined): boolean {
       if (!role) return false;
       if (url === "#" || PLACEHOLDER_URLS.has(url)) return false;
-      if (url === "/") return true;
+      if (url === homePathForRole(role)) return true;
       if (PLATFORM_ONLY_URLS.has(url)) return isPlatformRole(role);
       // Analytics global solo plataforma; OWNER usa /overview (su compañía).
       if (url === "/analytics" && !isPlatformRole(role)) return false;
@@ -316,16 +326,29 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
 
     return data.navMain
       .map((group) => {
-        const newGroup = { ...group };
+        const newGroup = {
+          ...group,
+          url: group.title === "Home" && currentUser?.role
+            ? homePathForRole(currentUser.role)
+            : group.url,
+        };
 
         if (newGroup.url !== "#" && !newGroup.items) {
           if (!isNavItemVisible(newGroup.url, currentUser?.role)) return null;
         }
 
         if (newGroup.items) {
-          newGroup.items = newGroup.items.filter((item) =>
-            isNavItemVisible(item.url, currentUser?.role),
-          );
+          if (newGroup.title === "Management" && currentUser?.role) {
+            const allowed = new Set(managementDestinationsForRole(currentUser.role));
+            newGroup.items = newGroup.items.filter((item) => {
+              const destination = managementByUrl[item.url];
+              return destination ? allowed.has(destination) : false;
+            });
+          } else {
+            newGroup.items = newGroup.items.filter((item) =>
+              isNavItemVisible(item.url, currentUser?.role),
+            );
+          }
         }
 
         return newGroup;
@@ -343,15 +366,18 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={teams} />
+        <div className="flex items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:justify-center">
+          <span className="text-xs font-medium text-muted-foreground group-data-[collapsible=icon]:hidden">
+            Apariencia
+          </span>
+          <ThemeToggle />
+        </div>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMainWithError} />
+        <NavMain items={navMainWithError} label={isPlatform ? "Plataforma" : "Navegación"} />
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex justify-end px-2 group-data-[collapsible=icon]:justify-center">
-          <ThemeToggle />
-        </div>
         <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />

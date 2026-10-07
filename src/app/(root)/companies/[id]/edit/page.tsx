@@ -1,4 +1,5 @@
-import { getCompanyById } from '@/services/company.service';
+import { getCompanyForActor } from '@/services/company.service';
+import { actorIsPlatform, requireAuthenticatedActor } from '@/lib/auth/actor';
 import { notFound } from 'next/navigation';
 import { CompanyForm } from '@/components/companies/CompanyForm';
 import {
@@ -20,7 +21,9 @@ interface PageProps {
 
 export default async function EditCompanyPage({ params }: PageProps) {
     const { id } = await params;
-    const company = await getCompanyById(id);
+    const actor = await requireAuthenticatedActor();
+    if (!actorIsPlatform(actor)) notFound();
+    const company = await getCompanyForActor(actor, id);
 
     if (!company) {
         notFound();
@@ -79,4 +82,3 @@ export default async function EditCompanyPage({ params }: PageProps) {
         </>
     );
 }
-

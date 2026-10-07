@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { homePathForRole } from "@/lib/auth/navigation"
+import type { UserRole } from "@prisma/client"
 
 export function LoginForm({
   className,
@@ -36,7 +38,7 @@ export function LoginForm({
         email,
         password,
         redirect: false,
-        callbackUrl: "/store",
+        callbackUrl: "/admin",
       })
 
       if (!result?.ok) {
@@ -45,7 +47,10 @@ export function LoginForm({
         return
       }
 
-      router.push("/store")
+      const me = await fetch("/api/auth/me", { cache: "no-store" })
+      const payload = await me.json()
+      if (!me.ok || !payload.user?.role) throw new Error("No se pudo verificar la sesión")
+      router.push(homePathForRole(payload.user.role as UserRole))
       router.refresh()
     } catch {
       setError("No fue posible iniciar sesión. Intenta nuevamente.")

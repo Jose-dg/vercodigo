@@ -1,6 +1,7 @@
 "use client"
 
 import { ChevronRight, type LucideIcon } from "lucide-react"
+import Link from "next/link"
 
 import {
   Collapsible,
@@ -20,6 +21,7 @@ import {
 
 export function NavMain({
   items,
+  label = "Navegación",
 }: {
   items: {
     title: string
@@ -31,10 +33,11 @@ export function NavMain({
       url: string
     }[]
   }[]
+  label?: string
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           // Si el item tiene subitems, renderiza con Collapsible
@@ -48,9 +51,9 @@ export function NavMain({
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton tooltip={item.title}>
-                    {item.icon && <item.icon />}
+                    {item.icon && <item.icon aria-hidden="true" />}
                     <span>{item.title}</span>
-                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    <ChevronRight aria-hidden="true" className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -58,9 +61,9 @@ export function NavMain({
                     {item.items?.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
                         <SidebarMenuSubButton asChild>
-                          <a href={subItem.url}>
+                          <Link href={subItem.url}>
                             <span>{subItem.title}</span>
-                          </a>
+                          </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     ))}
@@ -72,10 +75,10 @@ export function NavMain({
             // Si no tiene subitems, renderiza como enlace directo
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild tooltip={item.title} isActive={item.isActive}>
-                <a href={item.url}>
-                  {item.icon && <item.icon />}
+                <Link href={item.url}>
+                  {item.icon && <item.icon aria-hidden="true" />}
                   <span>{item.title}</span>
-                </a>
+                </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )

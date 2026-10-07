@@ -1,12 +1,17 @@
 import prisma from "@/lib/prisma";
-import { User, UserRole } from "@prisma/client";
-import { hashPassword } from "@/lib/auth";
+import { Prisma, UserRole } from "@prisma/client";
+import type { AuthenticatedActor } from "@/lib/auth/actor";
+import { hashPassword } from "@/lib/auth/password";
 import { AppError } from "@/lib/errors";
 import { getAssignableRoles } from "@/lib/auth/abilities";
 import { CreateUserInput, UpdateUserInput } from "./dto";
 
 const COMPANY_WIDE_ROLES: UserRole[] = [UserRole.OWNER, UserRole.GENERAL_ADMIN];
 const STORE_SCOPED_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.OPERATOR];
+const safeUserSelect = {
+    id: true, name: true, email: true, role: true, isActive: true,
+    companyId: true, storeId: true, purchaseOriginPhoneId: true, createdAt: true, updatedAt: true,
+} satisfies Prisma.UserSelect;
 
 /**
  * Ensures a role/companyId/storeId combination is internally consistent:
@@ -45,7 +50,7 @@ async function assertPurchaseOriginPhoneBelongsToCompany(
 /**
  * Creates a new user with scope validation.
  */
-export async function createUser(data: CreateUserInput, actor: User) {
+export async function createUser(data: CreateUserInput, actor: AuthenticatedActor) {
     // 1. Validate role assignment (hierarchy) and scope
     if (!getAssignableRoles(actor.role).includes(data.role)) {
         throw new AppError("Cannot assign this role", 403, "FORBIDDEN");
@@ -81,17 +86,16 @@ export async function createUser(data: CreateUserInput, actor: User) {
             purchaseOriginPhoneId: data.purchaseOriginPhoneId,
             isActive: true,
         },
+        select: safeUserSelect,
     });
-
-    const { passwordHash, ...safeUser } = user;
-    return safeUser;
+    return user;
 }
 
 /**
  * Lists users filtered by actor's scope.
  */
-export async function getUsers(actor: User) {
-    const where: any = {};
+export async function getUsers(actor: AuthenticatedActor) {
+    const where: Prisma.UserWhereInput = {};
 
     if (COMPANY_WIDE_ROLES.includes(actor.role)) {
         where.companyId = actor.companyId;
@@ -126,7 +130,7 @@ export async function getUsers(actor: User) {
 /**
  * Updates a user with scope validation.
  */
-export async function updateUser(targetUserId: string, data: UpdateUserInput, actor: User) {
+export async function updateUser(targetUserId: string, data: UpdateUserInput, actor: AuthenticatedActor) {
     // 1. Check target existence and scope
     if (!targetUserId) {
         throw new AppError("User id is required", 400, "BAD_REQUEST");
@@ -162,11 +166,11 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
     await assertPurchaseOriginPhoneBelongsToCompany(resultingOriginPhoneId, resultingCompanyId);
 
     // 2. Prepare update data
-    const updateData: any = { ...data };
-    if (data.password) {
-        updateData.passwordHash = hashPassword(data.password);
-        delete updateData.password;
-    }
+    const { password, ...fields } = data;
+    const updateData: Prisma.UserUncheckedUpdateInput = {
+        ...fields,
+        ...(password ? { passwordHash: hashPassword(password) } : {}),
+    };
 
     // 3. Update. Si se restablece la contraseña, el cambio y su registro de
     // auditoría se guardan en la misma transacción. El hash nunca se incluye
@@ -175,6 +179,7 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
         const savedUser = await tx.user.update({
             where: { id: targetUserId },
             data: updateData,
+            select: safeUserSelect,
         });
 
         if (data.password) {
@@ -196,14 +201,13 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
         return savedUser;
     });
 
-    const { passwordHash, ...safeUser } = updated;
-    return safeUser;
+    return updated;
 }
 
 /**
  * Deletes (or deactivates) a user.
  */
-export async function deleteUser(targetUserId: string, actor: User) {
+export async function deleteUser(targetUserId: string, actor: AuthenticatedActor) {
     if (!targetUserId) {
         throw new AppError("User id is required", 400, "BAD_REQUEST");
     }

@@ -1,4 +1,5 @@
-import { getAllCompanies } from '@/services/company.service';
+import { getCompaniesForActor } from '@/services/company.service';
+import { actorIsPlatform, requireAuthenticatedActor } from '@/lib/auth/actor';
 import { CompanyList } from '@/components/companies/CompanyList';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -17,7 +18,9 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 export const dynamic = 'force-dynamic';
 
 export default async function CompaniesPage() {
-    const companies = await getAllCompanies();
+    const actor = await requireAuthenticatedActor();
+    const companies = await getCompaniesForActor(actor);
+    const isPlatform = actorIsPlatform(actor);
 
     return (
         <>
@@ -52,18 +55,17 @@ export default async function CompaniesPage() {
                                 Gestiona y monitorea las compañías registradas.
                             </p>
                         </div>
-                        <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                        {isPlatform && <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
                             <Link href="/companies/create">
-                                <Plus className="mr-2 h-4 w-4" />
+                                <Plus aria-hidden="true" className="mr-2 h-4 w-4" />
                                 Crear Nueva Compañía
                             </Link>
-                        </Button>
+                        </Button>}
                     </div>
 
-                    <CompanyList companies={companies} />
+                    <CompanyList companies={companies} canEdit={isPlatform} canDelete={isPlatform} />
                 </div>
             </div>
         </>
     );
 }
-

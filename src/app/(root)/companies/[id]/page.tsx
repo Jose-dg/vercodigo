@@ -9,15 +9,18 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { actorIsPlatform, requireAuthenticatedActor } from '@/lib/auth/actor';
+import { getCompanyForActor } from '@/services/company.service';
+import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-interface PageProps {
-    params: { id: string };
-}
+interface PageProps { params: Promise<{ id: string }>; }
 
-export default function CompanyDetailPage({ params }: PageProps) {
-    const { id } = params;
+export default async function CompanyDetailPage({ params }: PageProps) {
+    const { id } = await params;
+    const actor = await requireAuthenticatedActor();
+    if (!(await getCompanyForActor(actor, id))) notFound();
 
     return (
         <>
@@ -46,7 +49,7 @@ export default function CompanyDetailPage({ params }: PageProps) {
                 </div>
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-                <CompanyDetail id={id} />
+                <CompanyDetail id={id} canEdit={actorIsPlatform(actor)} />
             </div>
         </>
     );

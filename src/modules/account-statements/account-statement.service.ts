@@ -1,6 +1,7 @@
 import { Prisma, UserRole, WalletTransactionType } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
+import { isPrismaWriteConflict, runSerializableTransaction } from "@/lib/prisma-transaction";
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import { marketingConfig } from "@/lib/marketing/config";
 import {
@@ -31,6 +32,14 @@ function assertCanIssue(actor: StatementActor) {
     if (!canIssueAccountStatement(actor.role)) {
         throw forbidden("Solo la plataforma puede emitir estados de cuenta");
     }
+}
+
+function isStatementSequenceConflict(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") return false;
+    const target = JSON.stringify(error.meta?.target ?? "");
+    return target.includes("sequenceYear")
+        || target.includes("sequenceNumber")
+        || target.includes("statementNumber");
 }
 
 function issuerSnapshot() {
@@ -287,12 +296,9 @@ export async function issueAccountStatement(params: {
 }) {
     assertCanIssue(params.actor);
     try {
-        return await prisma.$transaction(async (tx) => {
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`account-statement:company:${params.companyId}`}))`;
-
+        return await runSerializableTransaction(prisma, async (tx) => {
             const wallet = await tx.wallet.findUnique({ where: { companyId: params.companyId }, select: { id: true } });
             if (!wallet) throw badRequest("La empresa todavía no tiene wallet");
-            await tx.$queryRaw`SELECT "id" FROM "Wallet" WHERE "id" = ${wallet.id} FOR UPDATE`;
 
             const preview = await buildPreview(tx, params.companyId, params.cutoffAt);
             if (preview.fingerprint !== params.fingerprint) {
@@ -303,7 +309,6 @@ export async function issueAccountStatement(params: {
             }
 
             const year = params.cutoffAt.getUTCFullYear();
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`account-statement:sequence:${year}`}))`;
             const latest = await tx.accountStatement.findFirst({
                 where: { sequenceYear: year },
                 orderBy: { sequenceNumber: "desc" },
@@ -370,8 +375,14 @@ export async function issueAccountStatement(params: {
             });
 
             return statement;
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10_000 });
+        }, {
+            timeoutMs: 10_000,
+            retryOn: (error) => isPrismaWriteConflict(error) || isStatementSequenceConflict(error),
+        });
     } catch (error) {
+        if (isStatementSequenceConflict(error)) {
+            throw conflict("El consecutivo cambió durante la emisión. Vuelve a intentarlo.");
+        }
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
             throw conflict("Uno de los movimientos ya pertenece a otro estado de cuenta");
         }

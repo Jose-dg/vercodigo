@@ -3,6 +3,7 @@ import { afterEach, beforeEach, test } from 'node:test';
 
 import {
     checkDiemConnection,
+    correctCodeRequestCommercialPrice,
     createCodeRequest,
     getCodeRequest,
     getDiemConfig,
@@ -179,6 +180,75 @@ test('Diem HTTP errors preserve status and provider detail', async () => {
             assert.match(error.message, /lacks code_requests:create/);
             assert.match(error.message, /correlación: code-purchase:abc/);
             assert.equal(error.correlationId, 'code-purchase:abc');
+            return true;
+        },
+    );
+});
+
+test('commercial correction uses the authenticated Diem endpoint and idempotency contract', async () => {
+    let captured;
+    globalThis.fetch = async (url, init) => {
+        captured = { url: String(url), init };
+        return Response.json({
+            request_id: 'request-1',
+            commercial_order_id: 'order-1',
+            unit_price: '31900.00',
+            total_amount: '31900.00',
+            currency_code: 'COP',
+        });
+    };
+
+    const result = await correctCodeRequestCommercialPrice({
+        requestId: 'request/with spaces',
+        idempotencyKey: 'sale-reprice:operation-1',
+        expectedUnitPrice: 36_000,
+        expectedTotalAmount: 36_000,
+        newUnitPrice: 31_900,
+        newTotalAmount: 31_900,
+        currencyCode: 'COP',
+        reason: 'Tasa comercial acordada',
+        correlationId: 'sale-reprice:operation-1',
+    });
+
+    assert.equal(result.total_amount, '31900.00');
+    assert.equal(
+        captured.url,
+        'https://diem.example.test/api/v1/code-requests/request%2Fwith%20spaces/commercial-correction/',
+    );
+    assert.equal(captured.init.headers.Authorization, 'Bearer ddk_test_secret');
+    assert.equal(captured.init.headers['Idempotency-Key'], 'sale-reprice:operation-1');
+    assert.equal(captured.init.headers['X-Correlation-ID'], 'sale-reprice:operation-1');
+    assert.deepEqual(JSON.parse(captured.init.body), {
+        expected_unit_price: '36000.00',
+        expected_total_amount: '36000.00',
+        new_unit_price: '31900.00',
+        new_total_amount: '31900.00',
+        currency_code: 'COP',
+        reason: 'Tasa comercial acordada',
+    });
+});
+
+test('commercial correction preserves only safe correlation metadata on Diem errors', async () => {
+    globalThis.fetch = async () => Response.json(
+        { detail: 'Internal implementation detail' },
+        { status: 500, headers: { 'X-Correlation-ID': 'sale-reprice:operation-1' } },
+    );
+
+    await assert.rejects(
+        () => correctCodeRequestCommercialPrice({
+            requestId: 'request-1',
+            idempotencyKey: 'sale-reprice:operation-1',
+            expectedUnitPrice: 36_000,
+            expectedTotalAmount: 36_000,
+            newUnitPrice: 31_900,
+            newTotalAmount: 31_900,
+            currencyCode: 'COP',
+            reason: 'Tasa comercial acordada',
+            correlationId: 'sale-reprice:operation-1',
+        }),
+        (error) => {
+            assert.equal(error.status, 500);
+            assert.equal(error.correlationId, 'sale-reprice:operation-1');
             return true;
         },
     );

@@ -1,10 +1,11 @@
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { badRequest, conflict, notFound } from "@/lib/errors";
+import { AppError, badGateway, badRequest, conflict, notFound, serviceUnavailable } from "@/lib/errors";
 import { rebuildBalances } from "@/lib/wallet/ledger";
-import { correctCodeRequestCommercialPrice } from "@/lib/devdiem/fulfillment";
+import { correctCodeRequestCommercialPrice, type DiemHttpError } from "@/lib/devdiem/fulfillment";
 import { calculateCompanyRateAmount } from "@/lib/pricing/company-rate";
+import { runSerializableTransaction } from "@/lib/prisma-transaction";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 export type RepriceTargetType = "CODE_PURCHASE" | "CARD_ACTIVATION";
@@ -44,6 +45,32 @@ function fingerprint(target: Target, newRate: number) {
         occurredSequence: target.occurredSequence,
         statementIssued: target.statementIssued,
     })).digest("hex");
+}
+
+function remoteCorrectionError(error: unknown) {
+    const remote = error as DiemHttpError;
+    const correlationId = typeof remote?.correlationId === "string" ? remote.correlationId : undefined;
+    const details = correlationId ? { correlationId } : undefined;
+    const suffix = correlationId ? ` (correlación: ${correlationId})` : "";
+
+    if (remote?.status === 409) {
+        return conflict(`Diem detectó que el precio comercial cambió después de la vista previa${suffix}`, details);
+    }
+    if (remote?.status === 422) {
+        return new AppError(
+            `Diem rechazó la corrección comercial${suffix}`,
+            422,
+            "DIEM_VALIDATION",
+            details,
+        );
+    }
+    if (typeof remote?.status === "number" && remote.status >= 500) {
+        return badGateway(`Diem no pudo procesar la corrección comercial${suffix}`, "DIEM_UNAVAILABLE", details);
+    }
+    if (error instanceof TypeError || typeof remote?.status !== "number") {
+        return serviceUnavailable(`No fue posible comunicarse con Diem${suffix}`, "DIEM_UNREACHABLE", details);
+    }
+    return badGateway(`Diem rechazó la corrección comercial${suffix}`, "DIEM_REJECTED", details);
 }
 
 async function loadTarget(targetType: RepriceTargetType, targetId: string, db: Db = prisma): Promise<Target> {
@@ -363,27 +390,34 @@ export async function applySaleReprice(params: {
                 correlationId: `sale-reprice:${operation.id}`,
             });
             await prisma.salePriceCorrection.updateMany({
-                where: { id: operation.id, status: { not: "COMPLETED" } },
+                where: { id: operation.id, status: { in: ["PENDING", "FAILED"] } },
                 data: { status: "REMOTE_APPLIED", lastError: null },
             });
             operation = await prisma.salePriceCorrection.findUniqueOrThrow({ where: { id: operation.id } });
         } catch (error) {
+            const mappedError = remoteCorrectionError(error);
             await prisma.salePriceCorrection.updateMany({
-                where: { id: operation.id, status: { not: "COMPLETED" } },
-                data: { status: "FAILED", lastError: String(error instanceof Error ? error.message : error).slice(0, 1000) },
+                where: { id: operation.id, status: { in: ["PENDING", "FAILED"] } },
+                data: { status: "FAILED", lastError: mappedError.message.slice(0, 1000) },
             });
             const latest = await prisma.salePriceCorrection.findUnique({ where: { id: operation.id } });
             if (latest?.status === "COMPLETED") return latest;
-            throw error;
+            if (latest?.status === "REMOTE_APPLIED") {
+                operation = latest;
+            } else {
+                throw mappedError;
+            }
         }
     }
 
-    return prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "Wallet" WHERE id = ${preview.walletId} FOR UPDATE`;
+    return runSerializableTransaction(prisma, async (tx) => {
         const latestOperation = await tx.salePriceCorrection.findUniqueOrThrow({
             where: { id: operation.id },
         });
         if (latestOperation.status === "COMPLETED") return latestOperation;
+        if (latestOperation.status !== "REMOTE_APPLIED") {
+            throw conflict("Diem todavía no ha confirmado la corrección comercial");
+        }
         const current = await loadTarget(params.targetType, params.targetId, tx);
         if (fingerprint(current, params.newRate) !== params.fingerprint) {
             throw conflict("La venta cambió después de sincronizar Diem; la corrección local requiere revisión");
@@ -464,5 +498,5 @@ export async function applySaleReprice(params: {
             where: { id: operation.id },
             data: { status: "COMPLETED", completedAt: new Date(), lastError: null },
         });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
 }

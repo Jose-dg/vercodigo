@@ -22,3 +22,5 @@ export const forbidden = (m: string, d?: unknown) => new AppError(m, 403, "FORBI
 export const notFound = (m: string, d?: unknown) => new AppError(m, 404, "NOT_FOUND", d);
 export const conflict = (m: string, d?: unknown) => new AppError(m, 409, "CONFLICT", d);
 export const tooMany = (m: string, d?: unknown) => new AppError(m, 429, "RATE_LIMIT", d);
+export const badGateway = (m: string, code = "BAD_GATEWAY", d?: unknown) => new AppError(m, 502, code, d);
+export const serviceUnavailable = (m: string, code = "SERVICE_UNAVAILABLE", d?: unknown) => new AppError(m, 503, code, d);

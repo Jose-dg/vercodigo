@@ -14,9 +14,9 @@ import type { UserRole } from '@prisma/client';
 
 export default function PurchaseCodesPage() {
     const router = useRouter();
-    const { data: session, status: sessionStatus } = useSession();
-    const isPlatform =
-        session?.user?.role != null && isPlatformRole(session.user.role as UserRole);
+    const { status: sessionStatus } = useSession();
+    const [effectiveRole, setEffectiveRole] = useState<UserRole | null>(null);
+    const isPlatform = effectiveRole != null && isPlatformRole(effectiveRole);
     const [products, setProducts] = useState<CatalogProduct[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [productsError, setProductsError] = useState<string | null>(null);
@@ -44,6 +44,26 @@ export default function PurchaseCodesPage() {
             setActiveTab('history');
         }
     }, []);
+
+    useEffect(() => {
+        if (sessionStatus !== 'authenticated') {
+            return;
+        }
+        let cancelled = false;
+        fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+            .then(async (response) => {
+                if (!response.ok) throw new Error('No se pudo validar el usuario');
+                return response.json();
+            })
+            .then((data) => {
+                const role = data.user?.role;
+                if (!cancelled) setEffectiveRole(typeof role === 'string' ? role as UserRole : null);
+            })
+            .catch(() => {
+                if (!cancelled) setEffectiveRole(null);
+            });
+        return () => { cancelled = true; };
+    }, [sessionStatus]);
 
     useEffect(() => {
         if (sessionStatus === 'loading') return;
@@ -120,21 +140,22 @@ export default function PurchaseCodesPage() {
 
         loadCatalog();
 
-        if (session?.user?.role && !isPlatformRole(session.user.role as UserRole)) {
-            fetch('/api/wallets', { credentials: 'include' })
-                .then((res) => (res.ok ? res.json() : null))
-                .then((data) => {
-                    if (data?.wallet && typeof data.wallet.balance === 'number') {
-                        setCompanyBalance({ amount: data.wallet.balance, currency: data.wallet.currency });
-                    }
-                })
-                .catch(() => undefined);
-        }
-
         return () => {
             cancelled = true;
         };
-    }, [sessionStatus, session?.user?.role]);
+    }, [sessionStatus]);
+
+    useEffect(() => {
+        if (!effectiveRole || isPlatform) return;
+        fetch('/api/wallets', { credentials: 'include' })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data?.wallet && typeof data.wallet.balance === 'number') {
+                    setCompanyBalance({ amount: data.wallet.balance, currency: data.wallet.currency });
+                }
+            })
+            .catch(() => undefined);
+    }, [effectiveRole, isPlatform]);
 
     useEffect(() => {
         if (sessionStatus !== 'authenticated') return;

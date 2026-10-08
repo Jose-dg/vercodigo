@@ -358,6 +358,46 @@ export async function correctCodeRequestCommercialPrice(params: {
     }>(response);
 }
 
+export type CommercialPurchaseOrigin = {
+    kind: 'phone' | 'store';
+    id: string;
+    label: string | null;
+    phone?: string | null;
+};
+
+export async function correctCodeRequestPurchaseOrigin(params: {
+    requestId: string;
+    idempotencyKey: string;
+    expectedOrigin: CommercialPurchaseOrigin | null;
+    newOrigin: CommercialPurchaseOrigin;
+    reason: string;
+    correlationId: string;
+}) {
+    const config = getDiemConfig();
+    const response = await fetch(
+        `${config.baseUrl}/api/v1/code-requests/${encodeURIComponent(params.requestId)}/origin-correction/`,
+        {
+            method: 'POST',
+            headers: headers(config, {
+                'Content-Type': 'application/json',
+                'Idempotency-Key': params.idempotencyKey,
+                'X-Correlation-ID': params.correlationId,
+            }),
+            body: JSON.stringify({
+                expected_origin: params.expectedOrigin,
+                new_origin: params.newOrigin,
+                reason: params.reason,
+            }),
+            cache: 'no-store',
+        },
+    );
+    return parse<{
+        request_id: string;
+        commercial_order_id: string;
+        purchase_origin: CommercialPurchaseOrigin;
+    }>(response);
+}
+
 export async function checkDiemConnection(): Promise<{
     ok: true;
     storeId: string;

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from 'node:test';
 import {
     checkDiemConnection,
     correctCodeRequestCommercialPrice,
+    correctCodeRequestPurchaseOrigin,
     createCodeRequest,
     getCodeRequest,
     getDiemConfig,
@@ -225,6 +226,41 @@ test('commercial correction uses the authenticated Diem endpoint and idempotency
         new_total_amount: '31900.00',
         currency_code: 'COP',
         reason: 'Tasa comercial acordada',
+    });
+});
+
+test('origin correction sends only commercial attribution through the authenticated Diem API', async () => {
+    let captured;
+    globalThis.fetch = async (url, init) => {
+        captured = { url: String(url), init };
+        return Response.json({
+            request_id: 'request-1',
+            commercial_order_id: 'order-1',
+            purchase_origin: { kind: 'phone', id: 'phone-edwin', label: 'Edwin', phone: '3003702892' },
+        });
+    };
+
+    const result = await correctCodeRequestPurchaseOrigin({
+        requestId: 'request/with spaces',
+        idempotencyKey: 'purchase-origin:operation-1',
+        expectedOrigin: null,
+        newOrigin: { kind: 'phone', id: 'phone-edwin', label: 'Edwin', phone: '3003702892' },
+        reason: 'Solicitud realizada desde el número de Edwin',
+        correlationId: 'purchase-origin:purchase-1:operation-1',
+    });
+
+    assert.equal(result.purchase_origin.phone, '3003702892');
+    assert.equal(
+        captured.url,
+        'https://diem.example.test/api/v1/code-requests/request%2Fwith%20spaces/origin-correction/',
+    );
+    assert.equal(captured.init.headers.Authorization, 'Bearer ddk_test_secret');
+    assert.equal(captured.init.headers['Idempotency-Key'], 'purchase-origin:operation-1');
+    assert.equal(captured.init.headers['X-Correlation-ID'], 'purchase-origin:purchase-1:operation-1');
+    assert.deepEqual(JSON.parse(captured.init.body), {
+        expected_origin: null,
+        new_origin: { kind: 'phone', id: 'phone-edwin', label: 'Edwin', phone: '3003702892' },
+        reason: 'Solicitud realizada desde el número de Edwin',
     });
 });
 

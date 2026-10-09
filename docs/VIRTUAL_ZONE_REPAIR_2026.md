@@ -62,3 +62,7 @@ npm run repair:virtual-zone -- apply \
 El reporte debe terminar con balance `-1640450`, 12 compras y un único `OPENING_BALANCE`. Un nuevo `plan` debe ser válido y una repetición `apply` con su recibo nuevo debe ser un no-op comercial.
 
 Conservar ambos respaldos privados hasta terminar la comparación cruzada. Los respaldos contienen todos los campos modificados; el de `diem-sas` contiene los PINes y nunca debe copiarse a logs, tickets o repositorios.
+
+## Retiro (2026-10-09)
+
+El comando de Diem `repair_virtual_zone_history` se **retiró** después de aplicarse. Escribía orígenes no canónicos (`{"kind":"company"}` y `{"kind":"phone"}` sin `id`), y si se volvía a ejecutar revertía las correcciones posteriores de origen y precio. Esos 12 orígenes se normalizan con `manage.py normalize_purchase_origins` (ver `docs/FASE_IDEMPOTENCIA_COMPRAS_2026-10.md`). El historial del comando se conserva en git.

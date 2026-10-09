@@ -147,7 +147,7 @@ export default function CompanyWalletPage() {
             <Card className="shadow-none">
                 <CardHeader>
                     <CardTitle>Movimientos</CardTitle>
-                    <CardDescription>Débitos, abonos y balance resultante en orden cronológico.</CardDescription>
+                    <CardDescription>Movimientos financieros desde el saldo anterior, en orden cronológico. Las compras previas a ese saldo ya están incluidas en él y solo aparecen en el historial comercial.</CardDescription>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
                     <Table className="min-w-[760px]">

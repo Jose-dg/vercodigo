@@ -54,9 +54,11 @@ async function responseData(response: Response) {
 export function PurchaseOriginPhonesPanel({
     companyId,
     stores,
+    onChange,
 }: {
     companyId: string;
     stores: StoreOption[];
+    onChange?: () => void | Promise<void>;
 }) {
     const [rows, setRows] = useState<OriginPhone[]>([]);
     const [loading, setLoading] = useState(true);
@@ -117,6 +119,7 @@ export function PurchaseOriginPhonesPanel({
             toast.success(editing ? "Número actualizado" : "Número añadido");
             setDialogOpen(false);
             await load();
+            await onChange?.();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "No se pudo guardar el número");
         } finally {
@@ -135,6 +138,7 @@ export function PurchaseOriginPhonesPanel({
             await responseData(response);
             toast.success(row.isActive ? "Número desactivado" : "Número reactivado");
             await load();
+            await onChange?.();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "No se pudo cambiar el estado");
         } finally {

@@ -23,7 +23,7 @@ export function walletPurchaseOriginDescription(input: {
 }): string | null {
     const phone = input.phone?.trim();
     const label = input.label?.trim();
-    if (phone) return `Número: ${phone}${label ? ` · ${label}` : ""}`;
+    if (phone) return `Número: ${phone}${label && label !== phone ? ` · ${label}` : ""}`;
     const store = label || input.storeName?.trim();
     return store ? `Sede: ${store}` : null;
 }

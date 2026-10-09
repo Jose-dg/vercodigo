@@ -56,6 +56,10 @@ test("purchase origins prefer phone, otherwise store, and omit missing origins",
     }), "Sede: Sede Centro");
     assert.equal(walletPurchaseOriginDescription({ storeName: "Sede Norte" }), "Sede: Sede Norte");
     assert.equal(walletPurchaseOriginDescription({ label: "Virtual Zone" }), "Sede: Virtual Zone");
+    assert.equal(walletPurchaseOriginDescription({
+        phone: "3021224697",
+        label: "3021224697",
+    }), "Número: 3021224697");
     assert.equal(walletPurchaseOriginDescription({}), null);
 });
 

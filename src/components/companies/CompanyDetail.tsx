@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PurchaseOriginPhonesPanel } from '@/components/companies/PurchaseOriginPhonesPanel';
 
 interface CompanyDetailProps { id: string; canEdit: boolean; }
 interface CompanyStore {
@@ -290,6 +291,17 @@ export function CompanyDetail({ id, canEdit }: CompanyDetailProps) {
                     </CardContent>
                 </Card>
             </div>
+
+            {canEdit && (
+                <PurchaseOriginPhonesPanel
+                    companyId={company.id}
+                    stores={company.stores.map(({ id: storeId, name, isActive }) => ({
+                        id: storeId,
+                        name,
+                        isActive,
+                    }))}
+                />
+            )}
 
             {company.stores && company.stores.length > 0 && (
                 <Card className="bg-card shadow-sm border-border">

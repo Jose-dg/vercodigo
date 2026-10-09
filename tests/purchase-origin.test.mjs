@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolvePurchaseOrigin } from "../src/services/purchases/purchase-origin.ts";
+import {
+    normalizePurchaseOriginPhone,
+    resolvePurchaseOrigin,
+} from "../src/services/purchases/purchase-origin.ts";
 
 const companies = new Set(["company-a", "company-b"]);
 const stores = [
@@ -36,6 +39,12 @@ const actor = (overrides = {}) => ({
     storeId: null,
     purchaseOriginPhoneId: null,
     ...overrides,
+});
+
+test("origin phones are normalized without hardcoding labels or formatting", () => {
+    assert.equal(normalizePurchaseOriginPhone("300 3702892"), "3003702892");
+    assert.equal(normalizePurchaseOriginPhone("+57 312 264 0682"), "3122640682");
+    assert.throws(() => normalizePurchaseOriginPhone("601 234 5678"), /celular colombiano válido/);
 });
 
 test("a business profile uses its configured phone before its store", async () => {

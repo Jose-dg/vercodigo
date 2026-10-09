@@ -83,7 +83,7 @@ model WalletTransaction {
   gatewayTransactionId String? // lo llenará la integración PSE/tarjeta futura
   createdById          String? // userId que originó el movimiento
   cardActivationId     String?                 @unique
-  codePurchaseId       String?
+  codePurchaseId       String?                 @unique
   createdAt            DateTime                @default(now())
   occurredAt           DateTime                @default(now())
   occurredSequence     Int                     @default(0)
@@ -93,7 +93,6 @@ model WalletTransaction {
   @@index([walletId, createdAt])
   @@index([walletId, occurredAt, occurredSequence, id])
   @@index([status])
-  @@index([codePurchaseId])
 }
 
 model AccountStatement {

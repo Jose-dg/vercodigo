@@ -1,9 +1,10 @@
 import crypto from "crypto";
 
 import prisma from "@/lib/prisma";
-import { processActivationJob } from "@/services/self-service/activate-card.service";
+import { processActivationJob, updateOpenActivationJob } from "@/services/self-service/activate-card.service";
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
 import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
+import { updateOpenCodePurchase } from "@/services/self-service/code-purchase-state";
 
 export type FulfillmentWebhookPayload = {
     event_id: string;
@@ -98,18 +99,19 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
                     { id: payload.external_reference.replace(/^DIEM-SAS-PURCHASE-/, "") },
                 ],
             },
-            select: { id: true, status: true },
+            select: { id: true, status: true, diemRequestId: true },
         });
         if (!purchase) {
             return { ok: true, handled: false, reason: "purchase_not_found" };
         }
-        await prisma.codePurchase.update({
-            where: { id: purchase.id },
-            data: {
-                fulfillmentStatus: payload.to_status,
-                diemRequestId: payload.code_request_id,
-                nextRetryAt: null,
-            },
+        if (purchase.diemRequestId && purchase.diemRequestId !== payload.code_request_id) {
+            return { ok: false, handled: false, reason: "code_request_mismatch" };
+        }
+        // Settled purchases are immutable; only open ones record remote progress.
+        await updateOpenCodePurchase(prisma, purchase.id, {
+            fulfillmentStatus: payload.to_status,
+            diemRequestId: payload.code_request_id,
+            nextRetryAt: null,
         });
         if (isSettledFulfillmentStatus(purchase.status)) {
             return {
@@ -139,18 +141,18 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
                     { id: payload.external_reference.replace(/^DIEM-SAS-ACTIVATION-/, "") },
                 ],
             },
-            select: { id: true, status: true },
+            select: { id: true, status: true, diemRequestId: true },
         });
         if (!job) {
             return { ok: true, handled: false, reason: "activation_not_found" };
         }
-        await prisma.activationJob.update({
-            where: { id: job.id },
-            data: {
-                fulfillmentStatus: payload.to_status,
-                diemRequestId: payload.code_request_id,
-                nextRetryAt: null,
-            },
+        if (job.diemRequestId && job.diemRequestId !== payload.code_request_id) {
+            return { ok: false, handled: false, reason: "code_request_mismatch" };
+        }
+        await updateOpenActivationJob(prisma, job.id, {
+            fulfillmentStatus: payload.to_status,
+            diemRequestId: payload.code_request_id,
+            nextRetryAt: null,
         });
         if (isSettledFulfillmentStatus(job.status)) {
             return {

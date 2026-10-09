@@ -12,41 +12,12 @@ import {
 } from "@/lib/devdiem/fulfillment";
 import type { AuthenticatedActor } from "@/lib/auth/actor";
 import { resolvePurchaseOrigin, type RequestedOrigin } from "./purchase-origin";
+import { purchaseOriginSnapshot } from "@/lib/purchases/origin-snapshot";
 
 const PLATFORM_ROLES = new Set(["SUPER_ADMIN", "SYSTEM_ADMIN"]);
 
-type PurchaseWithOrigin = {
-    id: string;
-    companyId: string;
-    storeId: string | null;
-    purchaseOriginPhoneId: string | null;
-    originLabelSnapshot: string | null;
-    diemRequestId: string | null;
-    status?: string;
-    purchaseOriginPhone: { phone: string } | null;
-};
-
 function assertPlatform(actor: Pick<AuthenticatedActor, "role">) {
     if (!PLATFORM_ROLES.has(actor.role)) throw forbidden("Solo un administrador de plataforma puede corregir el origen");
-}
-
-export function purchaseOriginSnapshot(purchase: PurchaseWithOrigin): CommercialPurchaseOrigin | null {
-    if (purchase.purchaseOriginPhoneId) {
-        return {
-            kind: "phone",
-            id: purchase.purchaseOriginPhoneId,
-            label: purchase.originLabelSnapshot,
-            phone: purchase.purchaseOriginPhone?.phone ?? null,
-        };
-    }
-    if (purchase.storeId) {
-        return {
-            kind: "store",
-            id: purchase.storeId,
-            label: purchase.originLabelSnapshot,
-        };
-    }
-    return null;
 }
 
 function sameOrigin(a: CommercialPurchaseOrigin | null, b: CommercialPurchaseOrigin | null) {

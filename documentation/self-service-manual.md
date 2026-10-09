@@ -63,8 +63,8 @@ El sistema cuenta con un registro de intentos (`ActivationJob`).
 
 ### 3.2 Reintentos (Solo Administradores)
 Si una activación falla por problemas técnicos (ej. caída de internet momentánea), el sistema guarda el estado `FAILED`.
-*   Los administradores pueden disparar un **Reintento Manual** desde la API o panel de administración (Endpoint: `POST /api/jobs/retry`).
-*   Esto intentará procesar nuevamente las activaciones fallidas sin cobrar doble.
+*   `FAILED` es definitivo: ningún proceso lo reabre. Para reintentar, se activa de nuevo la tarjeta, lo que crea un trabajo nuevo e idempotente.
+*   `POST /api/jobs/retry` es un reporte de solo lectura de activaciones fallidas; marca `INCONSISTENT_CARD_ACTIVATED` si la tarjeta figura activada pese al fallo, para revisión manual.
 
 ### 3.3 Errores Comunes
 *   **403 Forbidden**: Su usuario no tiene permisos para esta tienda.

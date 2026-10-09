@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            message: "Retry process executed",
+            message: "Failed activation jobs (read-only triage)",
             results
         });
 

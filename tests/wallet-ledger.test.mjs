@@ -66,3 +66,15 @@ test("Virtual Zone reconstructs all 14 events and intermediate debt balances", (
     ]);
     assert.equal(result.balance, -1_640_450);
 });
+
+test("a failed duplicate consumption is retained for audit but excluded from the balance", () => {
+    const occurredAt = new Date("2026-10-08T18:59:00-05:00");
+    const result = rebuildBalances([
+        { id: "opening", type: "OPENING_BALANCE", amount: 1_000_000, occurredAt, occurredSequence: 0, status: "CONFIRMED" },
+        { id: "canonical", type: "CONSUMPTION", amount: 31_900, occurredAt, occurredSequence: 1, status: "CONFIRMED" },
+        { id: "duplicate", type: "CONSUMPTION", amount: 36_000, occurredAt, occurredSequence: 2, status: "FAILED" },
+    ]);
+
+    assert.equal(result.balance, -1_031_900);
+    assert.equal(result.balances.has("duplicate"), false);
+});

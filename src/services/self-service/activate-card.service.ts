@@ -18,7 +18,31 @@ import {
     resolveCardDenomination,
     resolveDevDiemProductId,
 } from "@/lib/devdiem/resolve-card-catalog";
+import { isSettledFulfillmentStatus } from "./fulfillment-lifecycle";
 
+// Same lifecycle discipline as CodePurchase: COMPLETED and FAILED are
+// absorbing, and every concurrent write is a compare-and-set on "still open".
+const OPEN_ACTIVATION_JOB_STATUSES = [
+    "PENDING",
+    "PROCESSING",
+    "AWAITING_STOCK",
+    "ACTION_REQUIRED",
+    "FINALIZING",
+];
+
+type ActivationJobWriter = Pick<typeof prisma, "activationJob">;
+
+export async function updateOpenActivationJob(
+    db: ActivationJobWriter,
+    id: string,
+    data: Parameters<typeof prisma.activationJob.updateMany>[0]["data"],
+) {
+    const result = await db.activationJob.updateMany({
+        where: { id, status: { in: OPEN_ACTIVATION_JOB_STATUSES } },
+        data,
+    });
+    return result.count === 1;
+}
 
 export function extractCardUuid(qr: string): string {
     const value = qr?.trim();
@@ -45,7 +69,7 @@ export async function processActivationJob(jobId: string) {
         },
     });
     if (!job) throw notFound("Trabajo de activación no encontrado");
-    if (job.status === "COMPLETED") return { status: "COMPLETED", job };
+    if (isSettledFulfillmentStatus(job.status)) return { status: job.status, job };
     if (!job.userId) throw conflict("El trabajo no tiene usuario responsable");
 
     const effectiveDenomination = resolveCardDenomination(job.card);
@@ -119,8 +143,12 @@ export async function processActivationJob(jobId: string) {
                     store_id: job.card.storeId,
                 },
             });
-            job = await prisma.activationJob.update({
-                where: { id: job.id },
+            const linked = await prisma.activationJob.updateMany({
+                where: {
+                    id: job.id,
+                    status: { in: OPEN_ACTIVATION_JOB_STATUSES },
+                    OR: [{ diemRequestId: null }, { diemRequestId: remote.id }],
+                },
                 data: {
                     diemRequestId: remote.id,
                     fulfillmentStatus: remote.status,
@@ -129,6 +157,9 @@ export async function processActivationJob(jobId: string) {
                     nextRetryAt: null,
                     lastError: null,
                 },
+            });
+            job = await prisma.activationJob.findUniqueOrThrow({
+                where: { id: job.id },
                 include: {
                     card: {
                         include: {
@@ -139,6 +170,10 @@ export async function processActivationJob(jobId: string) {
                     },
                 },
             });
+            if (!linked.count) {
+                if (isSettledFulfillmentStatus(job.status)) return { status: job.status, jobId: job.id };
+                throw conflict("La activación ya está vinculada a otra solicitud de Diem");
+            }
         }
 
         const persistedCodes = Array.isArray(job.deliveredCodes)
@@ -148,50 +183,51 @@ export async function processActivationJob(jobId: string) {
         // including retries that already persisted the delivered code.
         const remote = await getCodeRequest(job.diemRequestId!);
         if (["failed", "cancelled"].includes(remote.status)) {
-            await prisma.$transaction([
-                prisma.activationJob.update({
+            const failed = await prisma.$transaction(async (tx) => {
+                const applied = await updateOpenActivationJob(tx, job!.id, {
+                    status: "FAILED",
+                    fulfillmentStatus: remote.status,
+                    lastError: `Fulfillment terminó en ${remote.status}`,
+                    nextRetryAt: null,
+                });
+                // Only the processor that failed the job releases the card lock.
+                if (applied) {
+                    await tx.card.update({
+                        where: { id: job!.cardId },
+                        data: {
+                            activationLock: false,
+                            activationLockBy: null,
+                            activationLockAt: null,
+                        },
+                    });
+                }
+                return applied;
+            });
+            if (!failed) {
+                const settled = await prisma.activationJob.findUniqueOrThrow({
                     where: { id: job.id },
-                    data: {
-                        status: "FAILED",
-                        fulfillmentStatus: remote.status,
-                        lastError: `Fulfillment terminó en ${remote.status}`,
-                        nextRetryAt: null,
-                    },
-                }),
-                prisma.card.update({
-                    where: { id: job.cardId },
-                    data: {
-                        activationLock: false,
-                        activationLockBy: null,
-                        activationLockAt: null,
-                    },
-                }),
-            ]);
+                    select: { status: true },
+                });
+                return { status: settled.status, jobId: job.id };
+            }
             return { status: "FAILED", jobId: job.id };
         }
         if (remote.status === "action_required" || remote.status === "pending_review") {
-            await prisma.activationJob.update({
-                where: { id: job.id },
-                data: {
-                    status: "ACTION_REQUIRED",
-                    fulfillmentStatus: remote.status,
-                    lastError:
-                        remote.status === "pending_review"
-                            ? "Diem exige revisión manual de esta solicitud. No se debitó la wallet."
-                            : job.lastError,
-                    nextRetryAt: null,
-                },
+            await updateOpenActivationJob(prisma, job.id, {
+                status: "ACTION_REQUIRED",
+                fulfillmentStatus: remote.status,
+                ...(remote.status === "pending_review"
+                    ? { lastError: "Diem exige revisión manual de esta solicitud. No se debitó la wallet." }
+                    : {}),
+                nextRetryAt: null,
             });
             return { status: "ACTION_REQUIRED", jobId: job.id };
         }
         if (!["allocated", "delivered", "partially_delivered"].includes(remote.status)) {
-            await prisma.activationJob.update({
-                where: { id: job.id },
-                data: {
-                    status: remote.status === "awaiting_stock" ? "AWAITING_STOCK" : "PROCESSING",
-                    fulfillmentStatus: remote.status,
-                    nextRetryAt: null,
-                },
+            await updateOpenActivationJob(prisma, job.id, {
+                status: remote.status === "awaiting_stock" ? "AWAITING_STOCK" : "PROCESSING",
+                fulfillmentStatus: remote.status,
+                nextRetryAt: null,
             });
             return { status: remote.status, jobId: job.id };
         }
@@ -201,15 +237,14 @@ export async function processActivationJob(jobId: string) {
             : await revealCodeRequest(remote.id, `activation-job:${job.id}`);
         if (codes.length !== 1) throw new Error(`Diem reveló ${codes.length} códigos; se esperaba 1`);
         if (persistedCodes.length !== 1) {
-            job = await prisma.activationJob.update({
+            const stored = await updateOpenActivationJob(prisma, job.id, {
+                deliveredCodes: codes,
+                fulfillmentStatus: "delivered",
+                nextRetryAt: null,
+                lastError: null,
+            });
+            job = await prisma.activationJob.findUniqueOrThrow({
                 where: { id: job.id },
-                data: {
-                    deliveredCodes: codes,
-                    fulfillmentStatus: "delivered",
-                    status: "PROCESSING",
-                    nextRetryAt: null,
-                    lastError: null,
-                },
                 include: {
                     card: {
                         include: {
@@ -220,30 +255,23 @@ export async function processActivationJob(jobId: string) {
                     },
                 },
             });
+            if (!stored) return { status: job.status, jobId: job.id };
         }
 
         const result = await prisma.$transaction(async (tx) => {
             const claimed = await tx.activationJob.updateMany({
-                where: {
-                    id: job!.id,
-                    status: { in: ["PENDING", "PROCESSING", "AWAITING_STOCK", "ACTION_REQUIRED"] },
+                where: { id: job!.id, status: { in: OPEN_ACTIVATION_JOB_STATUSES } },
+                data: {
+                    status: "COMPLETED",
+                    fulfillmentStatus: "delivered",
+                    deliveredCodes: codes,
+                    nextRetryAt: null,
+                    lastError: null,
                 },
-                data: { status: "FINALIZING" },
             });
             const currentCard = await tx.card.findUniqueOrThrow({ where: { id: job!.cardId } });
             if (!claimed.count || currentCard.isActivated) {
                 const activation = await tx.cardActivation.findUnique({ where: { cardId: currentCard.id } });
-                if (claimed.count) {
-                    await tx.activationJob.update({
-                        where: { id: job!.id },
-                        data: {
-                            status: "COMPLETED",
-                            fulfillmentStatus: "delivered",
-                            nextRetryAt: null,
-                            lastError: null,
-                        },
-                    });
-                }
                 return { card: currentCard, activation, finalized: false };
             }
 
@@ -310,16 +338,6 @@ export async function processActivationJob(jobId: string) {
                     success: true,
                 },
             });
-            await tx.activationJob.update({
-                where: { id: job!.id },
-                data: {
-                    status: "COMPLETED",
-                    fulfillmentStatus: "delivered",
-                    deliveredCodes: codes,
-                    nextRetryAt: null,
-                    lastError: null,
-                },
-            });
             return { card, activation, finalized: true };
         });
 
@@ -349,29 +367,24 @@ export async function processActivationJob(jobId: string) {
     } catch (error) {
         const message = error instanceof Error ? error.message : "UNKNOWN";
         const permanent = isDiemContractError(error) && !job.diemRequestId;
-        await prisma.$transaction([
-            prisma.activationJob.update({
-                where: { id: job.id },
-                data: {
-                    attempts: { increment: 1 },
-                    lastError: message.slice(0, 1000),
-                    nextRetryAt: null,
-                    ...(permanent ? { status: "FAILED" as const } : {}),
-                },
-            }),
-            ...(permanent
-                ? [
-                    prisma.card.update({
-                        where: { id: job.cardId },
-                        data: {
-                            activationLock: false,
-                            activationLockBy: null,
-                            activationLockAt: null,
-                        },
-                    }),
-                ]
-                : []),
-        ]).catch(() => undefined);
+        await prisma.$transaction(async (tx) => {
+            const applied = await updateOpenActivationJob(tx, job!.id, {
+                attempts: { increment: 1 },
+                lastError: message.slice(0, 1000),
+                nextRetryAt: null,
+                ...(permanent ? { status: "FAILED" as const } : {}),
+            });
+            if (applied && permanent) {
+                await tx.card.update({
+                    where: { id: job!.cardId },
+                    data: {
+                        activationLock: false,
+                        activationLockBy: null,
+                        activationLockAt: null,
+                    },
+                });
+            }
+        }).catch(() => undefined);
         throw error;
     }
 }

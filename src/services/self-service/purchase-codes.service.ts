@@ -16,9 +16,15 @@ import { resolveCost } from "@/services/costing/costing.service";
 import { summarizeCodeDelivery } from "@/lib/codes/delivery-counts";
 import { buildPurchaseTimeline } from "@/lib/codes/purchase-timeline";
 import { resolvePurchaseOrigin, type RequestedOrigin } from "@/services/purchases/purchase-origin";
+import { purchaseOriginSnapshot } from "@/lib/purchases/origin-snapshot";
+import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
+import {
+    OPEN_CODE_PURCHASE_STATUSES,
+    isOpenCodePurchaseStatus,
+    updateOpenCodePurchase,
+} from "@/services/self-service/code-purchase-state";
 
 const TERMINAL_FAILURES = new Set(["failed", "cancelled"]);
-const PENDING_STATUSES = ["PENDING", "AWAITING_STOCK", "FINALIZING", "ACTION_REQUIRED"] as const;
 const PLATFORM_ROLES = new Set(["SUPER_ADMIN", "SYSTEM_ADMIN"]);
 
 type Actor = Pick<TokenPayload, "id" | "role" | "companyId" | "storeId">;
@@ -63,7 +69,7 @@ function serializePurchase<T extends {
         keys: purchase.status === "COMPLETED" ? delivery.codes.map((code) => ({ code })) : [],
         deliveredCodeCount: delivery.deliveredCodeCount,
         hasDeliveryCountMismatch: delivery.hasDeliveryCountMismatch,
-        isPending: PENDING_STATUSES.includes(purchase.status as typeof PENDING_STATUSES[number]),
+        isPending: isOpenCodePurchaseStatus(purchase.status),
         isSuccessful: purchase.status === "COMPLETED",
         needsAction: purchase.status === "ACTION_REQUIRED",
     };
@@ -128,13 +134,82 @@ export async function listCodePurchasesForUser(
     return enrichPurchases(purchases);
 }
 
+const loadPurchase = (id: string) => prisma.codePurchase.findUniqueOrThrow({
+    where: { id },
+    include: { denomination: true },
+});
+
+function persistedCodesOf(purchase: { deliveredCodes: Prisma.JsonValue }) {
+    return Array.isArray(purchase.deliveredCodes)
+        ? purchase.deliveredCodes.filter((code): code is string => typeof code === "string")
+        : [];
+}
+
+/**
+ * The only place a code purchase is debited. One local transaction moves the
+ * purchase from open to COMPLETED with a compare-and-set and, only for the
+ * winner, writes its single wallet consumption. A concurrent processor either
+ * blocks on the row lock and then sees COMPLETED, or loses the CAS.
+ */
+async function settleCodePurchase(purchaseId: string, productName: string) {
+    try {
+        return await prisma.$transaction(async (tx) => {
+            const won = await updateOpenCodePurchase(tx, purchaseId, {
+                status: "COMPLETED",
+                fulfillmentStatus: "delivered",
+                completedAt: new Date(),
+                nextRetryAt: null,
+                lastError: null,
+            });
+            const current = await tx.codePurchase.findUniqueOrThrow({
+                where: { id: purchaseId },
+                include: { denomination: true },
+            });
+            if (!won) return current;
+
+            if (persistedCodesOf(current).length !== current.count) {
+                throw conflict("La entrega persistida está incompleta");
+            }
+            const existing = await tx.walletTransaction.findUnique({
+                where: { codePurchaseId: current.id },
+                select: { id: true },
+            });
+            if (existing) {
+                // An open purchase must never own a consumption. Abort instead of
+                // silently completing so the inconsistency is investigated.
+                throw conflict(`La compra ${current.id} ya tiene un consumo sin estar completada`);
+            }
+            await debit({
+                companyId: current.companyId,
+                amount: current.totalAmount,
+                currency: current.currency,
+                description: `Compra de ${current.count} código(s) ${productName}`,
+                createdById: current.userId,
+                codePurchaseId: current.id,
+                sourceAmount: current.sourceAmount ?? undefined,
+                sourceCurrency: current.sourceCurrency ?? undefined,
+                appliedExchangeRate: current.appliedExchangeRate ?? undefined,
+                tx,
+            });
+            return current;
+        }, { maxWait: 5_000, timeout: 10_000 });
+    } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            // The unique (codePurchaseId) invariant rejected a second debit.
+            console.error("[code-purchase] duplicate consumption rejected", { purchaseId });
+            return loadPurchase(purchaseId);
+        }
+        throw error;
+    }
+}
+
 export async function processCodePurchase(purchaseId: string) {
     let purchase = await prisma.codePurchase.findUnique({
         where: { id: purchaseId },
         include: { denomination: true },
     });
     if (!purchase) throw notFound("Compra no encontrada");
-    if (purchase.status === "COMPLETED" || purchase.status === "FAILED") {
+    if (isSettledFulfillmentStatus(purchase.status)) {
         return serializePurchase(purchase);
     }
 
@@ -148,6 +223,13 @@ export async function processCodePurchase(purchaseId: string) {
     if (!remoteProductId) {
         throw conflict("El producto no está mapeado al catálogo de Diem");
     }
+
+    // Every local write below is conditional on the purchase still being open.
+    // When another processor settled it first, return that state unchanged.
+    const writeWhileOpen = async (data: Parameters<typeof updateOpenCodePurchase>[2]) => {
+        const applied = await updateOpenCodePurchase(prisma, purchaseId, data);
+        return { applied, current: await loadPurchase(purchaseId) };
+    };
 
     try {
         if (!purchase.diemRequestId) {
@@ -181,6 +263,7 @@ export async function processCodePurchase(purchaseId: string) {
             ]);
             if (!user?.email) throw conflict("El usuario necesita un email para recibir el código");
             const [firstName, ...lastName] = (user.name || user.email).trim().split(/\s+/);
+            // Idempotent in Diem: concurrent processors receive the same request.
             const request = await createCodeRequest({
                 idempotencyKey: purchase.idempotencyKey,
                 externalReference: `DIEM-SAS-PURCHASE-${purchase.id}`,
@@ -206,22 +289,20 @@ export async function processCodePurchase(purchaseId: string) {
                     company_name: originCompany?.name ?? null,
                     store_id: purchase.storeId,
                     store_name: originStore?.name ?? null,
-                    purchase_origin: purchase.purchaseOriginPhoneId
-                        ? {
-                            kind: "phone",
-                            id: purchase.purchaseOriginPhoneId,
-                            label: purchase.originLabelSnapshot,
-                            phone: originPhone?.phone ?? null,
-                        }
-                        : purchase.storeId
-                            ? { kind: "store", id: purchase.storeId, label: originStore?.name ?? null }
-                            : null,
+                    purchase_origin: purchaseOriginSnapshot({
+                        ...purchase,
+                        purchaseOriginPhone: originPhone,
+                    }),
                     commercial_occurred_at: purchase.occurredAt.toISOString(),
                     commercial_sequence: purchase.occurredSequence,
                 },
             });
-            purchase = await prisma.codePurchase.update({
-                where: { id: purchase.id },
+            const linked = await prisma.codePurchase.updateMany({
+                where: {
+                    id: purchase.id,
+                    status: { in: [...OPEN_CODE_PURCHASE_STATUSES] },
+                    OR: [{ diemRequestId: null }, { diemRequestId: request.id }],
+                },
                 data: {
                     diemRequestId: request.id,
                     fulfillmentStatus: request.status,
@@ -229,139 +310,73 @@ export async function processCodePurchase(purchaseId: string) {
                     lastError: null,
                     nextRetryAt: null,
                 },
-                include: { denomination: true },
             });
+            purchase = await loadPurchase(purchaseId);
+            if (!linked.count) {
+                if (isSettledFulfillmentStatus(purchase.status)) return serializePurchase(purchase);
+                throw conflict("La compra ya está vinculada a otra solicitud de Diem");
+            }
         }
 
-        const persistedCodes = Array.isArray(purchase.deliveredCodes)
-            ? purchase.deliveredCodes.filter((code): code is string => typeof code === "string")
-            : [];
         // Always revalidate the remote commercial link before reveal or debit,
         // including retries that already persisted the delivered codes.
         const request = await getCodeRequest(purchase.diemRequestId!);
         if (TERMINAL_FAILURES.has(request.status)) {
-            purchase = await prisma.codePurchase.update({
-                where: { id: purchase.id },
-                data: {
-                    status: "FAILED",
-                    fulfillmentStatus: request.status,
-                    lastError: `Fulfillment terminó en estado ${request.status}`,
-                    nextRetryAt: null,
-                },
-                include: { denomination: true },
+            const { current } = await writeWhileOpen({
+                status: "FAILED",
+                fulfillmentStatus: request.status,
+                lastError: `Fulfillment terminó en estado ${request.status}`,
+                nextRetryAt: null,
             });
-            return serializePurchase(purchase);
+            return serializePurchase(current);
         }
         if (request.status === "action_required" || request.status === "pending_review") {
             // Pause only. After Diem approves, the partner webhook resumes.
-            purchase = await prisma.codePurchase.update({
-                where: { id: purchase.id },
-                data: {
-                    status: "ACTION_REQUIRED",
-                    fulfillmentStatus: request.status,
-                    lastError:
-                        request.status === "pending_review"
-                            ? "Diem exige revisión manual de esta solicitud. No se debitó la wallet."
-                            : purchase.lastError,
-                    nextRetryAt: null,
-                },
-                include: { denomination: true },
+            const { current } = await writeWhileOpen({
+                status: "ACTION_REQUIRED",
+                fulfillmentStatus: request.status,
+                ...(request.status === "pending_review"
+                    ? { lastError: "Diem exige revisión manual de esta solicitud. No se debitó la wallet." }
+                    : {}),
+                nextRetryAt: null,
             });
-            return serializePurchase(purchase);
+            return serializePurchase(current);
         }
         if (!["allocated", "delivered", "partially_delivered"].includes(request.status)) {
-            purchase = await prisma.codePurchase.update({
-                where: { id: purchase.id },
-                data: {
-                    status: request.status === "awaiting_stock" ? "AWAITING_STOCK" : "PENDING",
-                    fulfillmentStatus: request.status,
-                    nextRetryAt: null,
-                },
-                include: { denomination: true },
+            const { current } = await writeWhileOpen({
+                status: request.status === "awaiting_stock" ? "AWAITING_STOCK" : "PENDING",
+                fulfillmentStatus: request.status,
+                nextRetryAt: null,
             });
-            return serializePurchase(purchase);
+            return serializePurchase(current);
         }
 
-        const codes = persistedCodes.length === purchase.count
-            ? persistedCodes
-            : await revealCodeRequest(request.id, `code-purchase:${purchase.id}`);
-        if (codes.length !== purchase.count) {
-            throw new Error(`Diem reveló ${codes.length} de ${purchase.count} códigos`);
-        }
+        const persistedCodes = persistedCodesOf(purchase);
         if (persistedCodes.length !== purchase.count) {
-            purchase = await prisma.codePurchase.update({
-                where: { id: purchase.id },
-                data: {
-                    deliveredCodes: codes,
-                    fulfillmentStatus: "delivered",
-                    status: "PENDING",
-                    nextRetryAt: null,
-                    lastError: null,
-                },
-                include: { denomination: true },
+            // Idempotent in Diem: the same correlation id reveals the same codes.
+            const codes = await revealCodeRequest(request.id, `code-purchase:${purchase.id}`);
+            if (codes.length !== purchase.count) {
+                throw new Error(`Diem reveló ${codes.length} de ${purchase.count} códigos`);
+            }
+            const { applied, current } = await writeWhileOpen({
+                deliveredCodes: codes,
+                fulfillmentStatus: "delivered",
+                nextRetryAt: null,
+                lastError: null,
             });
+            if (!applied) return serializePurchase(current);
         }
 
-        purchase = await prisma.$transaction(async (tx) => {
-            const claimed = await tx.codePurchase.updateMany({
-                where: {
-                    id: purchase!.id,
-                    status: { in: ["PENDING", "AWAITING_STOCK", "ACTION_REQUIRED"] },
-                },
-                data: { status: "FINALIZING" },
-            });
-            const current = await tx.codePurchase.findUnique({ where: { id: purchase!.id } });
-            if (!current) throw notFound("Compra no encontrada");
-            if (!claimed.count || current.status === "COMPLETED") {
-                return tx.codePurchase.findUniqueOrThrow({
-                    where: { id: current.id },
-                    include: { denomination: true },
-                });
-            }
-            const currentCodes = Array.isArray(current.deliveredCodes)
-                ? current.deliveredCodes.filter((code): code is string => typeof code === "string")
-                : [];
-            if (currentCodes.length !== current.count) {
-                throw conflict("La entrega persistida está incompleta");
-            }
-            await debit({
-                companyId: current.companyId,
-                amount: current.totalAmount,
-                currency: current.currency,
-                description: `Compra de ${current.count} código(s) ${product.name}`,
-                createdById: current.userId,
-                codePurchaseId: current.id,
-                sourceAmount: current.sourceAmount ?? undefined,
-                sourceCurrency: current.sourceCurrency ?? undefined,
-                appliedExchangeRate: current.appliedExchangeRate ?? undefined,
-                tx,
-            });
-            return tx.codePurchase.update({
-                where: { id: current.id },
-                data: {
-                    status: "COMPLETED",
-                    fulfillmentStatus: "delivered",
-                    deliveredCodes: currentCodes,
-                    completedAt: new Date(),
-                    nextRetryAt: null,
-                    lastError: null,
-                },
-                include: { denomination: true },
-            });
-        });
-        return serializePurchase(purchase);
+        return serializePurchase(await settleCodePurchase(purchase.id, product.name));
     } catch (error) {
         const message = error instanceof Error ? error.message : "Error desconocido";
         const permanent = isDiemContractError(error);
         const leaveQueue = permanent && !purchase.diemRequestId;
-        await prisma.codePurchase.update({
-            where: { id: purchase.id },
-            data: {
-                attempts: { increment: 1 },
-                lastError: message.slice(0, 1000),
-                nextRetryAt: null,
-                ...(leaveQueue ? { status: "ACTION_REQUIRED" as const } : {}),
-            },
+        await updateOpenCodePurchase(prisma, purchaseId, {
+            attempts: { increment: 1 },
+            lastError: message.slice(0, 1000),
+            nextRetryAt: null,
+            ...(leaveQueue ? { status: "ACTION_REQUIRED" as const } : {}),
         }).catch(() => undefined);
         throw error;
     }
@@ -534,20 +549,16 @@ export async function purchaseCodes(params: {
         if (isDiemRateLimited(error)) {
             return serializePurchase(pending);
         }
-        if (pending.status === "ACTION_REQUIRED" || pending.status === "FAILED") {
+        if (pending.status === "ACTION_REQUIRED" || isSettledFulfillmentStatus(pending.status)) {
             return serializePurchase(pending);
         }
         if (isDiemContractError(error)) {
-            const blocked = await prisma.codePurchase.update({
-                where: { id: purchase.id },
-                data: {
-                    status: "ACTION_REQUIRED",
-                    lastError: (error instanceof Error ? error.message : "Contrato Diem").slice(0, 1000),
-                    nextRetryAt: null,
-                },
-                include: { denomination: true },
+            await updateOpenCodePurchase(prisma, purchase.id, {
+                status: "ACTION_REQUIRED",
+                lastError: (error instanceof Error ? error.message : "Contrato Diem").slice(0, 1000),
+                nextRetryAt: null,
             });
-            return serializePurchase(blocked);
+            return serializePurchase(await loadPurchase(purchase.id));
         }
         return serializePurchase(pending);
     }

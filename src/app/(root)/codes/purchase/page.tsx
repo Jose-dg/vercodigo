@@ -166,7 +166,7 @@ export default function PurchaseCodesPage() {
         const query = isPlatform
             ? `?companyId=${encodeURIComponent(targetCompanyId)}`
             : '';
-        fetch(`/api/billing-rates${query}`, { credentials: 'include', cache: 'no-store' })
+        fetch(`/api/codes/quotes${query}`, { credentials: 'include', cache: 'no-store' })
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => setPrices(Array.isArray(data?.rows) ? data.rows : []))
             .catch(() => setPrices([]));

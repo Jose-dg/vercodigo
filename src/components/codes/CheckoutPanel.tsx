@@ -179,6 +179,7 @@ export function CheckoutPanel({
     const hasOrigin = Boolean(targetStoreId || targetOriginPhoneId);
     const canConfirm =
         Boolean(selected)
+        && unitPrice != null
         && quantity >= 1
         && quantity <= maxQuantity
         && (!isPlatform || (Boolean(targetCompanyId) && hasOrigin));
@@ -422,6 +423,12 @@ export function CheckoutPanel({
                     )}
                 </div>
 
+                {selected && unitPrice == null && (
+                    <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+                        <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                        Este producto no tiene costo configurado para la empresa. Pide a plataforma que lo configure en Costos.
+                    </p>
+                )}
                 {insufficientBalance && (
                     <p className="mt-3 flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
                         <AlertCircle className="mt-0.5 size-4 shrink-0" />

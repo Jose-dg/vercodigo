@@ -3,26 +3,19 @@ import { Prisma, User, UserRole } from "@prisma/client";
 import { badRequest, forbidden, notFound } from "@/lib/errors";
 import { getOrCreateWallet } from "@/services/wallet/wallet.service";
 import { calculateCompanyRateAmount } from "@/lib/pricing/company-rate";
+import { computeCost, type ResolvedCost } from "@/lib/pricing/resolve-cost";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
 const PLATFORM_ROLES: UserRole[] = [UserRole.SUPER_ADMIN, UserRole.SYSTEM_ADMIN];
 
-export interface ResolvedCost {
-    amount: number;
-    currency: string;
-    source: "company_rate" | "company" | "global" | "denomination";
-    sourceAmount?: number;
-    sourceCurrency?: string;
-    exchangeRate?: number;
-}
+export type { ResolvedCost } from "@/lib/pricing/resolve-cost";
 
 /**
  * Costo efectivo que se le cobra a una compañía por un producto/denominación —
- * lo que se debita de la wallet. Precedencia: tarifa negociada de la compañía →
- * costo global de plataforma → valor nominal de la denominación (comportamiento
- * histórico). null si no hay forma de determinarlo (producto sin denominaciones
- * ni costo configurado) — el llamador registra el consumo PENDING.
+ * lo que se debita de la wallet. La regla vive en computeCost (compartida con
+ * la cotización del checkout). null si no hay forma de determinarlo (producto
+ * sin denominaciones ni costo configurado) — el llamador registra el consumo PENDING.
  */
 export async function resolveCost(
     companyId: string,
@@ -30,7 +23,7 @@ export async function resolveCost(
     denominationId?: string | null,
     tx: Db = prisma
 ): Promise<ResolvedCost | null> {
-    const [rate, wallet, denomination, usdCopConfig] = await Promise.all([
+    const [rate, wallet, denomination, usdCopConfig, costs] = await Promise.all([
         tx.companyProductRate.findUnique({
             where: { companyId_productId: { companyId, productId } },
         }),
@@ -39,63 +32,86 @@ export async function resolveCost(
             ? tx.productDenomination.findUnique({ where: { id: denominationId } })
             : Promise.resolve(null),
         tx.systemConfig.findUnique({ where: { key: "FX_USD_COP" } }),
+        tx.productCost.findMany({
+            where: {
+                productId,
+                denominationId: denominationId ?? null,
+                isActive: true,
+                OR: [{ companyId }, { companyId: null }],
+            },
+        }),
     ]);
-    const fallbackRate = usdCopConfig && Number(usdCopConfig.value) > 0
-        ? Number(usdCopConfig.value)
-        : null;
-    const normalizeToWallet = (amount: number, currency: string): ResolvedCost => {
-        if (
-            currency.toUpperCase() === "USD"
-            && (wallet?.currency ?? "COP").toUpperCase() === "COP"
-            && fallbackRate != null
-        ) {
-            return {
-                amount: calculateCompanyRateAmount({ denominationUsd: amount, rateCopPerUsd: fallbackRate }).unitAmountCop,
-                currency: "COP",
-                source: "denomination",
-                sourceAmount: amount,
-                sourceCurrency: "USD",
-                exchangeRate: fallbackRate,
-            };
-        }
-        return { amount, currency, source: "denomination" };
-    };
-    if (
-        rate
-        && denomination
-        && denomination.currency.toUpperCase() === "USD"
-        && (wallet?.currency ?? "COP").toUpperCase() === "COP"
-    ) {
-        return {
-            amount: calculateCompanyRateAmount({ denominationUsd: denomination.amount, rateCopPerUsd: rate.rateCopPerUsd }).unitAmountCop,
-            currency: "COP",
-            source: "company_rate",
-            sourceAmount: denomination.amount,
-            sourceCurrency: "USD",
-            exchangeRate: rate.rateCopPerUsd,
-        };
-    }
-
-    const costs = await tx.productCost.findMany({
-        where: {
-            productId,
-            denominationId: denominationId ?? null,
-            isActive: true,
-            OR: [{ companyId }, { companyId: null }],
-        },
+    return computeCost({
+        companyId,
+        walletCurrency: wallet?.currency ?? null,
+        companyRateCopPerUsd: rate?.rateCopPerUsd ?? null,
+        fallbackRateCopPerUsd: usdCopConfig ? Number(usdCopConfig.value) : null,
+        denomination,
+        costs,
     });
+}
 
-    const companyCost = costs.find((c) => c.companyId === companyId);
-    if (companyCost) return { ...normalizeToWallet(companyCost.cost, companyCost.currency), source: "company" };
+export interface PurchaseQuote {
+    productId: string;
+    denominationId: string | null;
+    nominalAmount: number | null;
+    salePrice: number;
+    currency: string;
+    /** Tasa con la que se cobrará; el checkout la reenvía para detectar cambios. */
+    rateCopPerUsd: number | null;
+    effectiveRateCopPerUsd: number | null;
+}
 
-    const globalCost = costs.find((c) => c.companyId === null);
-    if (globalCost) return { ...normalizeToWallet(globalCost.cost, globalCost.currency), source: "global" };
-
-    if (denomination) {
-        return normalizeToWallet(denomination.amount, denomination.currency);
-    }
-
-    return null;
+/**
+ * Cotización del checkout para todos los productos activos, en cualquier moneda.
+ * Usa computeCost, la misma regla que resolveCost aplica al cobrar.
+ */
+export async function getPurchaseQuotes(companyId: string): Promise<PurchaseQuote[]> {
+    const [products, rates, wallet, usdCopConfig, costs] = await Promise.all([
+        prisma.product.findMany({
+            where: { isActive: true },
+            select: { id: true, denominations: { select: { id: true, amount: true, currency: true } } },
+        }),
+        prisma.companyProductRate.findMany({ where: { companyId } }),
+        prisma.wallet.findUnique({ where: { companyId }, select: { currency: true } }),
+        prisma.systemConfig.findUnique({ where: { key: "FX_USD_COP" } }),
+        prisma.productCost.findMany({
+            where: { isActive: true, OR: [{ companyId }, { companyId: null }] },
+            select: { companyId: true, productId: true, denominationId: true, cost: true, currency: true },
+        }),
+    ]);
+    const rateByProduct = new Map(rates.map((rate) => [rate.productId, rate.rateCopPerUsd]));
+    const fallbackRateCopPerUsd = usdCopConfig ? Number(usdCopConfig.value) : null;
+    const quote = (
+        productId: string,
+        denomination: { id: string; amount: number; currency: string } | null,
+    ): PurchaseQuote[] => {
+        const cost = computeCost({
+            companyId,
+            walletCurrency: wallet?.currency ?? null,
+            companyRateCopPerUsd: rateByProduct.get(productId) ?? null,
+            fallbackRateCopPerUsd,
+            denomination,
+            costs: costs.filter((row) => (
+                row.productId === productId && row.denominationId === (denomination?.id ?? null)
+            )),
+        });
+        if (!cost || !(cost.amount > 0)) return [];
+        return [{
+            productId,
+            denominationId: denomination?.id ?? null,
+            nominalAmount: denomination?.amount ?? null,
+            salePrice: cost.amount,
+            currency: cost.currency,
+            rateCopPerUsd: cost.exchangeRate ?? null,
+            effectiveRateCopPerUsd: cost.exchangeRate ?? null,
+        }];
+    };
+    return products.flatMap((product) => (
+        product.denominations.length === 0
+            ? quote(product.id, null)
+            : product.denominations.flatMap((denomination) => quote(product.id, denomination))
+    ));
 }
 
 export async function getCompanyProductRates(companyId?: string | null) {

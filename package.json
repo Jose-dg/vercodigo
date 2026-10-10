@@ -15,6 +15,7 @@
     "test:account-statements": "node --test --experimental-strip-types tests/account-statements.test.mjs",
     "test:wallet": "node --test --experimental-strip-types tests/wallet-presentation.test.mjs",
     "test:wallet-ledger": "node --test --experimental-strip-types tests/wallet-ledger.test.mjs tests/purchase-finalization-idempotency.test.mjs tests/ledger-verification.test.mjs",
+    "test:purchase-quote": "node --test --experimental-strip-types tests/company-rate.test.mjs tests/purchase-quote.test.mjs",
     "test:concurrency": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node -r ts-node/register -r tsconfig-paths/register tests/integration/code-purchase-concurrency.test.ts",
     "test:sale-repricing": "node --test --experimental-strip-types tests/orm-only.test.mjs tests/prisma-transaction.test.mjs tests/sale-repricing-source.test.mjs tests/devdiem-fulfillment.test.mjs",
     "test:purchase-origin": "node --test --experimental-strip-types tests/purchase-origin.test.mjs",

@@ -23,6 +23,18 @@ import { OPEN_ACTIVATION_JOB_STATUSES } from "@/lib/codes/fulfillment-order";
 
 type ActivationJobWriter = Pick<typeof prisma, "activationJob">;
 
+/**
+ * Diem delivered a code for a card that SAS already shows as activated (by
+ * another path). Settling would complete the job without its own
+ * CardActivation and debit, so the transaction rolls back and the job waits
+ * for review with the delivered code kept.
+ */
+class CardAlreadyActivatedError extends Error {
+    constructor() {
+        super("Diem entregó un código para una tarjeta que ya estaba activada. No se debitó la wallet; requiere revisión.");
+    }
+}
+
 export async function updateOpenActivationJob(
     db: ActivationJobWriter,
     id: string,
@@ -249,7 +261,12 @@ export async function processActivationJob(jobId: string) {
             if (!stored) return { status: job.status, jobId: job.id };
         }
 
-        const result = await prisma.$transaction(async (tx) => {
+        const settle = () => prisma.$transaction(async (tx) => {
+            // Check the card before claiming: a COMPLETED job must always own
+            // its CardActivation and debit, never be committed without them.
+            const currentCard = await tx.card.findUniqueOrThrow({ where: { id: job!.cardId } });
+            const existingActivation = await tx.cardActivation.findUnique({ where: { cardId: currentCard.id } });
+            if (currentCard.isActivated || existingActivation) throw new CardAlreadyActivatedError();
             const claimed = await tx.activationJob.updateMany({
                 where: { id: job!.id, status: { in: OPEN_ACTIVATION_JOB_STATUSES } },
                 data: {
@@ -260,11 +277,8 @@ export async function processActivationJob(jobId: string) {
                     lastError: null,
                 },
             });
-            const currentCard = await tx.card.findUniqueOrThrow({ where: { id: job!.cardId } });
-            if (!claimed.count || currentCard.isActivated) {
-                const activation = await tx.cardActivation.findUnique({ where: { cardId: currentCard.id } });
-                return { card: currentCard, activation, finalized: false };
-            }
+            // Another processor settled (or failed) this job first.
+            if (!claimed.count) return { card: currentCard, activation: null, finalized: false };
 
             const key = await tx.key.upsert({
                 where: { code: codes[0] },
@@ -332,19 +346,39 @@ export async function processActivationJob(jobId: string) {
             return { card, activation, finalized: true };
         });
 
-        if (result.finalized) {
-            await writeAuditLog({
-                action: "ACTIVATION",
-                userId: job.userId!,
-                companyId: job.card.store.companyId,
-                storeId: job.card.storeId,
-                entityType: "Card",
-                entityId: job.cardId,
-                after: { isActivated: true, fulfillmentRequestId: remote.id },
-                details: { jobId: job.id, cardUuid: job.card.uuid },
-                success: true,
+        let result: Awaited<ReturnType<typeof settle>>;
+        try {
+            result = await settle();
+        } catch (error) {
+            if (!(error instanceof CardAlreadyActivatedError)) throw error;
+            await updateOpenActivationJob(prisma, job.id, {
+                status: "ACTION_REQUIRED",
+                fulfillmentStatus: remote.status,
+                deliveredCodes: codes,
+                lastError: error.message,
+                nextRetryAt: null,
             });
+            return { status: "ACTION_REQUIRED", jobId: job.id };
         }
+
+        if (!result.finalized) {
+            const settled = await prisma.activationJob.findUniqueOrThrow({
+                where: { id: job.id },
+                select: { status: true },
+            });
+            return { status: settled.status, jobId: job.id };
+        }
+        await writeAuditLog({
+            action: "ACTIVATION",
+            userId: job.userId!,
+            companyId: job.card.store.companyId,
+            storeId: job.card.storeId,
+            entityType: "Card",
+            entityId: job.cardId,
+            after: { isActivated: true, fulfillmentRequestId: remote.id },
+            details: { jobId: job.id, cardUuid: job.card.uuid },
+            success: true,
+        });
         return {
             status: "COMPLETED",
             jobId: job.id,

@@ -16,7 +16,14 @@ const prisma = new PrismaClient();
 
 async function main() {
     const [wallets, transactions, purchases, linked, failedLinked, refunds] = await Promise.all([
-        prisma.wallet.findMany({ select: { id: true, companyId: true, balance: true } }),
+        prisma.wallet.findMany({
+            select: {
+                id: true,
+                companyId: true,
+                balance: true,
+                accountStatements: { orderBy: { periodEnd: "asc" }, select: { periodStart: true, periodEnd: true } },
+            },
+        }),
         prisma.walletTransaction.findMany({
             select: {
                 id: true,
@@ -27,6 +34,7 @@ async function main() {
                 balanceAfter: true,
                 occurredAt: true,
                 occurredSequence: true,
+                accountStatementLine: { select: { id: true } },
             },
         }),
         prisma.codePurchase.findMany({ select: { id: true, status: true, totalAmount: true } }),
@@ -57,9 +65,14 @@ async function main() {
     const consumptionsByPurchase = new Map(linked.map((row) => [row.codePurchaseId, row._count._all]));
     const failedByPurchase = new Map(failedLinked.map((row) => [row.codePurchaseId, row._count._all]));
     const { findings, exclusions } = verifyLedger(
-        wallets.map((wallet) => ({
+        wallets.map(({ accountStatements, ...wallet }) => ({
             ...wallet,
-            rows: transactions.filter((row) => row.walletId === wallet.id),
+            statementCoverage: accountStatements.length
+                ? { from: accountStatements[0].periodStart, until: accountStatements[accountStatements.length - 1].periodEnd }
+                : null,
+            rows: transactions
+                .filter((row) => row.walletId === wallet.id)
+                .map(({ accountStatementLine, ...row }) => ({ ...row, inStatement: accountStatementLine !== null })),
         })),
         purchases.map((purchase) => ({
             ...purchase,

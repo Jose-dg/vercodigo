@@ -84,3 +84,29 @@ test("flags a reversed purchase that was not refunded, or a completed one that w
         ["COMPLETED_PURCHASE_REFUNDED", "p3"],
     ]);
 });
+
+test("a movement dated inside an issued period but outside every statement is reported", () => {
+    const wallet = (rows) => ({
+        id: "w1",
+        companyId: "c1",
+        balance: rows.reduce((balance, current) => current.balanceAfter ?? balance, 0),
+        statementCoverage: { from: at(0), until: at(30) },
+        rows,
+    });
+    const recharge = (id, minute, inStatement) => ({
+        ...row(id, "RECHARGE", 100, 100, minute),
+        inStatement,
+    });
+
+    const clean = verifyLedger([wallet([{ ...recharge("anchor", 0, false), balanceAfter: 100 }])], []);
+    assert.deepEqual(clean.findings, [], "the first statement's opening anchor is excluded on purpose");
+
+    const reported = verifyLedger([wallet([recharge("in", 10, true)])], []);
+    assert.deepEqual(reported.findings, []);
+
+    const after = verifyLedger([wallet([recharge("next", 40, false)])], []);
+    assert.deepEqual(after.findings, [], "movements after the last cut belong to the next statement");
+
+    const hidden = verifyLedger([wallet([recharge("late", 20, false)])], []);
+    assert.deepEqual(hidden.findings.map((finding) => finding.kind), ["MOVEMENT_IN_CLOSED_PERIOD"]);
+});

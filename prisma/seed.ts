@@ -132,6 +132,8 @@ async function main() {
                 externalReference: 'TRF-DEMO-001',
                 description: 'Abono inicial de ejemplo',
                 createdById: user.id,
+                occurredAt: new Date(),
+                occurredAtSource: 'PAYMENT',
             },
         });
 
@@ -147,6 +149,7 @@ async function main() {
                 originalCurrency: 'USD',
                 exchangeRate: 4000,
                 description: 'Consumo de ejemplo (Netflix $10)',
+                occurredAtSource: 'LEDGER_EVENT',
             },
         });
         console.log('Created wallet with demo transactions');

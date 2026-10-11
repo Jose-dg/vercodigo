@@ -86,8 +86,16 @@ model WalletTransaction {
   codePurchaseId       String?                 @unique
   /// REFUND that reverses this CONSUMPTION (cancelled after delivery). Unique: one reversal per movement.
   reversalOfId         String?                 @unique
+  /// Manual top-ups: one key per request attempt; a retry returns the same movement.
+  idempotencyKey       String?                 @unique
+  /// sha256 of the request behind idempotencyKey; a reused key with other data is rejected.
+  requestFingerprint   String?
+  /// When the record was written. Never shown as the time of the movement.
   createdAt            DateTime                @default(now())
+  /// Effective time: when the movement happened (payment made or confirmed for top-ups).
   occurredAt           DateTime                @default(now())
+  /// Where occurredAt comes from. Required on every write: no silent fallback.
+  occurredAtSource     WalletTimeSource
   occurredSequence     Int                     @default(0)
   wallet               Wallet                  @relation(fields: [walletId], references: [id])
   accountStatementLine AccountStatementLine?
@@ -147,6 +155,8 @@ model AccountStatementLine {
   debit               Decimal               @db.Decimal(18, 2)
   credit              Decimal               @db.Decimal(18, 2)
   balanceAfter        Decimal               @db.Decimal(18, 2)
+  /// null on lines issued before the source was captured.
+  occurredAtSource    WalletTimeSource?
   accountStatement    AccountStatement      @relation(fields: [accountStatementId], references: [id], onDelete: Restrict)
   walletTransaction   WalletTransaction     @relation(fields: [walletTransactionId], references: [id], onDelete: Restrict)
 
@@ -160,6 +170,15 @@ enum WalletTransactionType {
   CONSUMPTION
   ADJUSTMENT
   REFUND
+}
+
+/// Origin of WalletTransaction.occurredAt.
+enum WalletTimeSource {
+  LEDGER_EVENT // the system produced the movement at that moment
+  PAYMENT // payment time taken from evidence (bank transfer time, audited correction)
+  GATEWAY_CONFIRMATION // DevDiem confirmed the collected top-up (credited_at)
+  SOURCE_SYSTEM // imported from another system with its own time (Blue Panther history)
+  REGISTRATION_ONLY // historical top-up without a payment time: occurredAt is the registration time
 }
 
 enum WalletTransactionStatus {

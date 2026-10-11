@@ -6,6 +6,15 @@ import {
 } from "@/lib/wallet/presentation";
 import { Prisma, WalletRechargeMethod } from "@prisma/client";
 import { badRequest, conflict, notFound } from "@/lib/errors";
+import { runSerializableTransaction } from "@/lib/prisma-transaction";
+import {
+    effectiveTimeLabel,
+    effectiveTimeProblem,
+    normalizeBankReference,
+    type WalletTimeSource,
+} from "@/lib/wallet/effective-time";
+import type { WalletMovementFilters } from "@/lib/wallet/movement-query";
+import { assertOpenPeriod, rebuildWalletLedger } from "./ledger-write";
 
 // Cliente Prisma normal o transaccional: todas las funciones de este servicio
 // aceptan `tx` para poder ejecutarse dentro de la $transaction del flujo llamador
@@ -78,6 +87,7 @@ export async function debit(params: {
                 cardActivationId: params.cardActivationId,
                 codePurchaseId: params.codePurchaseId,
                 occurredAt: new Date(),
+                occurredAtSource: "LEDGER_EVENT",
             },
         });
     }
@@ -105,6 +115,7 @@ export async function debit(params: {
             cardActivationId: params.cardActivationId,
             codePurchaseId: params.codePurchaseId,
             occurredAt: new Date(),
+            occurredAtSource: "LEDGER_EVENT",
         },
     });
 }
@@ -153,50 +164,107 @@ export async function reverseConsumption(params: {
             createdById: params.createdById ?? null,
             reversalOfId: consumption.id,
             occurredAt: new Date(),
+            occurredAtSource: "LEDGER_EVENT",
         },
     });
 }
 
+export type RechargeTimeSource = Extract<WalletTimeSource, "PAYMENT" | "GATEWAY_CONFIRMATION">;
+
 /**
- * Registra un abono a la wallet (hoy: solo manual, tras confirmar un pago
- * externo como una transferencia). La autorización de plataforma se valida en
- * la ruta; el servicio solo asume que el actor está autorizado.
+ * Registra un abono a la wallet tras confirmar el pago externo. La autorización
+ * de plataforma se valida en la ruta.
+ *
+ * - `occurredAt` es cuándo ocurrió o se confirmó el pago, nunca la hora de
+ *   registro (`createdAt`). Si cae antes de movimientos existentes, los saldos
+ *   corridos posteriores se recalculan en la misma transacción.
+ * - Idempotente: por `gatewayTransactionId` (recargas de DevDiem) o por
+ *   `idempotencyKey` + huella de la solicitud (abonos manuales). Una
+ *   transferencia manual se abona una sola vez por wallet (referencia única).
+ * - Rechaza fechas futuras o dentro de un periodo ya cerrado por un estado de
+ *   cuenta.
  */
 export async function recharge(params: {
     companyId: string;
     amount: number;
+    occurredAt: Date;
+    occurredAtSource: RechargeTimeSource;
     method?: WalletRechargeMethod;
     externalReference?: string;
     /** DevDiem top-up id when the money was collected by DevDiem (unique). */
     gatewayTransactionId?: string;
+    idempotencyKey?: string;
+    requestFingerprint?: string;
     description?: string;
     actorId?: string;
 }) {
-    if (!(params.amount > 0)) throw badRequest("El monto del abono debe ser mayor a 0");
+    if (!(params.amount > 0) || !Number.isFinite(params.amount)) {
+        throw badRequest("El monto del abono debe ser mayor a 0");
+    }
+    const method = params.method ?? "MANUAL";
+    const externalReference = params.externalReference
+        ? normalizeBankReference(params.externalReference)
+        : undefined;
+    if (method === "MANUAL" && !externalReference) {
+        throw badRequest("La referencia de la transferencia es obligatoria");
+    }
+    if (Boolean(params.idempotencyKey) !== Boolean(params.requestFingerprint)) {
+        throw new Error("idempotencyKey y requestFingerprint van juntos");
+    }
+    if (params.occurredAtSource === "GATEWAY_CONFIRMATION" && !params.gatewayTransactionId) {
+        throw new Error("Una confirmación de pasarela requiere gatewayTransactionId");
+    }
 
-    return prisma.$transaction(async (tx) => {
-        const wallet = await getOrCreateWallet(params.companyId, tx);
-        const updated = await tx.wallet.update({
-            where: { id: wallet.id },
-            data: { balance: { increment: params.amount } },
-        });
+    try {
+        return await runSerializableTransaction(prisma, async (tx) => {
+            if (params.idempotencyKey) {
+                const previous = await tx.walletTransaction.findUnique({
+                    where: { idempotencyKey: params.idempotencyKey },
+                });
+                if (previous) {
+                    if (previous.requestFingerprint !== params.requestFingerprint) {
+                        throw conflict("La clave de idempotencia ya se usó con otros datos");
+                    }
+                    return { transaction: previous, replayed: true };
+                }
+            }
+            const wallet = await getOrCreateWallet(params.companyId, tx);
+            const problem = effectiveTimeProblem({ occurredAt: params.occurredAt, now: new Date() });
+            if (problem) throw badRequest(problem);
+            await assertOpenPeriod(tx, wallet.id, params.occurredAt);
 
-        return tx.walletTransaction.create({
-            data: {
-                walletId: wallet.id,
-                type: "RECHARGE",
-                status: "CONFIRMED",
-                method: params.method ?? "MANUAL",
-                amount: params.amount,
-                balanceAfter: updated.balance,
-                externalReference: params.externalReference,
-                gatewayTransactionId: params.gatewayTransactionId,
-                description: params.description,
-                createdById: params.actorId,
-                occurredAt: new Date(),
-            },
+            const created = await tx.walletTransaction.create({
+                data: {
+                    walletId: wallet.id,
+                    type: "RECHARGE",
+                    status: "CONFIRMED",
+                    method,
+                    amount: params.amount,
+                    externalReference,
+                    gatewayTransactionId: params.gatewayTransactionId,
+                    idempotencyKey: params.idempotencyKey,
+                    requestFingerprint: params.requestFingerprint,
+                    description: params.description,
+                    createdById: params.actorId,
+                    occurredAt: params.occurredAt,
+                    occurredAtSource: params.occurredAtSource,
+                },
+            });
+            await rebuildWalletLedger(tx, wallet.id);
+            const transaction = await tx.walletTransaction.findUniqueOrThrow({ where: { id: created.id } });
+            return { transaction, replayed: false };
         });
-    });
+    } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            const target = String((error.meta as { target?: unknown } | undefined)?.target ?? "");
+            if (target.includes("gatewayTransactionId")) throw error;
+            if (target.includes("idempotencyKey")) {
+                throw conflict("La solicitud ya se está procesando con esta clave de idempotencia");
+            }
+            throw conflict("Esta transferencia ya fue abonada a la wallet", { externalReference });
+        }
+        throw error;
+    }
 }
 
 /**
@@ -254,7 +322,10 @@ export async function getWalletSummaries() {
 /**
  * Vista de compañía (OWNER/GENERAL_ADMIN): su wallet + movimientos paginados.
  */
-export async function getWalletForCompany(companyId: string, opts?: { page?: number; pageSize?: number }) {
+export async function getWalletForCompany(
+    companyId: string,
+    opts?: { page?: number; pageSize?: number } & Partial<Omit<WalletMovementFilters, "page">>,
+) {
     const page = Math.max(1, opts?.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? 25));
 
@@ -279,6 +350,10 @@ export async function getWalletForCompany(companyId: string, opts?: { page?: num
                     id: { gte: opening.id },
                 },
             ],
+        } : {}),
+        ...(opts?.type ? { type: opts.type } : {}),
+        ...(opts?.from || opts?.to ? {
+            AND: [{ occurredAt: { ...(opts.from ? { gte: opts.from } : {}), ...(opts.to ? { lt: opts.to } : {}) } }],
         } : {}),
     };
     const [transactions, total] = await Promise.all([
@@ -358,6 +433,7 @@ export async function getWalletForCompany(companyId: string, opts?: { page?: num
 
         return {
             ...transaction,
+            effectiveTimeLabel: effectiveTimeLabel(transaction.occurredAtSource, transaction.createdAt),
             displayDescription,
             originDescription: purchase
                 ? walletPurchaseOriginDescription({

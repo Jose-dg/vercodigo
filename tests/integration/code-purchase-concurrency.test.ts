@@ -202,6 +202,7 @@ test("the database rejects a second consumption for the same purchase", async ()
                 status: "CONFIRMED",
                 amount: AMOUNT,
                 codePurchaseId: purchaseId,
+                occurredAtSource: "LEDGER_EVENT",
             },
         }),
         (error: { code?: string }) => error.code === "P2002",

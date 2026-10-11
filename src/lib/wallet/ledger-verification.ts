@@ -4,7 +4,12 @@ export type VerifiableWallet = {
     id: string;
     companyId: string;
     balance: number;
-    rows: Array<LedgerRow & { balanceAfter: number | null }>;
+    /**
+     * Range reported by issued statements: from the first statement's
+     * periodStart (its opening anchor, excluded) to the latest periodEnd.
+     */
+    statementCoverage?: { from: Date; until: Date } | null;
+    rows: Array<LedgerRow & { balanceAfter: number | null; inStatement?: boolean }>;
 };
 
 export type VerifiablePurchase = {
@@ -30,6 +35,7 @@ export type LedgerExclusion = { purchaseId: string; failedConsumptions: number }
 export type LedgerFinding =
     | { kind: "WALLET_BALANCE_DRIFT"; walletId: string; companyId: string; stored: number; rebuilt: number }
     | { kind: "BALANCE_AFTER_DRIFT"; walletId: string; transactionId: string; stored: number | null; rebuilt: number }
+    | { kind: "MOVEMENT_IN_CLOSED_PERIOD"; walletId: string; transactionId: string; occurredAt: string; closedUntil: string }
     | { kind: "COMPLETED_PURCHASE_WITHOUT_ONE_CONSUMPTION"; purchaseId: string; consumptions: number }
     | { kind: "UNSETTLED_PURCHASE_WITH_CONSUMPTION"; purchaseId: string; status: string; consumptions: number }
     | { kind: "REVERSED_PURCHASE_NOT_REFUNDED_ONCE"; purchaseId: string; consumptions: number; reversals: number }
@@ -41,6 +47,8 @@ const differs = (a: number | null, b: number) => a === null || Math.abs(a - b) >
  * Invariants of the prepaid wallet ledger:
  * - each wallet balance equals the rebuild of its active ledger,
  * - each confirmed movement stores the running balance the rebuild yields,
+ * - no confirmed movement outside a statement is dated inside an issued
+ *   period (it would never be reported),
  * - a COMPLETED purchase owns exactly one active consumption and no refund,
  * - a REVERSED purchase (cancelled by Diem after delivery) has every active
  *   consumption refunded exactly once, so it nets to zero,
@@ -64,6 +72,22 @@ export function verifyLedger(
             });
         }
         for (const row of wallet.rows) {
+            const coverage = wallet.statementCoverage;
+            if (
+                coverage
+                && row.status === "CONFIRMED"
+                && row.inStatement === false
+                && row.occurredAt > coverage.from
+                && row.occurredAt <= coverage.until
+            ) {
+                findings.push({
+                    kind: "MOVEMENT_IN_CLOSED_PERIOD",
+                    walletId: wallet.id,
+                    transactionId: row.id,
+                    occurredAt: row.occurredAt.toISOString(),
+                    closedUntil: coverage.until.toISOString(),
+                });
+            }
             const expected = rebuilt.balances.get(row.id);
             if (expected !== undefined && differs(row.balanceAfter, expected)) {
                 findings.push({

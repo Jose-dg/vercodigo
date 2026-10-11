@@ -34,6 +34,7 @@ import {
     Prisma,
     PrismaClient,
     WalletRechargeMethod,
+    WalletTimeSource,
     WalletTransactionStatus,
     WalletTransactionType,
 } from "@prisma/client";
@@ -404,6 +405,8 @@ async function applyHistory(manifest: Manifest, expectedFingerprint: string) {
                     createdById: ACTOR_ID,
                     cardActivationId: activationId,
                     createdAt: new Date(activationAt.getTime() + index),
+                    occurredAt: new Date(activationAt.getTime() + index),
+                    occurredAtSource: WalletTimeSource.SOURCE_SYSTEM,
                 },
                 update: {
                     status: WalletTransactionStatus.CONFIRMED,
@@ -477,7 +480,13 @@ async function applyHistory(manifest: Manifest, expectedFingerprint: string) {
                 await tx.walletTransaction.update({ where: { id: currentTx.id }, data: txData });
             } else {
                 await tx.walletTransaction.create({
-                    data: { id: `bp-hist-wallet-purchase-${event.key}`, ...txData, createdAt: new Date(event.occurredAt) },
+                    data: {
+                        id: `bp-hist-wallet-purchase-${event.key}`,
+                        ...txData,
+                        createdAt: new Date(event.occurredAt),
+                        occurredAt: new Date(event.occurredAt),
+                        occurredAtSource: WalletTimeSource.SOURCE_SYSTEM,
+                    },
                 });
             }
         }
@@ -526,6 +535,8 @@ async function applyHistory(manifest: Manifest, expectedFingerprint: string) {
                     externalReference: event.externalReference ?? null,
                     createdById: ACTOR_ID,
                     createdAt: new Date(event.occurredAt),
+                    occurredAt: new Date(event.occurredAt),
+                    occurredAtSource: WalletTimeSource.SOURCE_SYSTEM,
                 },
                 update: {
                     status: WalletTransactionStatus.CONFIRMED,

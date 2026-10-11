@@ -2,7 +2,7 @@ import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { AppError, badGateway, badRequest, conflict, notFound, serviceUnavailable } from "@/lib/errors";
-import { rebuildBalances } from "@/lib/wallet/ledger";
+import { rebuildWalletLedger } from "@/services/wallet/ledger-write";
 import { correctCodeRequestCommercialPrice, type DiemHttpError } from "@/lib/devdiem/fulfillment";
 import { calculateCompanyRateAmount } from "@/lib/pricing/company-rate";
 import { runSerializableTransaction } from "@/lib/prisma-transaction";
@@ -466,22 +466,7 @@ export async function applySaleReprice(params: {
                 exchangeRate: params.newRate,
             },
         });
-        const rows = await tx.walletTransaction.findMany({
-            where: { walletId: current.walletId },
-            orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],
-        });
-        const rebuilt = rebuildBalances(rows.map((row) => ({
-            id: row.id,
-            type: row.type,
-            status: row.status,
-            amount: row.amount,
-            occurredAt: row.occurredAt,
-            occurredSequence: row.occurredSequence,
-        })));
-        for (const [id, balanceAfter] of rebuilt.balances) {
-            await tx.walletTransaction.update({ where: { id }, data: { balanceAfter } });
-        }
-        await tx.wallet.update({ where: { id: current.walletId }, data: { balance: rebuilt.balance } });
+        const rebuiltBalance = await rebuildWalletLedger(tx, current.walletId);
         await tx.auditLog.create({
             data: {
                 action: "SALE_PRICE_CORRECTED",
@@ -490,7 +475,7 @@ export async function applySaleReprice(params: {
                 entityType: params.targetType,
                 entityId: params.targetId,
                 before: { rate: preview.oldRate, total: preview.oldTotal, walletBalance: preview.walletBalance },
-                after: { rate: params.newRate, total: preview.newTotal, walletBalance: rebuilt.balance },
+                after: { rate: params.newRate, total: preview.newTotal, walletBalance: rebuiltBalance },
                 details: { reason, correctionId: operation.id, diemRequestId: current.diemRequestId },
             },
         });

@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { isPrismaWriteConflict, runSerializableTransaction } from "@/lib/prisma-transaction";
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import { marketingConfig } from "@/lib/marketing/config";
+import { syncCreditedTopUpsBeforeClosing } from "@/services/wallet/gateway-topup.service";
 import {
     buildFinancialSnapshot,
     canIssueAccountStatement,
@@ -136,6 +137,7 @@ async function enrichMovements(db: Db, transactions: SourceTransaction[]): Promi
             amount,
             balanceAfter: transaction.balanceAfter as number,
             occurredAt: transaction.occurredAt.toISOString(),
+            occurredAtSource: transaction.occurredAtSource,
             description:
                 transaction.type === "OPENING_BALANCE" ? "Saldo anterior"
                     : transaction.type === "CONSUMPTION" ? (productDetail ?? "Consumo")
@@ -279,13 +281,22 @@ async function buildPreview(db: Db, companyId: string, cutoffAt: Date) {
     };
 }
 
+const TOP_UPS_UNVERIFIED = "No se pudieron verificar con Diem las recargas acreditadas pendientes. Intenta de nuevo antes de emitir.";
+
 export async function previewAccountStatement(params: {
     companyId: string;
     cutoffAt: Date;
     actor: StatementActor;
 }) {
     assertCanIssue(params.actor);
-    return buildPreview(prisma, params.companyId, params.cutoffAt);
+    const topUpsVerified = await syncCreditedTopUpsBeforeClosing(params.companyId);
+    const preview = await buildPreview(prisma, params.companyId, params.cutoffAt);
+    if (topUpsVerified) return preview;
+    return {
+        ...preview,
+        canIssue: false,
+        blockers: [...preview.blockers, TOP_UPS_UNVERIFIED],
+    };
 }
 
 export async function issueAccountStatement(params: {
@@ -295,6 +306,11 @@ export async function issueAccountStatement(params: {
     actor: StatementActor;
 }) {
     assertCanIssue(params.actor);
+    // A credited top-up recorded after closing would fall into the issued
+    // period and never be reported: record pending credits first.
+    if (!await syncCreditedTopUpsBeforeClosing(params.companyId)) {
+        throw conflict(TOP_UPS_UNVERIFIED);
+    }
     try {
         return await runSerializableTransaction(prisma, async (tx) => {
             const wallet = await tx.wallet.findUnique({ where: { companyId: params.companyId }, select: { id: true } });
@@ -344,6 +360,7 @@ export async function issueAccountStatement(params: {
                             walletTransactionId: line.id,
                             position: line.position,
                             occurredAt: new Date(line.occurredAt),
+                            occurredAtSource: line.occurredAtSource ?? null,
                             type: line.type as WalletTransactionType,
                             description: line.description,
                             productDetail: line.productDetail,

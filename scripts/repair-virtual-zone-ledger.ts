@@ -216,12 +216,18 @@ async function apply(manifest: Manifest, fingerprint: string) {
                 id: OPENING_ID, walletId: WALLET_ID, type: "OPENING_BALANCE", status: "CONFIRMED",
                 amount: 1_679_200, balanceAfter: -1_679_200, description: "Saldo anterior - Virtual Zone",
                 createdById: ACTOR_ID, occurredAt: new Date("2026-09-29T13:39:00-05:00"),
+                occurredAtSource: "LEDGER_EVENT",
             },
             update: { amount: 1_679_200, balanceAfter: -1_679_200, occurredAt: new Date("2026-09-29T13:39:00-05:00") },
         });
         await tx.walletTransaction.update({
             where: { id: PAYMENT_ID },
-            data: { occurredAt: new Date("2026-09-30T16:29:00-05:00"), description: "Pago - Virtual Zone", balanceAfter: null },
+            data: {
+                occurredAt: new Date("2026-09-30T16:29:00-05:00"),
+                occurredAtSource: "PAYMENT",
+                description: "Pago - Virtual Zone",
+                balanceAfter: null,
+            },
         });
         for (const [eventIndex, event] of manifest.events.entries()) {
             const purchase = await tx.codePurchase.update({

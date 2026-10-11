@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth/guard";
 import { AppError } from "@/lib/errors";
+import { parseMovementQuery } from "@/lib/wallet/movement-query";
 import { getWalletSummaries, getWalletForCompany } from "@/services/wallet/wallet.service";
 
 /**
  * GET /api/wallets
  * Plataforma (SUPER_ADMIN/SYSTEM_ADMIN): todas las wallets con balance por compañía.
- * OWNER/GENERAL_ADMIN: su propia wallet con movimientos paginados (?page=).
+ * OWNER/GENERAL_ADMIN: su propia wallet con movimientos paginados
+ * (?page=&type=&from=&to=), ordenados por fecha efectiva.
  */
 async function handler(req: NextRequest, ctx: any, ability: any, user: any) {
     try {
@@ -24,8 +26,8 @@ async function handler(req: NextRequest, ctx: any, ability: any, user: any) {
             );
         }
 
-        const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1", 10) || 1;
-        const data = await getWalletForCompany(user.companyId, { page });
+        const filters = parseMovementQuery(req.nextUrl.searchParams);
+        const data = await getWalletForCompany(user.companyId, filters);
         return NextResponse.json({ scope: "company", ...data });
     } catch (e: any) {
         if (e instanceof AppError) {

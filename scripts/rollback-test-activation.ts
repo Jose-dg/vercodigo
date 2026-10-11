@@ -23,9 +23,8 @@ for (const line of readFileSync(envPath, 'utf8').split('\n')) {
 }
 
 import prisma from '../src/lib/prisma';
-import { recharge } from '../src/services/wallet/wallet.service';
+import { rebuildWalletLedger } from '../src/services/wallet/ledger-write';
 
-const PLATFORM_ACTOR_ID = 'cmixxhiad00092fwzu5gsb6gy';
 
 async function main() {
     const cardUuid = (process.argv[2] || '').trim().toUpperCase();
@@ -53,22 +52,14 @@ async function main() {
         : null;
 
     await prisma.$transaction(async (tx) => {
-        if (walletTx && walletTx.status === 'CONFIRMED' && walletTx.amount > 0) {
-            await recharge({
-                companyId: card.store.companyId,
-                amount: Number(walletTx.amount),
-                method: 'MANUAL',
-                externalReference: `rollback-${cardUuid}`,
-                description: `Reverso activacion test ${cardUuid}`,
-                actorId: PLATFORM_ACTOR_ID,
-            });
-        }
-
         if (activation) {
             await tx.activationAttempt.deleteMany({ where: { cardId: card.id, success: true } });
             await tx.walletTransaction.deleteMany({ where: { cardActivationId: activation.id } });
             await tx.cardActivation.delete({ where: { id: activation.id } });
         }
+        // The test debit is erased, not compensated: rebuild the running
+        // balances so the wallet matches its remaining movements.
+        if (walletTx) await rebuildWalletLedger(tx, walletTx.walletId);
 
         if (card.keyId) {
             await tx.key.delete({ where: { id: card.keyId } }).catch(() => undefined);

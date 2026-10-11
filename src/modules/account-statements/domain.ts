@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import type { WalletTimeSource } from "../../lib/wallet/effective-time.ts";
+
 export type StatementMovementType = "OPENING_BALANCE" | "RECHARGE" | "CONSUMPTION" | "ADJUSTMENT" | "REFUND";
 
 export type StatementMovement = {
@@ -8,6 +10,8 @@ export type StatementMovement = {
     amount: number | string;
     balanceAfter: number | string;
     occurredAt: string;
+    /** Origin of occurredAt; null on lines issued before it was captured. */
+    occurredAtSource?: WalletTimeSource | null;
     description: string;
     productDetail?: string | null;
     quantity?: number | null;

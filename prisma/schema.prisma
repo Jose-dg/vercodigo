@@ -376,6 +376,8 @@ model CodePurchase {
   status                String               @default("PENDING") // PENDING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
   idempotencyKey        String               @unique
   diemRequestId         String?              @unique
+  /// Exact command sent to Diem; frozen so retries never break its idempotency hash.
+  diemRequestSnapshot   Json?
   fulfillmentStatus     String?
   deliveredCodes        Json?
   lastError             String?
@@ -683,6 +685,8 @@ model ActivationJob {
   lastError           String?
   idempotencyKey      String    @unique
   diemRequestId       String?   @unique
+  /// Exact command sent to Diem; frozen so retries never break its idempotency hash.
+  diemRequestSnapshot Json?
   fulfillmentStatus   String?
   commercialAmount    Float?
   commercialCurrency  String?

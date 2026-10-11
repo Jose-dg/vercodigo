@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 
 import {
+    buildCodeRequestCommand,
     checkDiemConnection,
+    isDiemContractError,
+    isDiemIdempotencyConflict,
+    parseCodeRequestCommand,
+    sendCodeRequest,
     correctCodeRequestCommercialPrice,
     correctCodeRequestPurchaseOrigin,
     createCodeRequest,
@@ -324,4 +329,57 @@ test('connection check validates credentials, store grant and catalog access', a
             two: 0,
         },
     });
+});
+
+const commandParams = () => ({
+    idempotencyKey: 'diem-sas-purchase:c1:k1',
+    externalReference: 'DIEM-SAS-PURCHASE-p1',
+    correlationId: 'code-purchase:p1',
+    source: 'partner_api',
+    productId: 'remote-1',
+    quantity: 2,
+    recipient: { firstName: 'Ana', lastName: 'Ruiz', email: 'ana@test.local' },
+    commercial: {
+        accountCode: 'diem-sas:c1',
+        referenceNamespace: 'code_purchase',
+        currencyCode: 'COP',
+        unitPrice: 36000,
+        totalAmount: 72000,
+    },
+    metadata: { store_name: 'Tienda 1' },
+});
+
+test('a frozen command survives a JSON round trip and resends the identical payload', async () => {
+    const command = buildCodeRequestCommand(commandParams());
+    const stored = JSON.parse(JSON.stringify(command));
+    assert.deepEqual(parseCodeRequestCommand(stored), command);
+
+    const sent = [];
+    globalThis.fetch = async (url, init) => {
+        sent.push({ key: init.headers['Idempotency-Key'], body: init.body });
+        return new Response(JSON.stringify({
+            id: 'r1', commercial_order_id: 'o1', status: 'received', external_reference: 'DIEM-SAS-PURCHASE-p1',
+        }), { status: 201 });
+    };
+    await sendCodeRequest(command);
+    await sendCodeRequest(parseCodeRequestCommand(stored));
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0].key, sent[1].key);
+    assert.equal(sent[0].body, sent[1].body);
+});
+
+test('malformed or missing snapshots are rejected so legacy rows rebuild once', () => {
+    assert.equal(parseCodeRequestCommand(null), null);
+    assert.equal(parseCodeRequestCommand({ idempotencyKey: 'k', correlationId: 'c' }), null);
+    assert.equal(parseCodeRequestCommand({ idempotencyKey: '', correlationId: 'c', body: {} }), null);
+    assert.equal(parseCodeRequestCommand([1, 2]), null);
+});
+
+test('a Diem idempotency 409 is a permanent contract error, other 409s are not', () => {
+    const conflict = Object.assign(new Error('Idempotency key was already used with a different payload'), { status: 409 });
+    const other = Object.assign(new Error('Order is locked'), { status: 409 });
+    assert.equal(isDiemIdempotencyConflict(conflict), true);
+    assert.equal(isDiemContractError(conflict), true);
+    assert.equal(isDiemIdempotencyConflict(other), false);
+    assert.equal(isDiemContractError(other), false);
 });

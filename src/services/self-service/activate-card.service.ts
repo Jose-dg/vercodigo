@@ -1,12 +1,16 @@
 import crypto from "crypto";
 
+import { Prisma } from "@prisma/client";
+
 import prisma from "@/lib/prisma";
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import {
+    buildCodeRequestCommand,
     buildCommercialAccountCode,
-    createCodeRequest,
     getCodeRequest,
     isDiemContractError,
+    isDiemIdempotencyConflict,
+    sendCodeRequest,
     revealCodeRequest,
 } from "@/lib/devdiem/fulfillment";
 import { assertCanActivateCard } from "./permissions.service";
@@ -20,6 +24,7 @@ import {
 } from "@/lib/devdiem/resolve-card-catalog";
 import { isSettledFulfillmentStatus } from "./fulfillment-lifecycle";
 import { OPEN_ACTIVATION_JOB_STATUSES } from "@/lib/codes/fulfillment-order";
+import { frozenCodeRequestCommand } from "./diem-request-snapshot";
 
 type ActivationJobWriter = Pick<typeof prisma, "activationJob">;
 
@@ -119,33 +124,46 @@ export async function processActivationJob(jobId: string) {
 
     try {
         if (!job.diemRequestId) {
+            const current = job;
             const [firstName, ...lastName] = (actor.name || actor.email).trim().split(/\s+/);
-            const remote = await createCodeRequest({
-                idempotencyKey: job.idempotencyKey,
-                externalReference: `DIEM-SAS-ACTIVATION-${job.id}`,
-                correlationId: `card-activation:${job.id}`,
-                source: "physical_card",
-                productId: remoteProductId,
-                quantity: 1,
-                recipient: {
-                    firstName,
-                    lastName: lastName.join(" "),
-                    email: actor.email,
-                },
-                commercial: {
-                    accountCode: buildCommercialAccountCode(job.card.store.companyId),
-                    referenceNamespace: "card_activation",
-                    currencyCode: job.commercialCurrency!,
-                    unitPrice: job.commercialAmount!,
-                    totalAmount: job.commercialAmount!,
-                },
-                metadata: {
-                    activation_job_id: job.id,
-                    card_uuid: job.card.uuid,
-                    company_id: job.card.store.companyId,
-                    store_id: job.card.storeId,
-                },
+            const command = await frozenCodeRequestCommand({
+                stored: current.diemRequestSnapshot,
+                build: () => buildCodeRequestCommand({
+                    idempotencyKey: current.idempotencyKey,
+                    externalReference: `DIEM-SAS-ACTIVATION-${current.id}`,
+                    correlationId: `card-activation:${current.id}`,
+                    source: "physical_card",
+                    productId: remoteProductId,
+                    quantity: 1,
+                    recipient: {
+                        firstName,
+                        lastName: lastName.join(" "),
+                        email: actor.email,
+                    },
+                    commercial: {
+                        accountCode: buildCommercialAccountCode(current.card.store.companyId),
+                        referenceNamespace: "card_activation",
+                        currencyCode: current.commercialCurrency!,
+                        unitPrice: current.commercialAmount!,
+                        totalAmount: current.commercialAmount!,
+                    },
+                    metadata: {
+                        activation_job_id: current.id,
+                        card_uuid: current.card.uuid,
+                        company_id: current.card.store.companyId,
+                        store_id: current.card.storeId,
+                    },
+                }),
+                persistIfAbsent: async (frozen) => (await prisma.activationJob.updateMany({
+                    where: { id: current.id, diemRequestSnapshot: { equals: Prisma.DbNull } },
+                    data: { diemRequestSnapshot: frozen as Prisma.InputJsonValue },
+                })).count,
+                reload: async () => (await prisma.activationJob.findUniqueOrThrow({
+                    where: { id: current.id },
+                    select: { diemRequestSnapshot: true },
+                })).diemRequestSnapshot,
             });
+            const remote = await sendCodeRequest(command);
             const linked = await prisma.activationJob.updateMany({
                 where: {
                     id: job.id,
@@ -391,6 +409,17 @@ export async function processActivationJob(jobId: string) {
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : "UNKNOWN";
+        // Diem already holds a request under this key: never release the card,
+        // park the job for review instead of failing it.
+        if (isDiemIdempotencyConflict(error)) {
+            await updateOpenActivationJob(prisma, job.id, {
+                status: "ACTION_REQUIRED",
+                attempts: { increment: 1 },
+                lastError: `Diem rechazó el reintento por idempotencia: ${message}`.slice(0, 1000),
+                nextRetryAt: null,
+            }).catch(() => undefined);
+            throw error;
+        }
         const permanent = isDiemContractError(error) && !job.diemRequestId;
         await prisma.$transaction(async (tx) => {
             const applied = await updateOpenActivationJob(tx, job!.id, {

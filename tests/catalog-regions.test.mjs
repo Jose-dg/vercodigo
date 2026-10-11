@@ -108,6 +108,7 @@ test('sums reported denomination stock and labels out-of-stock', () => {
     assert.equal(productStock(withStock), 2);
     assert.equal(stockLabel(0), 'Sin stock');
     assert.equal(stockLabel(2), '2 disponibles');
-    assert.equal(maxPurchasableQuantity(0), 0);
+    // Zero stock does not cap the order: Diem parks it as awaiting_stock (2cf83ba).
+    assert.equal(maxPurchasableQuantity(0), 100);
     assert.equal(maxPurchasableQuantity(null), 100);
 });

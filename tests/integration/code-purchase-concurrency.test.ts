@@ -87,9 +87,16 @@ beforeEach(async () => {
     remoteScript = () => ({ status: "delivered", delayMs: 0 });
     await prisma.walletTransaction.deleteMany();
     await prisma.wallet.deleteMany();
+    // Other integration files share this disposable database.
+    await prisma.activationAttempt.deleteMany();
+    await prisma.cardActivation.deleteMany();
+    await prisma.activationJob.deleteMany();
+    await prisma.card.deleteMany();
+    await prisma.key.deleteMany();
     await prisma.codePurchase.deleteMany();
     await prisma.product.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.store.deleteMany();
     await prisma.company.deleteMany();
 
     const suffix = Math.random().toString(36).slice(2);

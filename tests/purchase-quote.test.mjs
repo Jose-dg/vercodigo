@@ -85,3 +85,12 @@ test("el checkout cotiza con la misma regla que el cobro, no con las tarifas USD
     assert.match(resolveCost.slice(0, resolveCost.indexOf("\n}\n")), /computeCost\(/);
     assert.match(quotes.slice(0, quotes.indexOf("\n}\n")), /computeCost\(/);
 });
+
+test("el costo se redondea a centavos para que cotización, débito y orden Diem coincidan", () => {
+    const cost = computeCost({
+        ...base,
+        denomination: { amount: 10, currency: "USD" },
+        costs: [{ companyId: "company-a", cost: 33333.3333, currency: "COP" }],
+    });
+    assert.equal(cost.amount, 33333.33);
+});

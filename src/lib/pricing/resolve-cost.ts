@@ -28,6 +28,13 @@ export interface CostInputs {
  * costo de la compañía → costo global → valor nominal de la denominación.
  */
 export function computeCost(inputs: CostInputs): ResolvedCost | null {
+    const cost = resolveCostRule(inputs);
+    // Cents are the unit Diem reconciles (unit × quantity === total) and the
+    // wallet debits; quote, debit and the Diem order all start from this value.
+    return cost ? { ...cost, amount: Math.round(cost.amount * 100) / 100 } : null;
+}
+
+function resolveCostRule(inputs: CostInputs): ResolvedCost | null {
     const walletCurrency = (inputs.walletCurrency ?? "COP").toUpperCase();
     const fallbackRate = inputs.fallbackRateCopPerUsd != null && inputs.fallbackRateCopPerUsd > 0
         ? inputs.fallbackRateCopPerUsd

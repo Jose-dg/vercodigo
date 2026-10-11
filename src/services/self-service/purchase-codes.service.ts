@@ -4,8 +4,9 @@ import prisma from "@/lib/prisma";
 import { badRequest, conflict, notFound } from "@/lib/errors";
 import type { TokenPayload } from "@/lib/auth";
 import {
+    buildCodeRequestCommand,
     buildCommercialAccountCode,
-    createCodeRequest,
+    sendCodeRequest,
     getCodeRequest,
     isDiemContractError,
     isDiemRateLimited,
@@ -18,6 +19,7 @@ import { buildPurchaseTimeline } from "@/lib/codes/purchase-timeline";
 import { resolvePurchaseOrigin, type RequestedOrigin } from "@/services/purchases/purchase-origin";
 import { purchaseOriginSnapshot } from "@/lib/purchases/origin-snapshot";
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
+import { frozenCodeRequestCommand } from "@/services/self-service/diem-request-snapshot";
 import {
     OPEN_CODE_PURCHASE_STATUSES,
     isOpenCodePurchaseStatus,
@@ -225,70 +227,83 @@ export async function processCodePurchase(purchaseId: string) {
 
     try {
         if (!purchase.diemRequestId) {
-            const [user, originCompany, originStore, originPhone] = await Promise.all([
-                prisma.user.findUnique({
-                    where: { id: purchase.userId },
-                    select: { email: true, name: true },
-                }),
-                prisma.company.findUnique({
-                    where: { id: purchase.companyId },
-                    select: { name: true },
-                }),
-                purchase.storeId
-                    ? prisma.store.findFirst({
-                        where: {
-                            id: purchase.storeId,
-                            companyId: purchase.companyId,
-                        },
-                        select: { name: true },
-                    })
-                    : Promise.resolve(null),
-                purchase.purchaseOriginPhoneId
-                    ? prisma.purchaseOriginPhone.findFirst({
-                        where: {
-                            id: purchase.purchaseOriginPhoneId,
-                            companyId: purchase.companyId,
-                        },
-                        select: { phone: true },
-                    })
-                    : Promise.resolve(null),
-            ]);
-            if (!user?.email) throw conflict("El usuario necesita un email para recibir el código");
-            const [firstName, ...lastName] = (user.name || user.email).trim().split(/\s+/);
-            // Idempotent in Diem: concurrent processors receive the same request.
-            const request = await createCodeRequest({
-                idempotencyKey: purchase.idempotencyKey,
-                externalReference: `DIEM-SAS-PURCHASE-${purchase.id}`,
-                correlationId: `code-purchase:${purchase.id}`,
-                source: "partner_api",
-                productId: remoteProductId,
-                quantity: purchase.count,
-                recipient: {
-                    firstName,
-                    lastName: lastName.join(" "),
-                    email: user.email,
-                },
-                commercial: {
-                    accountCode: buildCommercialAccountCode(purchase.companyId),
-                    referenceNamespace: "code_purchase",
-                    currencyCode: purchase.currency,
-                    unitPrice: purchase.totalAmount / purchase.count,
-                    totalAmount: purchase.totalAmount,
-                },
-                metadata: {
-                    code_purchase_id: purchase.id,
-                    company_id: purchase.companyId,
-                    company_name: originCompany?.name ?? null,
-                    store_id: purchase.storeId,
-                    store_name: originStore?.name ?? null,
-                    purchase_origin: purchaseOriginSnapshot({
-                        ...purchase,
-                        purchaseOriginPhone: originPhone,
+            const current = purchase;
+            const buildCommand = async () => {
+                const [user, originCompany, originStore, originPhone] = await Promise.all([
+                    prisma.user.findUnique({
+                        where: { id: current.userId },
+                        select: { email: true, name: true },
                     }),
-                    commercial_occurred_at: purchase.occurredAt.toISOString(),
-                    commercial_sequence: purchase.occurredSequence,
-                },
+                    prisma.company.findUnique({
+                        where: { id: current.companyId },
+                        select: { name: true },
+                    }),
+                    current.storeId
+                        ? prisma.store.findFirst({
+                            where: {
+                                id: current.storeId,
+                                companyId: current.companyId,
+                            },
+                            select: { name: true },
+                        })
+                        : Promise.resolve(null),
+                    current.purchaseOriginPhoneId
+                        ? prisma.purchaseOriginPhone.findFirst({
+                            where: {
+                                id: current.purchaseOriginPhoneId,
+                                companyId: current.companyId,
+                            },
+                            select: { phone: true },
+                        })
+                        : Promise.resolve(null),
+                ]);
+                if (!user?.email) throw conflict("El usuario necesita un email para recibir el código");
+                const [firstName, ...lastName] = (user.name || user.email).trim().split(/\s+/);
+                return buildCodeRequestCommand({
+                    idempotencyKey: current.idempotencyKey,
+                    externalReference: `DIEM-SAS-PURCHASE-${current.id}`,
+                    correlationId: `code-purchase:${current.id}`,
+                    source: "partner_api",
+                    productId: remoteProductId,
+                    quantity: current.count,
+                    recipient: {
+                        firstName,
+                        lastName: lastName.join(" "),
+                        email: user.email,
+                    },
+                    commercial: {
+                        accountCode: buildCommercialAccountCode(current.companyId),
+                        referenceNamespace: "code_purchase",
+                        currencyCode: current.currency,
+                        unitPrice: current.totalAmount / current.count,
+                        totalAmount: current.totalAmount,
+                    },
+                    metadata: {
+                        code_purchase_id: current.id,
+                        company_id: current.companyId,
+                        company_name: originCompany?.name ?? null,
+                        store_id: current.storeId,
+                        store_name: originStore?.name ?? null,
+                        purchase_origin: purchaseOriginSnapshot({
+                            ...current,
+                            purchaseOriginPhone: originPhone,
+                        }),
+                        commercial_occurred_at: current.occurredAt.toISOString(),
+                        commercial_sequence: current.occurredSequence,
+                    },
+                });
+            };
+            // Idempotent in Diem: concurrent processors send the same frozen command.
+            const command = await frozenCodeRequestCommand({
+                stored: current.diemRequestSnapshot,
+                build: buildCommand,
+                persistIfAbsent: async (frozen) => (await prisma.codePurchase.updateMany({
+                    where: { id: current.id, diemRequestSnapshot: { equals: Prisma.DbNull } },
+                    data: { diemRequestSnapshot: frozen as Prisma.InputJsonValue },
+                })).count,
+                reload: async () => (await loadPurchase(current.id)).diemRequestSnapshot,
             });
+            const request = await sendCodeRequest(command);
             const linked = await prisma.codePurchase.updateMany({
                 where: {
                     id: purchase.id,

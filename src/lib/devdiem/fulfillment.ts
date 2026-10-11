@@ -72,6 +72,16 @@ export function isDiemRateLimited(error: unknown): error is DiemHttpError {
     );
 }
 
+/**
+ * Diem already holds a request under this Idempotency-Key with a different
+ * payload. Retrying cannot succeed and must not create a second request.
+ */
+export function isDiemIdempotencyConflict(error: unknown): error is DiemHttpError {
+    if (!error || typeof error !== 'object') return false;
+    return (error as DiemHttpError).status === 409
+        && String((error as Error).message || '').toLowerCase().includes('idempotency');
+}
+
 /** Permanent partner-contract failures that should leave the queue (not soft PENDING). */
 export function isDiemContractError(error: unknown): error is DiemHttpError {
     if (!error || typeof error !== 'object') return false;
@@ -80,6 +90,7 @@ export function isDiemContractError(error: unknown): error is DiemHttpError {
     const reason = String((error as DiemHttpError).reason || '').toLowerCase();
     const haystack = `${message} ${reason}`;
     if (status === 401 || status === 403) return true;
+    if (isDiemIdempotencyConflict(error)) return true;
     if (status !== 400 && status !== 422) return false;
     return (
         haystack.includes('commercial')
@@ -212,7 +223,7 @@ function requireCommercialOrder(request: CodeRequest): CodeRequest {
     return request;
 }
 
-export async function createCodeRequest(params: {
+export type CodeRequestParams = {
     idempotencyKey: string;
     externalReference: string;
     source: 'partner_api' | 'physical_card';
@@ -233,7 +244,20 @@ export async function createCodeRequest(params: {
     };
     metadata?: Record<string, unknown>;
     correlationId?: string;
-}): Promise<CodeRequest> {
+};
+
+/**
+ * The exact command sent to Diem. Diem hashes the whole payload behind the
+ * Idempotency-Key, so it is frozen on the first attempt and every retry
+ * resends it unchanged (see diemRequestSnapshot).
+ */
+export type CodeRequestCommand = {
+    idempotencyKey: string;
+    correlationId: string;
+    body: Record<string, unknown>;
+};
+
+export function buildCodeRequestCommand(params: CodeRequestParams): CodeRequestCommand {
     const config = getDiemConfig();
     if (!params.commercial?.accountCode?.trim()) {
         throw new Error('commercial.accountCode es obligatorio para el contrato Diem');
@@ -252,14 +276,10 @@ export async function createCodeRequest(params: {
         shipping_amount: '0.00',
         total_amount: money.totalAmount,
     };
-    const response = await fetch(`${config.baseUrl}/api/v1/code-requests/`, {
-        method: 'POST',
-        headers: headers(config, {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': params.idempotencyKey,
-            'X-Correlation-ID': params.correlationId || params.externalReference,
-        }),
-        body: JSON.stringify({
+    return {
+        idempotencyKey: params.idempotencyKey,
+        correlationId: params.correlationId || params.externalReference,
+        body: {
             store_id: config.storeId,
             external_reference: params.externalReference,
             source: params.source,
@@ -282,9 +302,57 @@ export async function createCodeRequest(params: {
                 commercial_account_code: commercialPayload.account_code,
                 ...params.metadata,
             },
+        },
+    };
+}
+
+/** A persisted command, or null when absent/malformed (legacy rows). */
+export function parseCodeRequestCommand(value: unknown): CodeRequestCommand | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const { idempotencyKey, correlationId, body } = value as Record<string, unknown>;
+    if (typeof idempotencyKey !== 'string' || !idempotencyKey) return null;
+    if (typeof correlationId !== 'string' || !correlationId) return null;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+    return { idempotencyKey, correlationId, body: body as Record<string, unknown> };
+}
+
+/**
+ * JSON with keys sorted at every level, matching Diem's canonical hash
+ * (json.dumps(sort_keys=True)). PostgreSQL JSONB does not keep key order, so
+ * a command reloaded from diemRequestSnapshot still serializes byte-for-byte
+ * like the first attempt.
+ */
+export function canonicalJson(value: unknown): string {
+    const sortKeys = (node: unknown): unknown => {
+        if (Array.isArray(node)) return node.map(sortKeys);
+        if (node && typeof node === 'object') {
+            return Object.fromEntries(
+                Object.keys(node as Record<string, unknown>)
+                    .sort()
+                    .map((key) => [key, sortKeys((node as Record<string, unknown>)[key])]),
+            );
+        }
+        return node;
+    };
+    return JSON.stringify(sortKeys(value));
+}
+
+export async function sendCodeRequest(command: CodeRequestCommand): Promise<CodeRequest> {
+    const config = getDiemConfig();
+    const response = await fetch(`${config.baseUrl}/api/v1/code-requests/`, {
+        method: 'POST',
+        headers: headers(config, {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': command.idempotencyKey,
+            'X-Correlation-ID': command.correlationId,
         }),
+        body: canonicalJson(command.body),
     });
     return requireCommercialOrder(await parse<CodeRequest>(response));
+}
+
+export async function createCodeRequest(params: CodeRequestParams): Promise<CodeRequest> {
+    return sendCodeRequest(buildCodeRequestCommand(params));
 }
 
 export async function getCodeRequest(requestId: string): Promise<CodeRequest> {

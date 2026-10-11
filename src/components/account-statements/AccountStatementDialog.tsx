@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatLedgerDateTime } from "@/lib/wallet/effective-time";
 
 type Preview = {
     companyId: string;
@@ -36,6 +37,7 @@ type Preview = {
     lines: Array<{
         id: string;
         occurredAt: string;
+        occurredAtSource?: string | null;
         description: string;
         quantity: number | null;
         debit: string;
@@ -166,7 +168,7 @@ export function AccountStatementDialog({ companyId, companyName }: { companyId: 
                                 </div>
                             </div>
                             <p className="mt-3 text-xs text-muted-foreground">
-                                {new Date(preview.periodStart).toLocaleString("es-CO")} – {new Date(preview.periodEnd).toLocaleString("es-CO")} · {preview.lines.length} movimientos
+                                {formatLedgerDateTime(preview.periodStart)} – {formatLedgerDateTime(preview.periodEnd)} · {preview.lines.length} movimientos
                             </p>
                         </div>
 
@@ -194,7 +196,12 @@ export function AccountStatementDialog({ companyId, companyName }: { companyId: 
                                 <TableBody>
                                     {preview.lines.map((line) => (
                                         <TableRow key={line.id}>
-                                            <TableCell className="whitespace-nowrap text-xs">{new Date(line.occurredAt).toLocaleString("es-CO")}</TableCell>
+                                            <TableCell className="whitespace-nowrap text-xs">
+                                                {formatLedgerDateTime(line.occurredAt)}
+                                                {line.occurredAtSource === "REGISTRATION_ONLY" ? (
+                                                    <div className="text-amber-700 dark:text-amber-400">Sin hora de pago</div>
+                                                ) : null}
+                                            </TableCell>
                                             <TableCell>{line.description}</TableCell>
                                             <TableCell className="text-right">{line.quantity ?? "—"}</TableCell>
                                             <TableCell className="text-right tabular-nums">{Number(line.debit) ? money(line.debit, preview.currency) : "—"}</TableCell>

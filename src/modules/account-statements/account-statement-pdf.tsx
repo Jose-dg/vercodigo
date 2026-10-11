@@ -31,6 +31,7 @@ export type PdfStatement = {
     lines: Array<{
         id: string;
         occurredAt: Date;
+        occurredAtSource?: string | null;
         description: string;
         productDetail: string | null;
         quantity: number | null;
@@ -176,6 +177,9 @@ export function AccountStatementDocument({ statement }: { statement: PdfStatemen
                                 <Text>{redactSensitiveCodes(line.description)}</Text>
                                 {line.productDetail && line.productDetail !== line.description
                                     ? <Text style={styles.product}>{redactSensitiveCodes(line.productDetail)}</Text>
+                                    : null}
+                                {line.occurredAtSource === "REGISTRATION_ONLY"
+                                    ? <Text style={styles.product}>Sin hora de pago: fecha de registro</Text>
                                     : null}
                             </View>
                             <Text style={styles.qty}>{line.quantity ?? "—"}</Text>

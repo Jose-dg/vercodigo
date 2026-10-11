@@ -21,9 +21,11 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
-import { Plus, RefreshCw } from "lucide-react";
+import { List, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AccountStatementDialog } from "@/components/account-statements/AccountStatementDialog";
+import { useWalletMovements, WalletMovementsTable } from "@/components/wallet/wallet-movements-table";
+import { bogotaLocalNow, bogotaLocalToIso } from "@/lib/wallet/effective-time";
 
 interface WalletSummary {
     companyId: string;
@@ -44,6 +46,12 @@ function formatMoney(amount: number, currency: string) {
     return new Intl.NumberFormat("es-CO", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
 }
 
+/** Keyed by company so page and filter start fresh for each one. */
+function CompanyMovements({ companyId }: { companyId: string }) {
+    const movements = useWalletMovements(`/api/wallets/${encodeURIComponent(companyId)}/transactions`);
+    return <WalletMovementsTable movements={movements} />;
+}
+
 export default function WalletsAdminPage() {
     const ability = useAbility();
     const [wallets, setWallets] = useState<WalletSummary[]>([]);
@@ -57,6 +65,13 @@ export default function WalletsAdminPage() {
     const [rechargeAmount, setRechargeAmount] = useState("");
     const [rechargeReference, setRechargeReference] = useState("");
     const [rechargeDescription, setRechargeDescription] = useState("");
+    // Hora del pago en Colombia (datetime-local). Sin valor por defecto: la
+    // hora de registro nunca debe pasar por hora del pago.
+    const [rechargePaidAt, setRechargePaidAt] = useState("");
+    // Una clave por intento de abono; los reintentos reutilizan la misma.
+    const [rechargeKey, setRechargeKey] = useState("");
+
+    const [movementsCompany, setMovementsCompany] = useState<WalletSummary | null>(null);
 
     // Formulario tasa FX
     const [fxRate, setFxRate] = useState("");
@@ -92,6 +107,8 @@ export default function WalletsAdminPage() {
         setRechargeAmount("");
         setRechargeReference("");
         setRechargeDescription("");
+        setRechargePaidAt("");
+        setRechargeKey(crypto.randomUUID());
         setIsSheetOpen(true);
     };
 
@@ -101,23 +118,33 @@ export default function WalletsAdminPage() {
             toast.error("Monto inválido");
             return;
         }
+        if (!rechargeReference.trim()) {
+            toast.error("Ingresa la referencia de la transferencia");
+            return;
+        }
+        let paidAt: string;
+        try {
+            paidAt = bogotaLocalToIso(rechargePaidAt);
+        } catch {
+            toast.error("Ingresa la fecha y hora del pago");
+            return;
+        }
         setSaving(true);
         try {
             const res = await fetch("/api/wallets/recharge", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Idempotency-Key": rechargeKey },
                 body: JSON.stringify({
                     companyId: rechargeCompanyId,
                     amount,
-                    externalReference: rechargeReference || undefined,
+                    paidAt,
+                    externalReference: rechargeReference.trim(),
                     description: rechargeDescription || undefined,
                 }),
             });
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.message || "Error registrando abono");
-            }
-            toast.success("Abono registrado");
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.message || "Error registrando abono");
+            toast.success(body.replayed ? "Este abono ya estaba registrado" : "Abono registrado");
             setIsSheetOpen(false);
             fetchData();
         } catch (e: any) {
@@ -255,6 +282,9 @@ export default function WalletsAdminPage() {
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex flex-wrap justify-end gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => setMovementsCompany(w)}>
+                                                    <List className="mr-1 h-4 w-4" /> Movimientos
+                                                </Button>
                                                 <AccountStatementDialog companyId={w.companyId} companyName={w.companyName} />
                                                 <Button size="sm" onClick={() => openRecharge(w.companyId)}>
                                                     <Plus className="mr-1 h-4 w-4" /> Abono
@@ -292,9 +322,24 @@ export default function WalletsAdminPage() {
                             />
                         </div>
                         <div className="space-y-1">
-                            <Label htmlFor="reference"># Referencia de transferencia (opcional)</Label>
+                            <Label htmlFor="paidAt">Fecha y hora del pago (hora Colombia)</Label>
+                            <Input
+                                id="paidAt"
+                                type="datetime-local"
+                                required
+                                max={bogotaLocalNow()}
+                                value={rechargePaidAt}
+                                onChange={(e) => setRechargePaidAt(e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                La del comprobante bancario. El movimiento se ordena y se reporta con esta hora.
+                            </p>
+                        </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="reference"># Referencia de transferencia</Label>
                             <Input
                                 id="reference"
+                                required
                                 value={rechargeReference}
                                 onChange={(e) => setRechargeReference(e.target.value)}
                             />
@@ -313,6 +358,20 @@ export default function WalletsAdminPage() {
                                 {saving ? "Guardando..." : "Registrar abono"}
                             </Button>
                         </div>
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            <Sheet open={movementsCompany !== null} onOpenChange={(open) => !open && setMovementsCompany(null)}>
+                <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-4xl">
+                    <SheetHeader>
+                        <SheetTitle>Movimientos · {movementsCompany?.companyName}</SheetTitle>
+                        <SheetDescription>Movimientos de la wallet desde el saldo anterior, por fecha efectiva.</SheetDescription>
+                    </SheetHeader>
+                    <div className="px-4 pb-6">
+                        {movementsCompany ? (
+                            <CompanyMovements key={movementsCompany.companyId} companyId={movementsCompany.companyId} />
+                        ) : null}
                     </div>
                 </SheetContent>
             </Sheet>

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatLedgerDate } from "@/lib/wallet/effective-time";
 
 type StatementSummary = {
     id: string;
@@ -93,7 +94,7 @@ export function AccountStatementsPanel() {
                                 <TableRow key={statement.id}>
                                     <TableCell className="font-medium">{statement.statementNumber}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {new Date(statement.periodStart).toLocaleDateString("es-CO")} – {new Date(statement.periodEnd).toLocaleDateString("es-CO")}
+                                        {formatLedgerDate(statement.periodStart)} – {formatLedgerDate(statement.periodEnd)}
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                         <span className={hasDebt ? "font-semibold text-red-700" : "text-emerald-700"}>

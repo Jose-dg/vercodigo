@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 import { WALLET_TOPUPS_KEY } from "./top-up-dialog";
 import { useTopUp } from "./top-up-provider";
+import { formatLedgerDate } from "@/lib/wallet/effective-time";
 import { useWalletSummary } from "./wallet-balance-chip";
 
 const TONE_CLASS = {
@@ -96,7 +97,7 @@ export function TopUpHistory() {
                                         <p className="font-mono text-xs text-muted-foreground">
                                             {shortTopUpReference(topUp.id)}
                                             {topUp.created_at
-                                                ? ` · ${new Date(topUp.created_at).toLocaleDateString("es-CO", { dateStyle: "medium" })}`
+                                                ? ` · ${formatLedgerDate(topUp.created_at)}`
                                                 : ""}
                                         </p>
                                     </div>

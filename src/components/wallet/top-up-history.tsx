@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { Plus, RefreshCw } from "lucide-react";
+import { Paperclip, Plus, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TopUp } from "@/lib/devdiem/stored-value";
 import { formatMoney } from "@/lib/wallet/balance";
+import { evidenceCountLabel } from "@/lib/wallet/topup-evidence";
 import { shortTopUpReference, timeRemaining, topUpStatePresentation } from "@/lib/wallet/topups";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +89,7 @@ export function TopUpHistory() {
                         {data.map((topUp) => {
                             const state = topUpStatePresentation(topUp.state);
                             const payable = topUp.state === "created" && !timeRemaining(topUp.expires_at).expired;
+                            const receipts = topUp.evidence_count ?? 0;
                             return (
                                 <li key={topUp.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
                                     <div className="min-w-0 flex-1">
@@ -99,6 +101,13 @@ export function TopUpHistory() {
                                             {topUp.created_at
                                                 ? ` · ${formatLedgerDate(topUp.created_at)}`
                                                 : ""}
+                                            {receipts > 0 ? (
+                                                <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle" title={evidenceCountLabel(receipts)}>
+                                                    <Paperclip className="size-3" aria-hidden="true" />
+                                                    <span className="sr-only">{evidenceCountLabel(receipts)}</span>
+                                                    <span aria-hidden="true">{receipts}</span>
+                                                </span>
+                                            ) : null}
                                         </p>
                                     </div>
                                     <Badge variant="outline" className={cn("font-medium", TONE_CLASS[state.tone])}>
@@ -110,7 +119,7 @@ export function TopUpHistory() {
                                         </Button>
                                     ) : state.isOpen ? (
                                         <Button size="sm" variant="outline" onClick={() => openTopUp(topUp)}>
-                                            Ver estado
+                                            {topUp.state === "under_review" && receipts === 0 ? "Adjuntar comprobante" : "Ver estado"}
                                         </Button>
                                     ) : null}
                                 </li>

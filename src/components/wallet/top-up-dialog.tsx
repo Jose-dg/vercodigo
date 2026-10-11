@@ -600,6 +600,14 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
                             ))}
                         </ol>
 
+                        {current.state === "under_review" ? (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                                <p className="font-medium">No tienes que esperar para comprar.</p>
+                                <p className="mt-0.5 text-xs">
+                                    Puedes hacer tus compras ahora. El saldo se actualiza solo cuando finanzas confirme el pago.
+                                </p>
+                            </div>
+                        ) : null}
                         {topUpStatePresentation(current.state).isOpen ? (
                             <p className="text-xs text-muted-foreground">
                                 Puedes cerrar esta ventana: te avisaremos en el indicador de saldo cuando se acredite.

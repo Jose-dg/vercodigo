@@ -47,6 +47,8 @@ test("only waiting and under-review top-ups count as in flight", () => {
     assert.equal(total, 150000);
     assert.equal(topUpStatePresentation("credited").isOpen, false);
     assert.equal(topUpStatePresentation("under_review").label, "En revisión");
+    // Purchases never wait for the balance: the customer is told so.
+    assert.match(topUpStatePresentation("under_review").description, /seguir comprando/);
 });
 
 import {

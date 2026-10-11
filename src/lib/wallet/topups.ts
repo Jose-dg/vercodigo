@@ -25,7 +25,8 @@ const STATES: Record<TopUpState, TopUpStatePresentation> = {
     },
     under_review: {
         label: 'En revisión',
-        description: 'Recibimos tu reporte. Finanzas lo confirma contra el banco.',
+        // Purchases are never blocked by balance, so the customer need not wait.
+        description: 'Recibimos tu reporte. Finanzas lo confirma contra el banco; mientras tanto puedes seguir comprando.',
         tone: 'review',
         isOpen: true,
     },

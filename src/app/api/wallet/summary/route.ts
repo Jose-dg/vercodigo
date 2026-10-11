@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/auth/guard';
 import type { AuthenticatedActor } from '@/lib/auth/actor';
-import { listTopUps } from '@/lib/devdiem/stored-value';
+import { getStoredValueConfig, listTopUps } from '@/lib/devdiem/stored-value';
 import { companyOrForbidden } from '@/lib/wallet/topup-api';
 import { openTopUpsTotal, topUpStatePresentation } from '@/lib/wallet/topups';
 import { creditTopUp } from '@/services/wallet/gateway-topup.service';
@@ -19,8 +19,13 @@ async function handler(_req: NextRequest, _ctx: unknown, _ability: unknown, user
     const { companyId } = scope;
 
     let openTopUps: { count: number; total: number } | null = null;
+    // The UI offers top-ups only when they can complete: configured here and
+    // answered by DevDiem. Otherwise the button stays hidden (no dead action).
+    let topUpsAvailable = false;
     try {
+        getStoredValueConfig();
         const topUps = await listTopUps(companyId);
+        topUpsAvailable = true;
         for (const topUp of topUps) {
             if (topUp.state === 'credited' && !topUp.partner_acknowledged_at) {
                 await creditTopUp(companyId, topUp, user.id);
@@ -38,6 +43,7 @@ async function handler(_req: NextRequest, _ctx: unknown, _ability: unknown, user
         currency: wallet.currency,
         balance: wallet.balance,
         openTopUps,
+        topUpsAvailable,
     });
 }
 

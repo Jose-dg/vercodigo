@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 import { WALLET_TOPUPS_KEY } from "./top-up-dialog";
 import { useTopUp } from "./top-up-provider";
+import { useWalletSummary } from "./wallet-balance-chip";
 
 const TONE_CLASS = {
     pending: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
@@ -31,10 +32,25 @@ async function fetchTopUps(url: string): Promise<TopUp[]> {
 /** The company's top-ups, read from DevDiem; resume a payment or follow one. */
 export function TopUpHistory() {
     const { canTopUp, openTopUp } = useTopUp();
-    const { data, error, isLoading, mutate } = useSWR(canTopUp ? WALLET_TOPUPS_KEY : null, fetchTopUps, {
+    const { data: summary } = useWalletSummary();
+    const available = summary?.topUpsAvailable === true;
+    const { data, error, isLoading, mutate } = useSWR(canTopUp && available ? WALLET_TOPUPS_KEY : null, fetchTopUps, {
         refreshInterval: 30_000,
     });
     if (!canTopUp) return null;
+    if (summary && !available) {
+        return (
+            <Card id="recargas" className="scroll-mt-20 shadow-none">
+                <CardHeader>
+                    <CardTitle>Recargas</CardTitle>
+                    <CardDescription>
+                        Las recargas por Bre-B no están disponibles por ahora. Mientras tanto, tu saldo se sigue
+                        actualizando con los abonos registrados por Vercode.
+                    </CardDescription>
+                </CardHeader>
+            </Card>
+        );
+    }
 
     return (
         <Card id="recargas" className="scroll-mt-20 shadow-none">
@@ -43,9 +59,11 @@ export function TopUpHistory() {
                     <CardTitle>Recargas</CardTitle>
                     <CardDescription>Transferencias Bre-B para sumar saldo a tu cuenta.</CardDescription>
                 </div>
-                <Button size="sm" onClick={() => openTopUp()}>
-                    <Plus className="size-4" aria-hidden="true" /> Recargar
-                </Button>
+                {available ? (
+                    <Button size="sm" onClick={() => openTopUp()}>
+                        <Plus className="size-4" aria-hidden="true" /> Recargar
+                    </Button>
+                ) : null}
             </CardHeader>
             <CardContent>
                 {isLoading ? (

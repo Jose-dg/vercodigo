@@ -15,7 +15,11 @@ type Db = Prisma.TransactionClient | typeof prisma;
 export async function getOrCreateWallet(companyId: string, tx: Db = prisma) {
     const existing = await tx.wallet.findUnique({ where: { companyId } });
     if (existing) return existing;
-    return tx.wallet.create({ data: { companyId } });
+    // Two concurrent first reads (e.g. overview + balance indicator) would both
+    // try to create it. ON CONFLICT DO NOTHING (skipDuplicates) avoids the
+    // unique violation, which inside a caller's transaction would abort it.
+    await tx.wallet.createMany({ data: [{ companyId }], skipDuplicates: true });
+    return tx.wallet.findUniqueOrThrow({ where: { companyId } });
 }
 
 /**

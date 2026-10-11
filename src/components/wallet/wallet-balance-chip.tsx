@@ -18,6 +18,7 @@ type WalletSummary = {
     currency: string;
     balance: number;
     openTopUps: { count: number; total: number } | null;
+    topUpsAvailable: boolean;
 };
 
 async function fetchSummary(url: string): Promise<WalletSummary> {

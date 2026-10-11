@@ -9,8 +9,8 @@ import { rebuildBalances } from "@/lib/wallet/ledger";
  * changed the ledger, so a movement placed in the past never leaves later
  * balances stale.
  */
-export async function rebuildWalletLedger(tx: Prisma.TransactionClient, walletId: string) {
-    const rows = await tx.walletTransaction.findMany({
+async function ledgerRows(tx: Prisma.TransactionClient, walletId: string) {
+    return tx.walletTransaction.findMany({
         where: { walletId },
         orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],
         select: {
@@ -23,6 +23,27 @@ export async function rebuildWalletLedger(tx: Prisma.TransactionClient, walletId
             occurredSequence: true,
         },
     });
+}
+
+/**
+ * A stored balance that its movements do not explain (drift) must be
+ * reconciled explicitly; a rebuild would silently replace it. Checked before
+ * any write that rebuilds the ledger.
+ */
+export async function assertLedgerConsistent(tx: Prisma.TransactionClient, walletId: string, storedBalance: number) {
+    const rebuilt = rebuildBalances(await ledgerRows(tx, walletId)).balance;
+    if (Math.abs(rebuilt - storedBalance) > 0.005) {
+        throw new AppError(
+            "El saldo de la wallet no coincide con sus movimientos; concílialo antes de registrar abonos",
+            409,
+            "LEDGER_DRIFT",
+            { stored: storedBalance, rebuilt },
+        );
+    }
+}
+
+export async function rebuildWalletLedger(tx: Prisma.TransactionClient, walletId: string) {
+    const rows = await ledgerRows(tx, walletId);
     const rebuilt = rebuildBalances(rows);
     for (const row of rows) {
         const balanceAfter = rebuilt.balances.get(row.id);

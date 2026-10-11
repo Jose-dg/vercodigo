@@ -247,6 +247,18 @@ test("a top-up dated inside an issued statement period is rejected, not re-dated
     assert.ok(open.transaction.occurredAt > cut);
 });
 
+test("a wallet whose balance its movements do not explain is not silently re-balanced", async () => {
+    await prisma.wallet.update({ where: { companyId }, data: { balance: -350_000 } });
+
+    await rejectsWith(
+        manual({ amount: 50_000, occurredAt: new Date(Date.now() - 60_000), reference: "TRF-DRIFT", key: "key-drift-0001" }),
+        409,
+        "LEDGER_DRIFT",
+    );
+    assert.equal((await prisma.wallet.findUniqueOrThrow({ where: { companyId } })).balance, -350_000);
+    assert.equal(await prisma.walletTransaction.count(), 0);
+});
+
 test("concurrent top-ups and a debit leave one consistent ledger", async () => {
     const base = Date.now() - 120_000;
     await Promise.all([

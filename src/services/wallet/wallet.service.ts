@@ -14,7 +14,7 @@ import {
     type WalletTimeSource,
 } from "@/lib/wallet/effective-time";
 import type { WalletMovementFilters } from "@/lib/wallet/movement-query";
-import { assertOpenPeriod, rebuildWalletLedger } from "./ledger-write";
+import { assertLedgerConsistent, assertOpenPeriod, rebuildWalletLedger } from "./ledger-write";
 
 // Cliente Prisma normal o transaccional: todas las funciones de este servicio
 // aceptan `tx` para poder ejecutarse dentro de la $transaction del flujo llamador
@@ -182,7 +182,8 @@ export type RechargeTimeSource = Extract<WalletTimeSource, "PAYMENT" | "GATEWAY_
  *   `idempotencyKey` + huella de la solicitud (abonos manuales). Una
  *   transferencia manual se abona una sola vez por wallet (referencia única).
  * - Rechaza fechas futuras o dentro de un periodo ya cerrado por un estado de
- *   cuenta.
+ *   cuenta, y wallets cuyo saldo no explican sus movimientos (LEDGER_DRIFT):
+ *   recalcular los saldos reemplazaría ese saldo en silencio.
  */
 export async function recharge(params: {
     companyId: string;
@@ -232,6 +233,7 @@ export async function recharge(params: {
             const problem = effectiveTimeProblem({ occurredAt: params.occurredAt, now: new Date() });
             if (problem) throw badRequest(problem);
             await assertOpenPeriod(tx, wallet.id, params.occurredAt);
+            await assertLedgerConsistent(tx, wallet.id, wallet.balance);
 
             const created = await tx.walletTransaction.create({
                 data: {

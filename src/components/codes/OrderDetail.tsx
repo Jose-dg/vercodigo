@@ -39,7 +39,9 @@ export interface PurchaseWalletTransaction {
 }
 
 export interface PurchaseDetail {
+    kind?: 'purchase' | 'activation';
     id: string;
+    cardUuid?: string | null;
     count: number;
     totalAmount: number;
     currency: string;
@@ -148,7 +150,11 @@ export function OrderDetail({
                         <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
                             <span className={cn('font-medium', tone.text)}>{timeline.statusLabel}</span>
                             <span>·</span>
-                            <span className="font-mono">{orderReference(purchase.id)}</span>
+                            <span className="font-mono">
+                                {purchase.kind === 'activation' && purchase.cardUuid
+                                    ? `Activación QR ${purchase.cardUuid}`
+                                    : orderReference(purchase.id)}
+                            </span>
                             <span>·</span>
                             <span className="tabular-nums">{formatShortWhen(purchase.createdAt)}</span>
                             {purchase.requesterLabel && (

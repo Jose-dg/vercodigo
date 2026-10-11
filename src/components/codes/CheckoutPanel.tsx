@@ -391,7 +391,7 @@ export function CheckoutPanel({
                 </div>
                 {outOfStock && (
                     <p className="mb-2 text-sm text-amber-800 dark:text-amber-300">
-                        Sin stock ahora: el pedido queda en espera y Diem lo entrega en cuanto haya códigos.
+                        Sin stock ahora: el pedido queda en espera hasta que Diem reponga códigos y lo asigne.
                     </p>
                 )}
                 {exceedsStock && (

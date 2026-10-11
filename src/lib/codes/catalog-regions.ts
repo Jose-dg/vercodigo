@@ -52,8 +52,8 @@ export function stockLabel(units: number | null): string | null {
 
 /**
  * Cap on how many codes can be requested per order. Not tied to current
- * stock: Diem accepts requests against depleted inventory and queues them
- * as "awaiting_stock", delivering automatically once codes are restocked.
+ * stock: Diem accepts requests against depleted inventory and parks them as
+ * "awaiting_stock" until Diem restocks and an operator retries the allocation.
  */
 export function maxPurchasableQuantity(_units: number | null): number {
     return 100;

@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { AppError } from "@/lib/errors";
 import { withAuth } from "@/lib/auth/guard";
-import {
-    listCodePurchasesForUser,
-} from "@/services/self-service/purchase-codes.service";
+import { listFulfillmentOrdersForUser } from "@/services/self-service/fulfillment-orders.service";
 
 async function handler(
     req: NextRequest,
@@ -20,7 +18,8 @@ async function handler(
         // This read endpoint intentionally never advances fulfillment. The
         // webhook is the happy path and an explicit authenticated POST is the
         // manual recovery path. Browser polling stays side-effect-free.
-        const buckets = await listCodePurchasesForUser(user, {
+        // Includes QR card activations: both are Diem fulfillments of the operator.
+        const buckets = await listFulfillmentOrdersForUser(user, {
             limit: Number.isFinite(limit) ? limit : undefined,
             companyId,
         });

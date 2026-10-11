@@ -27,11 +27,14 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { AlertCircle, Check, ChevronRight, Copy, Eye, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, Copy, Eye, Loader2, QrCode, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export interface PurchaseHistoryItem {
+    kind?: "purchase" | "activation";
     id: string;
+    detailHref?: string;
+    cardUuid?: string | null;
     count: number;
     totalAmount: number;
     currency: string;
@@ -60,6 +63,8 @@ function statusLabel(purchase: PurchaseHistoryItem): string {
     switch (purchase.status) {
         case "PENDING":
             return purchase.lastError ? "Pendiente · error Diem" : "Pendiente en Diem";
+        case "PROCESSING":
+            return "Procesando en Diem";
         case "AWAITING_STOCK":
             return "Esperando stock";
         case "FINALIZING":
@@ -196,6 +201,12 @@ function PurchaseTable({
                         </TableCell>
                         <TableCell>
                             <div className="font-medium">{purchase.productName ?? "Producto"}</div>
+                            {purchase.kind === "activation" && (
+                                <Badge variant="outline" className="mt-1 gap-1 font-normal">
+                                    <QrCode className="h-3 w-3" />
+                                    Activación QR{purchase.cardUuid ? ` · ${purchase.cardUuid}` : ""}
+                                </Badge>
+                            )}
                             {purchase.denomination && (
                                 <div className="text-xs text-muted-foreground">
                                     {purchase.denomination.amount} {purchase.denomination.currency}
@@ -241,7 +252,7 @@ function PurchaseTable({
                                     )}
                                     <div className="flex flex-wrap justify-end gap-2">
                                         <Button variant="outline" size="sm" asChild>
-                                            <Link href={`/codes/purchases/${purchase.id}`}>
+                                            <Link href={purchase.detailHref ?? `/codes/purchases/${purchase.id}`}>
                                                 Detalle
                                                 <ChevronRight className="ml-1 h-3 w-3" />
                                             </Link>
@@ -325,7 +336,10 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
     const retryPurchase = useCallback(async (purchase: PurchaseHistoryItem) => {
         setRetryingId(purchase.id);
         try {
-            const response = await fetch(`/api/codes/purchases/${purchase.id}`, {
+            const endpoint = purchase.kind === "activation" && purchase.cardUuid
+                ? `/api/codes/activations/${encodeURIComponent(purchase.cardUuid)}`
+                : `/api/codes/purchases/${purchase.id}`;
+            const response = await fetch(endpoint, {
                 method: "POST",
                 cache: "no-store",
             });
@@ -334,7 +348,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                 throw new Error(data?.message || "No se pudo consultar la entrega en Diem");
             }
             toast.success(
-                data?.purchase?.status === "COMPLETED"
+                (data?.purchase?.status ?? data?.status) === "COMPLETED"
                     ? "Entrega completada"
                     : "Estado actualizado desde Diem",
             );
@@ -377,7 +391,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                 <div>
                     <h2 className="text-xl font-semibold">Mis solicitudes</h2>
                     <p className="text-sm text-muted-foreground">
-                        Las solicitudes quedan registradas aunque cierres esta pantalla. Si Diem ya resolvió stock o aprobación, consulta nuevamente su estado.
+                        Compras de códigos y activaciones de tarjetas QR. Las solicitudes quedan registradas aunque cierres esta pantalla. Si Diem ya resolvió stock o aprobación, consulta nuevamente su estado.
                     </p>
                 </div>
                 <Button

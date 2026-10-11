@@ -27,9 +27,9 @@ import {
 const TERMINAL_FAILURES = new Set(["failed", "cancelled"]);
 const PLATFORM_ROLES = new Set(["SUPER_ADMIN", "SYSTEM_ADMIN"]);
 
-type Actor = Pick<TokenPayload, "id" | "role" | "companyId" | "storeId">;
+export type Actor = Pick<TokenPayload, "id" | "role" | "companyId" | "storeId">;
 
-function buildPurchaseVisibilityFilter(
+export function buildPurchaseVisibilityFilter(
     user: Actor,
     companyIdOverride?: string | null,
 ): Prisma.CodePurchaseWhereInput {
@@ -64,6 +64,9 @@ function serializePurchase<T extends {
     });
     return {
         ...purchase,
+        kind: "purchase" as const,
+        detailHref: "id" in purchase ? `/codes/purchases/${String(purchase.id)}` : undefined,
+        cardUuid: null,
         productName: extras?.productName,
         requesterLabel: extras?.requesterLabel,
         keys: purchase.status === "COMPLETED" ? delivery.codes.map((code) => ({ code })) : [],
@@ -83,9 +86,7 @@ async function enrichPurchases<
         status: string;
     },
 >(purchases: T[]) {
-    if (!purchases.length) {
-        return { pending: [], completed: [], failed: [] as ReturnType<typeof serializePurchase>[] };
-    }
+    if (!purchases.length) return [];
     const productIds = [...new Set(purchases.map((row) => row.productId))];
     const userIds = [...new Set(purchases.map((row) => row.userId))];
     const [products, users] = await Promise.all([
@@ -103,33 +104,24 @@ async function enrichPurchases<
         users.map((row) => [row.id, row.name?.trim() || row.email]),
     );
 
-    const serialized = purchases.map((row) =>
+    return purchases.map((row) =>
         serializePurchase(row, {
             productName: productNameById.get(row.productId),
             requesterLabel: requesterById.get(row.userId),
         }),
     );
-
-    return {
-        pending: serialized.filter((row) => row.isPending),
-        completed: serialized.filter((row) => row.isSuccessful),
-        failed: serialized.filter((row) =>
-            row.status === "FAILED" || row.needsAction,
-        ),
-    };
 }
 
-export async function listCodePurchasesForUser(
+/** Newest code purchases visible to the actor, serialized for "Mis solicitudes". */
+export async function listSerializedCodePurchases(
     user: Actor,
-    params?: { limit?: number; companyId?: string | null },
+    params: { limit: number; companyId?: string | null },
 ) {
-    const limit = Math.min(Math.max(params?.limit ?? 40, 1), 100);
-    const where = buildPurchaseVisibilityFilter(user, params?.companyId);
     const purchases = await prisma.codePurchase.findMany({
-        where,
+        where: buildPurchaseVisibilityFilter(user, params.companyId),
         include: { denomination: true },
         orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
-        take: limit,
+        take: params.limit,
     });
     return enrichPurchases(purchases);
 }
@@ -447,8 +439,9 @@ export async function purchaseCodes(params: {
     }
 
     // Stock is informational only, not a gate: Diem accepts requests against
-    // depleted inventory and queues them as "awaiting_stock", delivering
-    // automatically once codes are restocked (see processCodePurchase below).
+    // depleted inventory and parks them as "awaiting_stock". Diem does not
+    // re-allocate on restock by itself; a Diem operator retries the request and
+    // the webhook then settles it here (see processCodePurchase below).
     const durableIdempotencyKey = `diem-sas-purchase:${companyId}:${params.idempotencyKey}`;
     const matchesRequest = (existing: {
         userId: string;

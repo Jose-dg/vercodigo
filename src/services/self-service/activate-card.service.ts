@@ -19,16 +19,7 @@ import {
     resolveDevDiemProductId,
 } from "@/lib/devdiem/resolve-card-catalog";
 import { isSettledFulfillmentStatus } from "./fulfillment-lifecycle";
-
-// Same lifecycle discipline as CodePurchase: COMPLETED and FAILED are
-// absorbing, and every concurrent write is a compare-and-set on "still open".
-const OPEN_ACTIVATION_JOB_STATUSES = [
-    "PENDING",
-    "PROCESSING",
-    "AWAITING_STOCK",
-    "ACTION_REQUIRED",
-    "FINALIZING",
-];
+import { OPEN_ACTIVATION_JOB_STATUSES } from "@/lib/codes/fulfillment-order";
 
 type ActivationJobWriter = Pick<typeof prisma, "activationJob">;
 
@@ -450,7 +441,7 @@ export async function activateCard(params: {
         const existing = await tx.activationJob.findFirst({
             where: {
                 cardId: card.id,
-                status: { in: ["PENDING", "PROCESSING", "AWAITING_STOCK", "ACTION_REQUIRED"] },
+                status: { in: OPEN_ACTIVATION_JOB_STATUSES },
             },
             orderBy: { createdAt: "desc" },
         });

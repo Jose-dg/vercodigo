@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
+import { toast } from "sonner";
 import { Clock, RefreshCw, Wallet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,8 +33,27 @@ export function useWalletSummary() {
     });
 }
 
+/**
+ * Announces a credited top-up even when the dialog is closed: in-flight
+ * top-ups went down and the balance went up since the previous refresh.
+ */
+function useCreditedAnnouncement(data: WalletSummary | undefined) {
+    const previous = useRef<WalletSummary | undefined>(undefined);
+    const { mutate } = useSWRConfig();
+    useEffect(() => {
+        const before = previous.current;
+        previous.current = data;
+        if (!before || !data || !before.openTopUps || !data.openTopUps) return;
+        if (data.openTopUps.count < before.openTopUps.count && data.balance > before.balance) {
+            toast.success(`Recarga acreditada: +${formatMoney(data.balance - before.balance, data.currency)}`);
+            mutate("/api/wallet/topups");
+        }
+    }, [data, mutate]);
+}
+
 export function WalletBalanceChip({ onTopUp }: { onTopUp?: () => void }) {
     const { data, error, isLoading, mutate } = useWalletSummary();
+    useCreditedAnnouncement(data);
 
     if (isLoading) {
         return <Skeleton className="h-9 w-44 rounded-full" aria-label="Cargando saldo" />;

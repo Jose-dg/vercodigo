@@ -14,6 +14,16 @@ Un OWNER o GENERAL_ADMIN de una empresa recarga saldo desde la barra superior de
 
 Una recarga dejada en "Pagar más tarde" se puede retomar desde el mismo diálogo.
 
+## Experiencia (UX)
+- **Barra superior**: indicador "Disponible" o "Pendiente" (deuda) con color por estado, un punto ámbar si hay recargas en curso y un popover con el detalle, más el botón **Recargar** y el toggle de tema.
+- **Indicador de pasos**: Monto → Pago → Confirmación. El foco va al título de cada paso, para lectores de pantalla.
+- **Monto**: campo grande con formato de pesos, montos sugeridos y **"Pagar pendiente"** con la deuda exacta redondeada al millar. La **vista previa del saldo** muestra el saldo actual y el que queda después de acreditar, y si cubre todo lo pendiente o una parte. Incluye la sección "¿Cómo funciona?".
+- **Pago**: QR (descargable en PNG) y llave. Monto exacto y referencia `VC-…` con botón de copiar. **Cuenta regresiva** del vencimiento, en ámbar cuando faltan menos de 2 h. **"Enviar instrucciones"** usa la hoja de compartir del celular o copia un texto listo para quien hace el pago (por ejemplo, el contador). En el celular, la llave y los datos van antes del QR.
+- **Confirmación**: línea de tiempo (creada → pago reportado → verificación de finanzas → acreditada) con fechas y tiempo estimado.
+- **Aviso al acreditar**: un toast "Recarga acreditada: +$X" aunque el diálogo esté cerrado.
+- **Historial** en `/wallet#recargas`: estado por recarga, con **Continuar pago** o **Ver estado**. Una recarga pendiente también se puede retomar desde el diálogo.
+- **Responsive** (celular, con el diálogo desplazable y el indicador de pasos fijo), **modo oscuro** y `prefers-reduced-motion`. Revisado con capturas en escritorio, celular y modo oscuro.
+
 ## Quién es dueño de qué
 | Hecho | Dueño |
 |---|---|
@@ -44,7 +54,7 @@ En DevDiem se configuran el service account (`stored_value:topups:create/read`),
 La activación en producción requiere el **corte de Vercode a la tienda "Ver código"** (`diem/docs/billetera/CORTE_VERCODE_TIENDA.md`). Activarla sobre la tienda Diem mezclaría las ventas de ambos negocios.
 
 ## Pruebas
-- `npm run test:wallet-topups`: presentación, referencia, validación de monto y recargas en curso.
+- `npm run test:wallet-topups` (10): presentación, referencia, validación de monto, recargas en curso, vista previa del saldo, pago de deuda, cuenta regresiva, línea de tiempo e instrucciones.
 - Typecheck y `next build` sin errores.
 - Pendiente: prueba de punta a punta con DevDiem local y un usuario de empresa.
 

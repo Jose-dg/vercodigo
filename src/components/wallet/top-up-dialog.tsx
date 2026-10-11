@@ -1,9 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import useSWR, { useSWRConfig } from "swr";
-import { QRCodeSVG } from "qrcode.react";
-import { AlertCircle, Check, CheckCircle2, Clock, Copy, Loader2 } from "lucide-react";
+import { QRCodeCanvas } from "qrcode.react";
+import {
+    AlertCircle,
+    ArrowRight,
+    Check,
+    CheckCircle2,
+    Circle,
+    Clock,
+    Copy,
+    Download,
+    Info,
+    Loader2,
+    Share2,
+    XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,24 +33,37 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { TopUp } from "@/lib/devdiem/stored-value";
-import { formatMoney } from "@/lib/wallet/balance";
+import { BALANCE_TONE_CLASS, balancePresentation, formatMoney } from "@/lib/wallet/balance";
 import {
     BREB_MAX_PER_TRANSACTION_COP,
     TOPUP_MIN_COP,
     TOPUP_QUICK_AMOUNTS_COP,
+    balanceAfterTopUp,
+    debtSettlementAmount,
     shortTopUpReference,
+    timeRemaining,
+    topUpInstructionsText,
     topUpStatePresentation,
+    topUpTimeline,
     validateTopUpAmount,
+    type TimelineStep,
 } from "@/lib/wallet/topups";
 import { cn } from "@/lib/utils";
 
-import { WALLET_SUMMARY_KEY } from "./wallet-balance-chip";
+import { WALLET_SUMMARY_KEY, useWalletSummary } from "./wallet-balance-chip";
+
+export const WALLET_TOPUPS_KEY = "/api/wallet/topups";
 
 type Step = "amount" | "pay" | "status";
+const STEPS: Array<{ key: Step; label: string }> = [
+    { key: "amount", label: "Monto" },
+    { key: "pay", label: "Pago" },
+    { key: "status", label: "Confirmación" },
+];
 
 async function readJson(response: Response) {
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body?.message || "No pudimos completar la operación.");
+    if (!response.ok) throw new Error(body?.message || "No pudimos completar la operación. Intenta de nuevo.");
     return body;
 }
 
@@ -44,18 +71,80 @@ async function fetchTopUp(url: string): Promise<TopUp> {
     return (await readJson(await fetch(url, { cache: "no-store" }))).topUp;
 }
 
-function CopyField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+async function fetchTopUps(url: string): Promise<TopUp[]> {
+    return (await readJson(await fetch(url, { cache: "no-store" }))).topUps;
+}
+
+function stepFor(topUp: TopUp): Step {
+    return topUp.state === "created" ? "pay" : "status";
+}
+
+function formatDateTime(value: string) {
+    return new Date(value).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** Re-renders every `ms` so countdowns stay current while the dialog is open. */
+function useNow(ms: number, active: boolean) {
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+        if (!active) return;
+        const id = setInterval(() => setNow(new Date()), ms);
+        return () => clearInterval(id);
+    }, [ms, active]);
+    return now;
+}
+
+function Stepper({ current }: { current: Step }) {
+    const currentIndex = STEPS.findIndex((step) => step.key === current);
+    return (
+        <ol className="flex items-center gap-2" aria-label="Pasos de la recarga">
+            {STEPS.map((step, index) => {
+                const done = index < currentIndex;
+                const active = index === currentIndex;
+                return (
+                    <li key={step.key} className="flex flex-1 items-center gap-2" aria-current={active ? "step" : undefined}>
+                        <span
+                            className={cn(
+                                "flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
+                                done && "border-primary bg-primary text-primary-foreground",
+                                active && "border-primary text-primary",
+                                !done && !active && "text-muted-foreground",
+                            )}
+                        >
+                            {done ? <Check className="size-3.5" aria-hidden="true" /> : index + 1}
+                        </span>
+                        <span className={cn("text-xs font-medium", active ? "text-foreground" : "text-muted-foreground")}>
+                            {step.label}
+                        </span>
+                        {index < STEPS.length - 1 ? (
+                            <span className={cn("h-px flex-1", done ? "bg-primary" : "bg-border")} aria-hidden="true" />
+                        ) : null}
+                    </li>
+                );
+            })}
+        </ol>
+    );
+}
+
+function CopyField({ label, value, mono = false, emphasis = false }: {
+    label: string;
+    value: string;
+    mono?: boolean;
+    emphasis?: boolean;
+}) {
     const [copied, setCopied] = useState(false);
     return (
-        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2.5">
             <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">{label}</p>
-                <p className={cn("truncate font-semibold", mono && "font-mono tracking-wide")}>{value}</p>
+                <p className={cn("truncate font-semibold", mono && "font-mono tracking-wide", emphasis && "text-lg tabular-nums")}>
+                    {value}
+                </p>
             </div>
             <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                size="sm"
                 aria-label={`Copiar ${label.toLowerCase()}`}
                 onClick={async () => {
                     await navigator.clipboard.writeText(value);
@@ -63,14 +152,27 @@ function CopyField({ label, value, mono = false }: { label: string; value: strin
                     setTimeout(() => setCopied(false), 1500);
                 }}
             >
-                {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+                {copied ? <Check className="size-4 text-emerald-600" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+                <span className="sr-only sm:not-sr-only">{copied ? "Copiado" : "Copiar"}</span>
             </Button>
         </div>
     );
 }
 
-export function TopUpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function TimelineIcon({ status }: { status: TimelineStep["status"] }) {
+    if (status === "done") return <CheckCircle2 className="size-5 text-emerald-600" aria-hidden="true" />;
+    if (status === "current") return <Loader2 className="size-5 animate-spin text-amber-500 motion-reduce:animate-none" aria-hidden="true" />;
+    if (status === "stopped") return <XCircle className="size-5 text-muted-foreground" aria-hidden="true" />;
+    return <Circle className="size-5 text-muted-foreground/50" aria-hidden="true" />;
+}
+
+export function TopUpDialog({ open, resume, onOpenChange }: {
+    open: boolean;
+    resume: TopUp | null;
+    onOpenChange: (open: boolean) => void;
+}) {
     const { mutate } = useSWRConfig();
+    const { data: summary } = useWalletSummary();
     const [step, setStep] = useState<Step>("amount");
     const [amountInput, setAmountInput] = useState("");
     const [accepted, setAccepted] = useState(false);
@@ -80,28 +182,43 @@ export function TopUpDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     const [error, setError] = useState<string | null>(null);
     // One key per attempt: a retried request never opens a second top-up.
     const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+    const qrRef = useRef<HTMLCanvasElement>(null);
+    // Focus follows the step title so screen readers announce where the user is.
+    const titleRef = useRef<HTMLHeadingElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const id = requestAnimationFrame(() => titleRef.current?.focus());
+        return () => cancelAnimationFrame(id);
+    }, [open, step]);
 
+    useEffect(() => {
+        if (open && resume) {
+            setTopUp(resume);
+            setStep(stepFor(resume));
+            setError(null);
+        }
+    }, [open, resume]);
+
+    const now = useNow(30_000, open && step === "pay");
     const validation = useMemo(() => validateTopUpAmount(amountInput || 0), [amountInput]);
-    const shouldPoll = step === "status" && topUp !== null && topUpStatePresentation(topUp.state).isOpen;
-    const { data: live } = useSWR(
-        shouldPoll ? `/api/wallet/topups/${topUp?.id}` : null,
-        fetchTopUp,
-        { refreshInterval: 10_000 },
-    );
+    const balance = summary?.balance ?? 0;
+    const currency = summary?.currency ?? "COP";
+    const settle = debtSettlementAmount(balance);
+    const preview = validation.ok ? balanceAfterTopUp(balance, validation.amount) : null;
+
+    const shouldPoll = open && step === "status" && topUp !== null && topUpStatePresentation(topUp.state).isOpen;
+    const { data: live } = useSWR(shouldPoll ? `/api/wallet/topups/${topUp?.id}` : null, fetchTopUp, {
+        refreshInterval: 10_000,
+    });
     const current = live ?? topUp;
-    // A top-up left open ("Pagar más tarde") can be resumed instead of duplicated.
-    const { data: existing } = useSWR(
-        open && step === "amount" && !topUp ? "/api/wallet/topups" : null,
-        async (url: string) => (await readJson(await fetch(url, { cache: "no-store" }))).topUps as TopUp[],
-    );
-    const resumable = existing?.find(
-        (candidate) => candidate.state === "created" && new Date(candidate.expires_at) > new Date(),
-    );
+
+    const { data: existing } = useSWR(open && step === "amount" && !topUp ? WALLET_TOPUPS_KEY : null, fetchTopUps);
+    const resumable = existing?.find((candidate) => candidate.state === "created" && !timeRemaining(candidate.expires_at).expired);
 
     useEffect(() => {
         if (live?.state === "credited") {
             mutate(WALLET_SUMMARY_KEY);
-            toast.success("Recarga acreditada. Tu saldo ya está disponible.");
+            mutate(WALLET_TOPUPS_KEY);
         }
     }, [live?.state, mutate]);
 
@@ -121,7 +238,7 @@ export function TopUpDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         setError(null);
         try {
             const body = await readJson(
-                await fetch("/api/wallet/topups", {
+                await fetch(WALLET_TOPUPS_KEY, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
                     body: JSON.stringify({ amount: validation.amount, acceptedTerms: true }),
@@ -130,6 +247,7 @@ export function TopUpDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             setTopUp(body.topUp);
             setStep("pay");
             mutate(WALLET_SUMMARY_KEY);
+            mutate(WALLET_TOPUPS_KEY);
         } catch (cause) {
             setError((cause as Error).message);
         } finally {
@@ -143,7 +261,7 @@ export function TopUpDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         setError(null);
         try {
             const body = await readJson(
-                await fetch(`/api/wallet/topups/${topUp.id}/report`, {
+                await fetch(`${WALLET_TOPUPS_KEY}/${topUp.id}/report`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ bankReference: bankReference.trim() }),
@@ -152,6 +270,7 @@ export function TopUpDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             setTopUp(body.topUp);
             setStep("status");
             mutate(WALLET_SUMMARY_KEY);
+            mutate(WALLET_TOPUPS_KEY);
         } catch (cause) {
             setError((cause as Error).message);
         } finally {
@@ -159,188 +278,342 @@ export function TopUpDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         }
     }
 
-    const currency = current?.currency ?? "COP";
+    function downloadQr() {
+        const canvas = qrRef.current;
+        if (!canvas || !current) return;
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/png");
+        link.download = `recarga-${shortTopUpReference(current.id)}.png`;
+        link.click();
+    }
+
+    async function shareInstructions() {
+        if (!current) return;
+        const text = topUpInstructionsText({
+            amountLabel: formatMoney(Number(current.amount), current.currency),
+            reference: shortTopUpReference(current.id),
+            key: current.action?.key,
+            expiresLabel: formatDateTime(current.expires_at),
+        });
+        if (typeof navigator.share === "function") {
+            try {
+                await navigator.share({ title: "Recarga de saldo Vercode", text });
+                return;
+            } catch {
+                // Cancelled or unavailable: fall back to the clipboard.
+            }
+        }
+        await navigator.clipboard.writeText(text);
+        toast.success("Instrucciones copiadas. Compártelas con quien hará el pago.");
+    }
+
+    const remaining = current ? timeRemaining(current.expires_at, now) : null;
+    const errorBlock = error ? (
+        <p role="alert" className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <AlertCircle className="size-4 shrink-0" aria-hidden="true" /> {error}
+        </p>
+    ) : null;
 
     return (
         <Dialog
             open={open}
             onOpenChange={(next) => {
                 onOpenChange(next);
-                if (!next && (step === "status" || step === "amount")) reset();
+                if (!next && step !== "pay") reset();
             }}
         >
-            <DialogContent className="sm:max-w-md">
+            <DialogContent
+                className="max-h-[calc(100dvh-1.5rem)] gap-0 overflow-y-auto p-0 sm:max-w-2xl"
+                onOpenAutoFocus={(event) => event.preventDefault()}
+            >
+                <div className="sticky top-0 z-10 border-b bg-background px-6 pb-4 pt-6">
+                    <Stepper current={step} />
+                </div>
+
                 {step === "amount" ? (
-                    <>
-                        <DialogHeader>
-                            <DialogTitle>Recargar saldo</DialogTitle>
+                    <div className="space-y-5 px-6 py-5">
+                        <DialogHeader className="text-left">
+                            <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">¿Cuánto quieres recargar?</DialogTitle>
                             <DialogDescription>
-                                Paga por transferencia Bre-B. El saldo se suma cuando finanzas confirme el pago.
+                                Transfieres por Bre-B desde tu banco y el saldo se suma cuando finanzas confirma el pago.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4">
-                            {resumable ? (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setTopUp(resumable);
-                                        setStep("pay");
-                                    }}
-                                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-sm text-amber-900 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+
+                        {resumable ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setTopUp(resumable);
+                                    setStep("pay");
+                                }}
+                                className="flex w-full items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                            >
+                                <span>
+                                    Tienes una recarga sin pagar de{" "}
+                                    <strong className="tabular-nums">{formatMoney(Number(resumable.amount), resumable.currency)}</strong>
+                                </span>
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                    Continuar <ArrowRight className="size-4" aria-hidden="true" />
+                                </span>
+                            </button>
+                        ) : null}
+
+                        <div className="grid gap-5 md:grid-cols-[1fr_15rem]">
+                            <div className="space-y-3">
+                                <Label htmlFor="topup-amount">Monto</Label>
+                                <div className="relative">
+                                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-semibold text-muted-foreground">$</span>
+                                    <Input
+                                        id="topup-amount"
+                                        inputMode="numeric"
+                                        autoComplete="off"
+                                        autoFocus
+                                        placeholder="500.000"
+                                        className="h-14 pl-8 text-2xl font-semibold tabular-nums"
+                                        value={amountInput ? Number(amountInput).toLocaleString("es-CO") : ""}
+                                        onChange={(event) => setAmountInput(event.target.value.replace(/[^\d]/g, ""))}
+                                        aria-invalid={amountInput !== "" && !validation.ok}
+                                        aria-describedby="topup-amount-help"
+                                    />
+                                </div>
+                                <p
+                                    id="topup-amount-help"
+                                    className={cn("text-xs", amountInput !== "" && !validation.ok ? "text-destructive" : "text-muted-foreground")}
                                 >
-                                    <span>
-                                        Tienes una recarga pendiente de{" "}
-                                        <strong className="tabular-nums">
-                                            {formatMoney(Number(resumable.amount), resumable.currency)}
-                                        </strong>
-                                    </span>
-                                    <span className="font-medium underline-offset-2 hover:underline">Continuar</span>
-                                </button>
-                            ) : null}
-                            <div className="space-y-2">
-                                <Label htmlFor="topup-amount">Monto a recargar</Label>
-                                <Input
-                                    id="topup-amount"
-                                    inputMode="numeric"
-                                    autoComplete="off"
-                                    placeholder="$ 500.000"
-                                    value={amountInput ? Number(amountInput).toLocaleString("es-CO") : ""}
-                                    onChange={(event) => setAmountInput(event.target.value.replace(/[^\d]/g, ""))}
-                                    aria-invalid={amountInput !== "" && !validation.ok}
-                                    aria-describedby="topup-amount-help"
-                                />
-                                <p id="topup-amount-help" className="text-xs text-muted-foreground">
                                     {amountInput !== "" && !validation.ok
                                         ? validation.error
                                         : `Entre ${formatMoney(TOPUP_MIN_COP, "COP")} y ${formatMoney(BREB_MAX_PER_TRANSACTION_COP, "COP")} por transferencia.`}
                                 </p>
+                                <div className="flex flex-wrap gap-2" role="group" aria-label="Montos sugeridos">
+                                    {settle ? (
+                                        <Button
+                                            type="button"
+                                            variant={Number(amountInput) === settle ? "default" : "outline"}
+                                            size="sm"
+                                            className="rounded-full border-red-300 dark:border-red-800"
+                                            onClick={() => setAmountInput(String(settle))}
+                                        >
+                                            Pagar pendiente · {formatMoney(settle, "COP")}
+                                        </Button>
+                                    ) : null}
+                                    {TOPUP_QUICK_AMOUNTS_COP.map((quick) => (
+                                        <Button
+                                            key={quick}
+                                            type="button"
+                                            variant={Number(amountInput) === quick ? "default" : "outline"}
+                                            size="sm"
+                                            className="rounded-full"
+                                            onClick={() => setAmountInput(String(quick))}
+                                        >
+                                            {formatMoney(quick, "COP")}
+                                        </Button>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="flex flex-wrap gap-2" role="group" aria-label="Montos sugeridos">
-                                {TOPUP_QUICK_AMOUNTS_COP.map((quick) => (
-                                    <Button
-                                        key={quick}
-                                        type="button"
-                                        variant={Number(amountInput) === quick ? "default" : "outline"}
-                                        size="sm"
-                                        className="rounded-full"
-                                        onClick={() => setAmountInput(String(quick))}
-                                    >
-                                        {formatMoney(quick, "COP")}
-                                    </Button>
-                                ))}
+
+                            <div className="rounded-xl border bg-muted/30 p-4" aria-live="polite">
+                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tu saldo</p>
+                                <p className={cn("mt-1 text-lg font-semibold tabular-nums", BALANCE_TONE_CLASS[balancePresentation(balance).tone])}>
+                                    {balance < 0 ? "−" : ""}
+                                    {formatMoney(Math.abs(balance), currency)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{balancePresentation(balance).label}</p>
+                                {preview ? (
+                                    <div className="mt-3 border-t pt-3">
+                                        <p className="text-xs text-muted-foreground">Después de acreditar</p>
+                                        <p className={cn("text-lg font-semibold tabular-nums", BALANCE_TONE_CLASS[balancePresentation(preview.after).tone])}>
+                                            {preview.after < 0 ? "−" : ""}
+                                            {formatMoney(Math.abs(preview.after), currency)}
+                                        </p>
+                                        {preview.debtCovered > 0 ? (
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {preview.remainingDebt === 0
+                                                    ? "Cubre todo lo pendiente."
+                                                    : `Cubre ${formatMoney(preview.debtCovered, currency)} de lo pendiente.`}
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                ) : null}
                             </div>
-                            <label className="flex items-start gap-3 text-sm">
-                                <Checkbox
-                                    checked={accepted}
-                                    onCheckedChange={(value) => setAccepted(value === true)}
-                                    aria-label="Acepto las condiciones de la recarga"
-                                />
-                                <span className="text-muted-foreground">
-                                    Entiendo que la recarga se acredita cuando finanzas confirma la transferencia, y
-                                    que debo pagar el monto exacto con la referencia indicada.
-                                </span>
-                            </label>
                         </div>
-                        {error ? (
-                            <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
-                                <AlertCircle className="size-4" /> {error}
-                            </p>
-                        ) : null}
+
+                        <details className="group rounded-lg border px-4 py-3 text-sm">
+                            <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
+                                <Info className="size-4 text-muted-foreground" aria-hidden="true" />
+                                ¿Cómo funciona la recarga?
+                            </summary>
+                            <ol className="mt-3 list-decimal space-y-1 pl-5 text-muted-foreground">
+                                <li>Te mostramos el QR y la llave Bre-B, con el monto y una referencia.</li>
+                                <li>Transfieres desde la app de tu banco y escribes la referencia en la descripción.</li>
+                                <li>Nos confirmas el número que te dio tu banco y finanzas verifica el pago.</li>
+                            </ol>
+                        </details>
+
+                        <label className="flex items-start gap-3 text-sm">
+                            <Checkbox
+                                checked={accepted}
+                                onCheckedChange={(value) => setAccepted(value === true)}
+                                aria-label="Acepto las condiciones de la recarga"
+                                className="mt-0.5"
+                            />
+                            <span className="text-muted-foreground">
+                                Pagaré el monto exacto con la referencia indicada. Entiendo que el saldo se acredita cuando
+                                finanzas confirma la transferencia.
+                            </span>
+                        </label>
+
+                        {errorBlock}
                         <DialogFooter>
-                            <Button onClick={createTopUp} disabled={!validation.ok || !accepted || submitting}>
-                                {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+                            <Button size="lg" onClick={createTopUp} disabled={!validation.ok || !accepted || submitting}>
+                                {submitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
                                 Continuar al pago
+                                <ArrowRight className="size-4" aria-hidden="true" />
                             </Button>
                         </DialogFooter>
-                    </>
+                    </div>
                 ) : null}
 
                 {step === "pay" && current ? (
-                    <>
-                        <DialogHeader>
-                            <DialogTitle>Transfiere con Bre-B</DialogTitle>
+                    <div className="space-y-5 px-6 py-5">
+                        <DialogHeader className="text-left">
+                            <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">Transfiere con Bre-B</DialogTitle>
                             <DialogDescription>
-                                Escanea el código desde la app de tu banco o usa la llave. Escribe el monto exacto y la
+                                Escanea el código desde la app de tu banco o usa la llave. Paga el monto exacto y escribe la
                                 referencia en la descripción.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-3">
+
+                        <div className="grid gap-5 md:grid-cols-[auto_1fr]">
                             {current.action?.kind === "display_qr" && current.action.qr_payload ? (
-                                <div className="flex justify-center rounded-xl border bg-white p-4">
-                                    <QRCodeSVG
-                                        value={current.action.qr_payload}
-                                        size={184}
-                                        role="img"
-                                        aria-label="Código QR Bre-B para pagar"
-                                    />
+                                <div className="order-2 flex flex-col items-center gap-2 md:order-1">
+                                    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                                        <QRCodeCanvas
+                                            ref={qrRef}
+                                            value={current.action.qr_payload}
+                                            size={196}
+                                            marginSize={1}
+                                            role="img"
+                                            aria-label="Código QR Bre-B para pagar"
+                                        />
+                                    </div>
+                                    <Button type="button" variant="ghost" size="sm" onClick={downloadQr}>
+                                        <Download className="size-4" aria-hidden="true" /> Descargar QR
+                                    </Button>
                                 </div>
                             ) : null}
-                            <CopyField label="Monto exacto" value={formatMoney(Number(current.amount), currency)} />
-                            <CopyField label="Referencia (descripción)" value={shortTopUpReference(current.id)} mono />
-                            {current.action?.key ? <CopyField label="Llave Bre-B" value={current.action.key} mono /> : null}
-                            <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Clock className="size-3.5" aria-hidden="true" />
-                                Reporta tu pago antes de{" "}
-                                {new Date(current.expires_at).toLocaleString("es-CO", {
-                                    dateStyle: "medium",
-                                    timeStyle: "short",
-                                })}
-                                .
-                            </p>
-                            <div className="space-y-2 border-t pt-3">
-                                <Label htmlFor="topup-bank-ref">Referencia que te dio tu banco</Label>
-                                <Input
-                                    id="topup-bank-ref"
-                                    autoComplete="off"
-                                    placeholder="Ej. 4839201"
-                                    value={bankReference}
-                                    onChange={(event) => setBankReference(event.target.value)}
-                                />
+                            <div className="order-1 space-y-2 md:order-2">
+                                <CopyField label="Monto exacto" value={formatMoney(Number(current.amount), current.currency)} emphasis />
+                                <CopyField label="Referencia para la descripción" value={shortTopUpReference(current.id)} mono />
+                                {current.action?.key ? <CopyField label="Llave Bre-B" value={current.action.key} mono /> : null}
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                    {remaining ? (
+                                        <span
+                                            className={cn(
+                                                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+                                                remaining.urgent
+                                                    ? "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"
+                                                    : "bg-muted text-muted-foreground",
+                                            )}
+                                        >
+                                            <Clock className="size-3.5" aria-hidden="true" />
+                                            {remaining.expired ? "Plazo vencido" : `Vence en ${remaining.label}`}
+                                        </span>
+                                    ) : null}
+                                    <Button type="button" variant="outline" size="sm" onClick={shareInstructions}>
+                                        <Share2 className="size-4" aria-hidden="true" /> Enviar instrucciones
+                                    </Button>
+                                </div>
                             </div>
                         </div>
-                        {error ? (
-                            <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
-                                <AlertCircle className="size-4" /> {error}
+
+                        <div className="space-y-2 rounded-xl border bg-muted/20 p-4">
+                            <Label htmlFor="topup-bank-ref">¿Ya transferiste? Escribe la referencia de tu banco</Label>
+                            <Input
+                                id="topup-bank-ref"
+                                autoComplete="off"
+                                placeholder="Número de aprobación o de transacción"
+                                value={bankReference}
+                                onChange={(event) => setBankReference(event.target.value)}
+                                aria-describedby="topup-bank-ref-help"
+                            />
+                            <p id="topup-bank-ref-help" className="text-xs text-muted-foreground">
+                                Aparece en el comprobante de la transferencia. Con ella finanzas encuentra tu pago.
                             </p>
-                        ) : null}
+                        </div>
+
+                        {errorBlock}
                         <DialogFooter className="gap-2 sm:justify-between">
                             <Button variant="ghost" onClick={() => onOpenChange(false)}>
                                 Pagar más tarde
                             </Button>
-                            <Button onClick={reportPayment} disabled={bankReference.trim().length < 3 || submitting}>
-                                {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+                            <Button
+                                size="lg"
+                                onClick={reportPayment}
+                                disabled={bankReference.trim().length < 3 || submitting || Boolean(remaining?.expired)}
+                            >
+                                {submitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
                                 Ya hice la transferencia
                             </Button>
                         </DialogFooter>
-                    </>
+                    </div>
                 ) : null}
 
                 {step === "status" && current ? (
-                    <>
-                        <DialogHeader>
-                            <DialogTitle>{topUpStatePresentation(current.state).label}</DialogTitle>
+                    <div className="space-y-5 px-6 py-5">
+                        <DialogHeader className="text-left">
+                            <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">{topUpStatePresentation(current.state).label}</DialogTitle>
                             <DialogDescription>{topUpStatePresentation(current.state).description}</DialogDescription>
                         </DialogHeader>
-                        <div className="flex flex-col items-center gap-3 py-4 text-center" aria-live="polite">
-                            {current.state === "credited" ? (
-                                <CheckCircle2 className="size-12 text-emerald-600" aria-hidden="true" />
-                            ) : topUpStatePresentation(current.state).isOpen ? (
-                                <Loader2 className="size-12 animate-spin text-amber-500 motion-reduce:animate-none" aria-hidden="true" />
-                            ) : (
-                                <AlertCircle className="size-12 text-muted-foreground" aria-hidden="true" />
-                            )}
-                            <p className="text-2xl font-bold tabular-nums">{formatMoney(Number(current.amount), currency)}</p>
-                            <p className="font-mono text-sm text-muted-foreground">{shortTopUpReference(current.id)}</p>
-                            {topUpStatePresentation(current.state).isOpen ? (
-                                <p className="text-xs text-muted-foreground">
-                                    Puedes cerrar esta ventana: te avisamos en el indicador de saldo.
-                                </p>
-                            ) : null}
+
+                        <div className="flex items-baseline justify-between rounded-xl border bg-muted/20 px-4 py-3">
+                            <span className="font-mono text-sm text-muted-foreground">{shortTopUpReference(current.id)}</span>
+                            <span className="text-2xl font-bold tabular-nums">
+                                {formatMoney(Number(current.amount), current.currency)}
+                            </span>
                         </div>
-                        <DialogFooter>
+
+                        <ol className="space-y-0" aria-live="polite" aria-label="Estado de la recarga">
+                            {topUpTimeline(current).map((item, index, all) => (
+                                <li key={item.key} className="flex gap-3">
+                                    <div className="flex flex-col items-center">
+                                        <TimelineIcon status={item.status} />
+                                        {index < all.length - 1 ? (
+                                            <span
+                                                className={cn("my-1 w-px flex-1", item.status === "done" ? "bg-emerald-500" : "bg-border")}
+                                                aria-hidden="true"
+                                            />
+                                        ) : null}
+                                    </div>
+                                    <div className="pb-4">
+                                        <p className={cn("text-sm font-medium", item.status === "upcoming" && "text-muted-foreground")}>
+                                            {item.label}
+                                        </p>
+                                        {item.at ? (
+                                            <p className="text-xs text-muted-foreground">{formatDateTime(item.at)}</p>
+                                        ) : item.status === "current" && item.key === "review" ? (
+                                            <p className="text-xs text-muted-foreground">
+                                                Normalmente en menos de una hora hábil.
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                </li>
+                            ))}
+                        </ol>
+
+                        {topUpStatePresentation(current.state).isOpen ? (
+                            <p className="text-xs text-muted-foreground">
+                                Puedes cerrar esta ventana: te avisaremos en el indicador de saldo cuando se acredite.
+                            </p>
+                        ) : null}
+                        <DialogFooter className="gap-2 sm:justify-between">
+                            <Button asChild variant="ghost">
+                                <Link href="/wallet#recargas" onClick={() => onOpenChange(false)}>
+                                    Ver mis recargas
+                                </Link>
+                            </Button>
                             <Button onClick={() => onOpenChange(false)}>Listo</Button>
                         </DialogFooter>
-                    </>
+                    </div>
                 ) : null}
             </DialogContent>
         </Dialog>

@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { Plus } from "lucide-react";
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
-import { TopUpDialog } from "./top-up-dialog";
+import { useTopUp } from "./top-up-provider";
 import { WalletBalanceChip } from "./wallet-balance-chip";
 
 /**
@@ -17,25 +16,20 @@ import { WalletBalanceChip } from "./wallet-balance-chip";
 export function AppTopBar() {
     const ability = useAbility();
     const user = useCurrentUser();
-    const [topUpOpen, setTopUpOpen] = useState(false);
-    const isCompanyUser = Boolean(user?.companyId);
-    const canSeeWallet = isCompanyUser && ability.can("read", "Wallet");
-    const canTopUp = isCompanyUser && ability.can("create", "WalletTopUp");
+    const { canTopUp, openTopUp } = useTopUp();
+    const canSeeWallet = Boolean(user?.companyId) && ability.can("read", "Wallet");
 
     return (
         <div className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-end gap-2 border-b border-border/60 bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             {canSeeWallet ? (
-                <WalletBalanceChip onTopUp={canTopUp ? () => setTopUpOpen(true) : undefined} />
+                <WalletBalanceChip onTopUp={canTopUp ? () => openTopUp() : undefined} />
             ) : null}
             {canTopUp ? (
-                <>
-                    <Button size="sm" className="h-9 rounded-full" onClick={() => setTopUpOpen(true)}>
-                        <Plus aria-hidden="true" className="size-4" />
-                        <span className="hidden sm:inline">Recargar</span>
-                        <span className="sr-only sm:hidden">Recargar saldo</span>
-                    </Button>
-                    <TopUpDialog open={topUpOpen} onOpenChange={setTopUpOpen} />
-                </>
+                <Button size="sm" className="h-9 rounded-full" onClick={() => openTopUp()}>
+                    <Plus aria-hidden="true" className="size-4" />
+                    <span className="hidden sm:inline">Recargar</span>
+                    <span className="sr-only sm:hidden">Recargar saldo</span>
+                </Button>
             ) : null}
             <ThemeToggle className="rounded-full" />
         </div>

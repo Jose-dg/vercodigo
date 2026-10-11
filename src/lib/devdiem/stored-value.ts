@@ -30,6 +30,9 @@ export type TopUp = {
     action: TopUpAction | null;
     expires_at: string;
     succeeded_at: string | null;
+    created_at?: string;
+    reported_at?: string | null;
+    credited_at?: string | null;
     gateway_transaction_id?: string;
     partner_acknowledged_at?: string | null;
 };

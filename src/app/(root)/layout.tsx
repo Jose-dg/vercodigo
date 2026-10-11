@@ -2,6 +2,7 @@ import { ReactNode } from "react"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppTopBar } from "@/components/wallet/app-top-bar"
+import { TopUpProvider } from "@/components/wallet/top-up-provider"
 import { AuthProvider } from "@/components/auth/auth-provider"
 import { getActorCompanyName, requireAuthenticatedActor } from "@/lib/auth/actor"
 
@@ -31,8 +32,10 @@ export default async function DashboardLayout({
           }}
         />
         <SidebarInset>
-          <AppTopBar />
-          {children}
+          <TopUpProvider>
+            <AppTopBar />
+            {children}
+          </TopUpProvider>
         </SidebarInset>
       </SidebarProvider>
     </AuthProvider>

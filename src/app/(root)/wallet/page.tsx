@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { AccountStatementsPanel } from "@/components/account-statements/AccountStatementsPanel";
+import { TopUpHistory } from "@/components/wallet/top-up-history";
 import { formatWalletRunningBalance } from "@/lib/wallet/presentation";
 import { BALANCE_TONE_CLASS, balancePresentation, formatMoney as formatAmount } from "@/lib/wallet/balance";
 
@@ -117,6 +118,8 @@ export default function CompanyWalletPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {data ? <TopUpHistory /> : null}
 
             {data ? <AccountStatementsPanel /> : null}
 

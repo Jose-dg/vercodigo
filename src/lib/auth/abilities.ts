@@ -16,6 +16,7 @@ export type Subjects =
     | 'AuditLog'
     | 'Wallet'
     | 'WalletTransaction'
+    | 'WalletTopUp'
     | 'AccountStatement'
     | 'CompanyProductPrice'
     | 'ProductCost'
@@ -81,9 +82,10 @@ export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'comp
         // Purchase
         can('create', 'CodePurchase'); // Assuming they can purchase for their company
 
-        // Wallet: solo lectura (balance + histórico). La recarga la hace la
-        // plataforma; recarga self-service de GENERAL_ADMIN es fase futura.
+        // Wallet: balance + histórico en solo lectura. La recarga self-service
+        // (Bre-B, cobrada y verificada por DevDiem) la hacen OWNER y GENERAL_ADMIN.
         can('read', ['Wallet', 'WalletTransaction'], { companyId } as any);
+        can(['read', 'create'], 'WalletTopUp', { companyId } as any);
         can('read', 'AccountStatement', { companyId } as any);
         can('read', 'ProductCost', { companyId } as any);
 

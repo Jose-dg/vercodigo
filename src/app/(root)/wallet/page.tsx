@@ -15,6 +15,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { AccountStatementsPanel } from "@/components/account-statements/AccountStatementsPanel";
 import { formatWalletRunningBalance } from "@/lib/wallet/presentation";
+import { BALANCE_TONE_CLASS, balancePresentation, formatMoney as formatAmount } from "@/lib/wallet/balance";
+
+function formatMoney(amount: number, currency: string) {
+    return formatAmount(amount, currency, 2);
+}
 
 interface WalletTx {
     id: string;
@@ -45,35 +50,6 @@ const TYPE_LABELS: Record<WalletTx["type"], string> = {
     ADJUSTMENT: "Ajuste",
     REFUND: "Reembolso",
 };
-
-function formatMoney(amount: number, currency: string) {
-    return new Intl.NumberFormat("es-CO", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
-}
-
-function balancePresentation(balance: number) {
-    if (balance < 0) {
-        return {
-            label: "Total pendiente",
-            description: "Consumos confirmados pendientes de abono a Vercode.",
-            amount: Math.abs(balance),
-            tone: "text-red-700",
-        };
-    }
-    if (balance > 0) {
-        return {
-            label: "Saldo a favor",
-            description: "Saldo disponible para cubrir próximos consumos.",
-            amount: balance,
-            tone: "text-emerald-700",
-        };
-    }
-    return {
-        label: "Cuenta al día",
-        description: "No tienes saldo pendiente ni saldo a favor.",
-        amount: 0,
-        tone: "text-[#123f68]",
-    };
-}
 
 export default function CompanyWalletPage() {
     const ability = useAbility();
@@ -129,7 +105,7 @@ export default function CompanyWalletPage() {
                         <div className="text-muted-foreground" role="status">Cargando…</div>
                     ) : data ? (
                         <div
-                            className={`flex flex-wrap items-baseline gap-x-2 text-4xl font-bold tabular-nums ${balancePresentation(data.wallet.balance).tone}`}
+                            className={`flex flex-wrap items-baseline gap-x-2 text-4xl font-bold tabular-nums ${BALANCE_TONE_CLASS[balancePresentation(data.wallet.balance).tone]}`}
                         >
                             {formatMoney(balancePresentation(data.wallet.balance).amount, data.wallet.currency)}
                             <span className="text-sm font-medium tracking-wide text-muted-foreground" translate="no">

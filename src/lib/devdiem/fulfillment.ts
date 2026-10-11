@@ -33,7 +33,7 @@ export function getDiemConfig(): DiemConfig {
     };
 }
 
-function headers(config: DiemConfig, extra?: Record<string, string>) {
+export function headers(config: DiemConfig, extra?: Record<string, string>) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
         Accept: 'application/json',
@@ -144,7 +144,7 @@ export function buildCommercialAccountCode(companyId: string): string {
     return `${prefix}:${id}`;
 }
 
-async function parse<T>(response: Response): Promise<T> {
+export async function parse<T>(response: Response): Promise<T> {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
         const responseCorrelationId = response.headers.get('X-Correlation-ID');

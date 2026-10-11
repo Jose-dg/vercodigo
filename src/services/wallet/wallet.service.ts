@@ -163,8 +163,10 @@ export async function recharge(params: {
     amount: number;
     method?: WalletRechargeMethod;
     externalReference?: string;
+    /** DevDiem top-up id when the money was collected by DevDiem (unique). */
+    gatewayTransactionId?: string;
     description?: string;
-    actorId: string;
+    actorId?: string;
 }) {
     if (!(params.amount > 0)) throw badRequest("El monto del abono debe ser mayor a 0");
 
@@ -184,6 +186,7 @@ export async function recharge(params: {
                 amount: params.amount,
                 balanceAfter: updated.balance,
                 externalReference: params.externalReference,
+                gatewayTransactionId: params.gatewayTransactionId,
                 description: params.description,
                 createdById: params.actorId,
                 occurredAt: new Date(),

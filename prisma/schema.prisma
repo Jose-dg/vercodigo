@@ -80,7 +80,7 @@ model WalletTransaction {
   exchangeRate         Float? // tasa aplicada; null si PENDING sin tasa configurada
   description          String?
   externalReference    String? // # de transferencia bancaria en recargas manuales
-  gatewayTransactionId String? // lo llenará la integración PSE/tarjeta futura
+  gatewayTransactionId String?                @unique // id de la recarga en DevDiem: una recarga = un RECHARGE
   createdById          String? // userId que originó el movimiento
   cardActivationId     String?                 @unique
   codePurchaseId       String?                 @unique
@@ -172,6 +172,7 @@ enum WalletRechargeMethod {
   MANUAL
   PSE
   CREDIT_CARD
+  BRE_B // recarga cobrada y verificada por DevDiem (llave/QR Bre-B)
 }
 
 model Store {

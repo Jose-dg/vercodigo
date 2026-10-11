@@ -5,6 +5,29 @@ import { processActivationJob, updateOpenActivationJob } from "@/services/self-s
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
 import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
 import { updateOpenCodePurchase } from "@/services/self-service/code-purchase-state";
+import {
+    refreshReplacedActivationCode,
+    refreshReplacedPurchaseCodes,
+    reverseCancelledActivation,
+    reverseCancelledCodePurchase,
+    type PostDeliveryResult,
+} from "@/services/self-service/post-delivery.service";
+
+/**
+ * A settled (COMPLETED) order can still change in Diem: a cancellation voids
+ * the codes (refund) and delivery_pending means a bad code was replaced.
+ * Anything else on a settled order is ignored.
+ */
+function postDeliveryAction(
+    status: string,
+    toStatus: string,
+    actions: { reverse: () => Promise<PostDeliveryResult>; replace: () => Promise<PostDeliveryResult> },
+): (() => Promise<PostDeliveryResult>) | null {
+    if (status !== "COMPLETED") return null;
+    if (toStatus === "cancelled") return actions.reverse;
+    if (toStatus === "delivery_pending") return actions.replace;
+    return null;
+}
 
 export type FulfillmentWebhookPayload = {
     event_id: string;
@@ -18,6 +41,7 @@ export type FulfillmentWebhookPayload = {
 
 const ACTIONABLE_STATUSES = new Set([
     "allocated",
+    "delivery_pending",
     "delivered",
     "partially_delivered",
     "action_required",
@@ -113,6 +137,14 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
             diemRequestId: payload.code_request_id,
             nextRetryAt: null,
         });
+        const purchaseFollowUp = postDeliveryAction(purchase.status, payload.to_status, {
+            reverse: () => reverseCancelledCodePurchase(purchase.id),
+            replace: () => refreshReplacedPurchaseCodes(purchase.id),
+        });
+        if (purchaseFollowUp) {
+            const result = await purchaseFollowUp();
+            return { ok: true, handled: true, kind: "purchase", id: purchase.id, status: result.status, reason: result.action };
+        }
         if (isSettledFulfillmentStatus(purchase.status)) {
             return {
                 ok: true,
@@ -154,6 +186,14 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
             diemRequestId: payload.code_request_id,
             nextRetryAt: null,
         });
+        const activationFollowUp = postDeliveryAction(job.status, payload.to_status, {
+            reverse: () => reverseCancelledActivation(job.id),
+            replace: () => refreshReplacedActivationCode(job.id),
+        });
+        if (activationFollowUp) {
+            const result = await activationFollowUp();
+            return { ok: true, handled: true, kind: "activation", id: job.id, status: result.status, reason: result.action };
+        }
         if (isSettledFulfillmentStatus(job.status)) {
             return {
                 ok: true,

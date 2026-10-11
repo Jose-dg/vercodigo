@@ -101,13 +101,31 @@ export function isOpenActivationStatus(status: string): boolean {
     return OPEN_ACTIVATION_JOB_STATUSES.includes(status);
 }
 
+function activationLastError(state: {
+    reversed: boolean;
+    settled: boolean;
+    orphanCompletion: boolean;
+    jobError: string | null;
+}): string | null {
+    if (state.reversed) return state.jobError;
+    if (state.settled) return null;
+    if (state.orphanCompletion) {
+        return "Diem entregó el código pero la activación no quedó registrada ni cobrada. Requiere revisión.";
+    }
+    return state.jobError;
+}
+
 export function serializeActivationOrder(source: ActivationOrderSource): FulfillmentOrderRow {
     const { card, job, activation } = source;
     // A CardActivation is the settled fact (card activated and wallet debited).
     // A COMPLETED job without one means Diem delivered but SAS never settled:
     // surface it for review instead of reporting a delivery.
     const orphanCompletion = !activation && job?.status === "COMPLETED";
-    const status = activation ? "COMPLETED" : orphanCompletion ? "ACTION_REQUIRED" : job?.status ?? "PENDING";
+    // Diem cancelled the delivery afterwards and the debit was refunded.
+    const reversed = job?.status === "REVERSED";
+    const status = reversed
+        ? "REVERSED"
+        : activation ? "COMPLETED" : orphanCompletion ? "ACTION_REQUIRED" : job?.status ?? "PENDING";
     const jobCodes = summarizeCodeDelivery({ status, deliveredCodes: job?.deliveredCodes ?? null }).codes;
     const codes = jobCodes.length ? jobCodes : card.keyCode ? [card.keyCode] : [];
     const denomination = card.denomination
@@ -124,12 +142,8 @@ export function serializeActivationOrder(source: ActivationOrderSource): Fulfill
         totalAmount: activation?.commercialAmount ?? job?.commercialAmount ?? activation?.activationAmount ?? 0,
         currency: activation?.commercialCurrency ?? job?.commercialCurrency ?? "COP",
         status,
-        fulfillmentStatus: activation ? "delivered" : job?.fulfillmentStatus ?? null,
-        lastError: activation
-            ? null
-            : orphanCompletion
-                ? "Diem entregó el código pero la activación no quedó registrada ni cobrada. Requiere revisión."
-                : job?.lastError ?? null,
+        fulfillmentStatus: reversed ? job?.fulfillmentStatus ?? "cancelled" : activation ? "delivered" : job?.fulfillmentStatus ?? null,
+        lastError: activationLastError({ reversed, settled: Boolean(activation), orphanCompletion, jobError: job?.lastError ?? null }),
         createdAt,
         occurredAt: createdAt,
         completedAt: activation?.activatedAt ?? null,
@@ -159,6 +173,8 @@ export function laneFulfillmentOrders<T extends Pick<FulfillmentOrderRow, "occur
     return {
         pending: ordered.filter((row) => row.isPending),
         completed: ordered.filter((row) => row.isSuccessful),
-        failed: ordered.filter((row) => row.status === "FAILED" || row.needsAction),
+        // REVERSED: delivered, then cancelled by Diem and refunded. Shown here
+        // because the delivered codes are no longer valid.
+        failed: ordered.filter((row) => row.status === "FAILED" || row.status === "REVERSED" || row.needsAction),
     };
 }

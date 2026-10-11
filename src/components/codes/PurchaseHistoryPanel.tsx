@@ -75,6 +75,8 @@ function statusLabel(purchase: PurchaseHistoryItem): string {
             return "Entregada";
         case "FAILED":
             return "Fallida";
+        case "REVERSED":
+            return "Anulada · reembolsada";
         default:
             return purchase.status;
     }
@@ -82,7 +84,7 @@ function statusLabel(purchase: PurchaseHistoryItem): string {
 
 function statusVariant(purchase: PurchaseHistoryItem): "default" | "secondary" | "destructive" | "outline" {
     if (purchase.isSuccessful) return "default";
-    if (purchase.needsAction || purchase.status === "FAILED") return "destructive";
+    if (purchase.needsAction || purchase.status === "FAILED" || purchase.status === "REVERSED") return "destructive";
     if (purchase.isPending) return "secondary";
     return "outline";
 }
@@ -212,7 +214,7 @@ function PurchaseTable({
                                     {purchase.denomination.amount} {purchase.denomination.currency}
                                 </div>
                             )}
-                            {purchase.lastError && (purchase.isPending || purchase.needsAction) && (
+                            {purchase.lastError && (purchase.isPending || purchase.needsAction || purchase.status === "REVERSED") && (
                                 <div className="text-xs text-amber-700 mt-1">{purchase.lastError}</div>
                             )}
                         </TableCell>

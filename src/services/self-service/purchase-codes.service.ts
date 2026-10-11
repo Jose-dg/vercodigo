@@ -349,7 +349,7 @@ export async function processCodePurchase(purchaseId: string) {
             });
             return serializePurchase(current);
         }
-        if (!["allocated", "delivered", "partially_delivered"].includes(request.status)) {
+        if (!["allocated", "delivery_pending", "delivered", "partially_delivered"].includes(request.status)) {
             const { current } = await writeWhileOpen({
                 status: request.status === "awaiting_stock" ? "AWAITING_STOCK" : "PENDING",
                 fulfillmentStatus: request.status,

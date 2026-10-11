@@ -56,3 +56,31 @@ test("a completed purchase reclassified out of the active ledger is reported, no
     assert.deepEqual(findings, []);
     assert.deepEqual(exclusions, [{ purchaseId: "reclassified", failedConsumptions: 1 }]);
 });
+
+test("a purchase cancelled after delivery nets to zero with exactly one refund", () => {
+    const wallet = {
+        id: "w1",
+        companyId: "c1",
+        balance: -1000,
+        rows: [
+            row("o", "OPENING_BALANCE", 1000, -1000, 0),
+            row("c", "CONSUMPTION", 100, -1100, 1),
+            row("r", "REFUND", 100, -1000, 2),
+        ],
+    };
+    const reversed = { ...purchase("p1", "REVERSED", 1), reversals: 1 };
+    assert.deepEqual(verifyLedger([wallet], [reversed]).findings, []);
+});
+
+test("flags a reversed purchase that was not refunded, or a completed one that was", () => {
+    const { findings } = verifyLedger([], [
+        { ...purchase("p1", "REVERSED", 1), reversals: 0 },
+        { ...purchase("p2", "REVERSED", 1), reversals: 2 },
+        { ...purchase("p3", "COMPLETED", 1), reversals: 1 },
+    ]);
+    assert.deepEqual(findings.map((finding) => [finding.kind, finding.purchaseId]), [
+        ["REVERSED_PURCHASE_NOT_REFUNDED_ONCE", "p1"],
+        ["REVERSED_PURCHASE_NOT_REFUNDED_ONCE", "p2"],
+        ["COMPLETED_PURCHASE_REFUNDED", "p3"],
+    ]);
+});

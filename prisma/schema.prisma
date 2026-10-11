@@ -84,11 +84,15 @@ model WalletTransaction {
   createdById          String? // userId que originó el movimiento
   cardActivationId     String?                 @unique
   codePurchaseId       String?                 @unique
+  /// REFUND that reverses this CONSUMPTION (cancelled after delivery). Unique: one reversal per movement.
+  reversalOfId         String?                 @unique
   createdAt            DateTime                @default(now())
   occurredAt           DateTime                @default(now())
   occurredSequence     Int                     @default(0)
   wallet               Wallet                  @relation(fields: [walletId], references: [id])
   accountStatementLine AccountStatementLine?
+  reversalOf           WalletTransaction?      @relation("WalletReversal", fields: [reversalOfId], references: [id])
+  reversal             WalletTransaction?      @relation("WalletReversal")
 
   @@index([walletId, createdAt])
   @@index([walletId, occurredAt, occurredSequence, id])

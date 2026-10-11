@@ -15,7 +15,7 @@ import { verifyLedger } from "../src/lib/wallet/ledger-verification";
 const prisma = new PrismaClient();
 
 async function main() {
-    const [wallets, transactions, purchases, linked, failedLinked] = await Promise.all([
+    const [wallets, transactions, purchases, linked, failedLinked, refunds] = await Promise.all([
         prisma.wallet.findMany({ select: { id: true, companyId: true, balance: true } }),
         prisma.walletTransaction.findMany({
             select: {
@@ -40,7 +40,20 @@ async function main() {
             where: { codePurchaseId: { not: null }, status: "FAILED" },
             _count: { _all: true },
         }),
+        prisma.walletTransaction.findMany({
+            where: {
+                type: "REFUND",
+                status: { not: "FAILED" },
+                reversalOf: { codePurchaseId: { not: null } },
+            },
+            select: { reversalOf: { select: { codePurchaseId: true } } },
+        }),
     ]);
+    const reversalsByPurchase = new Map<string, number>();
+    for (const refund of refunds) {
+        const purchaseId = refund.reversalOf?.codePurchaseId;
+        if (purchaseId) reversalsByPurchase.set(purchaseId, (reversalsByPurchase.get(purchaseId) ?? 0) + 1);
+    }
     const consumptionsByPurchase = new Map(linked.map((row) => [row.codePurchaseId, row._count._all]));
     const failedByPurchase = new Map(failedLinked.map((row) => [row.codePurchaseId, row._count._all]));
     const { findings, exclusions } = verifyLedger(
@@ -52,6 +65,7 @@ async function main() {
             ...purchase,
             activeConsumptions: consumptionsByPurchase.get(purchase.id) ?? 0,
             failedConsumptions: failedByPurchase.get(purchase.id) ?? 0,
+            reversals: reversalsByPurchase.get(purchase.id) ?? 0,
         })),
     );
     console.log(JSON.stringify({

@@ -106,6 +106,54 @@ export async function debit(params: {
 }
 
 /**
+ * Reverses one CONSUMPTION when Diem cancels a delivery that was already
+ * billed. A CONFIRMED consumption is refunded with a REFUND movement linked by
+ * reversalOfId (unique: the database rejects a second reversal); a PENDING one
+ * never touched the balance, so it is marked FAILED. Runs inside the caller's
+ * transaction together with the order's status change.
+ */
+export async function reverseConsumption(params: {
+    consumptionId: string;
+    description: string;
+    createdById?: string | null;
+    tx: Db;
+}) {
+    const { tx } = params;
+    const consumption = await tx.walletTransaction.findUniqueOrThrow({ where: { id: params.consumptionId } });
+    if (consumption.type !== "CONSUMPTION") {
+        throw new Error(`El movimiento ${consumption.id} no es un consumo`);
+    }
+    if (consumption.status === "FAILED") return null;
+    if (consumption.status === "PENDING") {
+        await tx.walletTransaction.update({
+            where: { id: consumption.id },
+            data: { status: "FAILED", description: `${consumption.description ?? "Consumo"} · anulado` },
+        });
+        return null;
+    }
+    const updated = await tx.wallet.update({
+        where: { id: consumption.walletId },
+        data: { balance: { increment: consumption.amount } },
+    });
+    return tx.walletTransaction.create({
+        data: {
+            walletId: consumption.walletId,
+            type: "REFUND",
+            status: "CONFIRMED",
+            amount: consumption.amount,
+            balanceAfter: updated.balance,
+            originalAmount: consumption.originalAmount,
+            originalCurrency: consumption.originalCurrency,
+            exchangeRate: consumption.exchangeRate,
+            description: params.description,
+            createdById: params.createdById ?? null,
+            reversalOfId: consumption.id,
+            occurredAt: new Date(),
+        },
+    });
+}
+
+/**
  * Registra un abono a la wallet (hoy: solo manual, tras confirmar un pago
  * externo como una transferencia). La autorización de plataforma se valida en
  * la ruta; el servicio solo asume que el actor está autorizado.

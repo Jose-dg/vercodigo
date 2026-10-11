@@ -244,7 +244,7 @@ export async function processActivationJob(jobId: string) {
             });
             return { status: "ACTION_REQUIRED", jobId: job.id };
         }
-        if (!["allocated", "delivered", "partially_delivered"].includes(remote.status)) {
+        if (!["allocated", "delivery_pending", "delivered", "partially_delivered"].includes(remote.status)) {
             await updateOpenActivationJob(prisma, job.id, {
                 status: remote.status === "awaiting_stock" ? "AWAITING_STOCK" : "PROCESSING",
                 fulfillmentStatus: remote.status,

@@ -84,6 +84,20 @@ export function buildPurchaseTimeline(purchase: {
         };
     }
 
+    if (purchase.status === "REVERSED") {
+        return {
+            steps: [
+                created,
+                { key: "processing", label: "Entregada", at: completedAt ?? createdAt, state: "done" },
+                { key: "completed", label: "Anulada y reembolsada", at: null, state: "error" },
+            ],
+            progress: 1,
+            tone: "error",
+            statusLabel: "Anulada y reembolsada",
+            isTerminal: true,
+        };
+    }
+
     const label = processingLabel(purchase.status, purchase.fulfillmentStatus);
     const waiting = purchase.status === "AWAITING_STOCK" || purchase.status === "ACTION_REQUIRED";
     return {

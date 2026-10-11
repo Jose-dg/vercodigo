@@ -20,9 +20,19 @@ if (!["localhost", "127.0.0.1", "::1"].includes(new URL(testDatabaseUrl).hostnam
 process.env.DATABASE_URL = testDatabaseUrl;
 
 const acknowledged: string[] = [];
+// What the fake DevDiem reports for GET /topups/<id>/.
+const remoteTopUps = new Map<string, Record<string, unknown>>();
 const server = createServer((req, res) => {
-    const match = /\/topups\/([^/]+)\/acknowledge\/$/.exec(req.url ?? "");
+    const url = req.url ?? "";
+    const match = /\/topups\/([^/]+)\/acknowledge\/$/.exec(url);
     if (req.method === "POST" && match) acknowledged.push(decodeURIComponent(match[1]));
+    const detail = /\/topups\/([^/]+)\/$/.exec(url);
+    if (req.method === "GET" && detail) {
+        const topUp = remoteTopUps.get(decodeURIComponent(detail[1]));
+        res.writeHead(topUp ? 200 : 404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(topUp ?? { detail: "Not found." }));
+        return;
+    }
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end("{}");
 });
@@ -111,6 +121,7 @@ after(async () => {
 
 beforeEach(async () => {
     acknowledged.length = 0;
+    remoteTopUps.clear();
     await removeStatements();
     await prisma.walletTransaction.deleteMany();
     await prisma.wallet.deleteMany();
@@ -350,4 +361,76 @@ test("only the platform may read another company's wallet movements", () => {
     for (const role of ["OWNER", "GENERAL_ADMIN", "ADMIN", "OPERATOR"]) {
         assert.equal(defineAbilitiesFor(actor(role)).can("manage", "Wallet"), false, role);
     }
+});
+
+function remoteTopUp(id: string, state: string, creditedAt: string | null) {
+    const topUp = {
+        id,
+        status: "succeeded",
+        state,
+        amount: "90000.00",
+        bonus_amount: "0.00",
+        currency: "COP",
+        method_type: "BRE_B_MANUAL",
+        action: null,
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        succeeded_at: creditedAt,
+        credited_at: creditedAt,
+        partner_acknowledged_at: null,
+    };
+    remoteTopUps.set(id, topUp);
+    return topUp;
+}
+
+function stateEvent(topUpId: string, state: string, accountCode = `diem-sas:${companyId}`) {
+    const event = gateway.parseTopUpStateWebhook({
+        event_id: `topup:${topUpId}:${state}`,
+        type: "topup.state_changed",
+        topup_id: topUpId,
+        account_code: accountCode,
+        state,
+        occurred_at: new Date().toISOString(),
+    });
+    assert.ok(event);
+    return event;
+}
+
+test("a credited-top-up webhook credits the wallet at once, once, from DevDiem's own record", async () => {
+    const id = "6f0f2d4e-2222-4c4c-9999-000000000001";
+    const creditedAt = new Date(Date.now() - 30_000).toISOString();
+    remoteTopUp(id, "credited", creditedAt);
+
+    const first = await gateway.handleTopUpStateWebhook(stateEvent(id, "credited"));
+    const replay = await gateway.handleTopUpStateWebhook(stateEvent(id, "credited"));
+
+    assert.deepEqual(first, { ok: true, state: "credited" });
+    assert.deepEqual(replay, { ok: true, state: "credited" });
+    const credits = await prisma.walletTransaction.findMany({ where: { gatewayTransactionId: id } });
+    assert.equal(credits.length, 1);
+    assert.equal(credits[0].occurredAt.toISOString(), creditedAt);
+    assert.equal((await prisma.wallet.findUniqueOrThrow({ where: { companyId } })).balance, 90_000);
+    assert.ok(acknowledged.includes(id));
+});
+
+test("the webhook is only a hint: nothing is credited unless DevDiem reports the top-up credited", async () => {
+    const id = "6f0f2d4e-2222-4c4c-9999-000000000002";
+    remoteTopUp(id, "under_review", null);
+
+    const result = await gateway.handleTopUpStateWebhook(stateEvent(id, "credited"));
+
+    assert.deepEqual(result, { ok: true, state: "under_review" });
+    assert.equal(await prisma.walletTransaction.count(), 0);
+});
+
+test("webhooks for unknown accounts or malformed payloads are rejected", async () => {
+    assert.deepEqual(
+        await gateway.handleTopUpStateWebhook(stateEvent("x", "credited", "otro-partner:abc")),
+        { ok: false, reason: "unknown_account" },
+    );
+    assert.deepEqual(
+        await gateway.handleTopUpStateWebhook(stateEvent("x", "credited", "diem-sas:no-existe")),
+        { ok: false, reason: "unknown_company" },
+    );
+    assert.equal(gateway.parseTopUpStateWebhook({ type: "topup.state_changed", topup_id: 1 }), null);
+    assert.equal(gateway.parseTopUpStateWebhook(null), null);
 });

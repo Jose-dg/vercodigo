@@ -137,11 +137,23 @@ export function commercialLineMoney(totalAmount: number, quantity: number): {
     };
 }
 
+function commercialAccountPrefix(): string {
+    return (process.env.DIEM_COMMERCIAL_ACCOUNT_PREFIX || 'diem-sas').trim() || 'diem-sas';
+}
+
 export function buildCommercialAccountCode(companyId: string): string {
-    const prefix = (process.env.DIEM_COMMERCIAL_ACCOUNT_PREFIX || 'diem-sas').trim() || 'diem-sas';
     const id = companyId.trim();
     if (!id) throw new Error('companyId es requerido para account_code comercial');
-    return `${prefix}:${id}`;
+    return `${commercialAccountPrefix()}:${id}`;
+}
+
+/** Inverse of buildCommercialAccountCode; null for codes of other partners. */
+export function companyIdFromCommercialAccountCode(accountCode: string): string | null {
+    const prefix = `${commercialAccountPrefix()}:`;
+    const code = accountCode.trim();
+    if (!code.startsWith(prefix)) return null;
+    const id = code.slice(prefix.length);
+    return id && !id.includes(':') ? id : null;
 }
 
 export async function parse<T>(response: Response): Promise<T> {

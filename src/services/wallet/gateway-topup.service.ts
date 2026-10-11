@@ -9,6 +9,7 @@
  */
 import { Prisma } from '@prisma/client';
 
+import { companyIdFromCommercialAccountCode } from '@/lib/devdiem/fulfillment';
 import prisma from '@/lib/prisma';
 import {
     acknowledgeTopUp,
@@ -109,4 +110,42 @@ export async function syncCreditedTopUpsBeforeClosing(companyId: string): Promis
     if (!topUpsConfigured()) return true;
     const stats = await syncPendingCredits([companyId]);
     return stats.errors === 0;
+}
+
+export type TopUpStateWebhook = {
+    event_id: string;
+    type: 'topup.state_changed';
+    topup_id: string;
+    account_code: string;
+    state: string;
+};
+
+export function parseTopUpStateWebhook(body: unknown): TopUpStateWebhook | null {
+    if (!body || typeof body !== 'object') return null;
+    const row = body as Record<string, unknown>;
+    if (
+        row.type !== 'topup.state_changed'
+        || typeof row.event_id !== 'string'
+        || typeof row.topup_id !== 'string'
+        || typeof row.account_code !== 'string'
+        || typeof row.state !== 'string'
+    ) {
+        return null;
+    }
+    return row as TopUpStateWebhook;
+}
+
+/**
+ * DevDiem says a top-up was decided. The hint is never trusted for money: the
+ * top-up is re-read from DevDiem and credited through the same idempotent
+ * path as the sync job, so a replayed or forged-but-signed event cannot
+ * credit anything DevDiem does not report as credited.
+ */
+export async function handleTopUpStateWebhook(event: TopUpStateWebhook) {
+    const companyId = companyIdFromCommercialAccountCode(event.account_code);
+    if (!companyId) return { ok: false as const, reason: 'unknown_account' };
+    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+    if (!company) return { ok: false as const, reason: 'unknown_company' };
+    const topUp = await syncTopUp(company.id, event.topup_id);
+    return { ok: true as const, state: topUp.state };
 }

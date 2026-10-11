@@ -21,6 +21,9 @@ type WalletSummary = {
     topUpsAvailable: boolean;
 };
 
+const OPEN_TOPUP_REFRESH_MS = 10_000;
+const IDLE_REFRESH_MS = 60_000;
+
 async function fetchSummary(url: string): Promise<WalletSummary> {
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -29,7 +32,9 @@ async function fetchSummary(url: string): Promise<WalletSummary> {
 
 export function useWalletSummary() {
     return useSWR<WalletSummary>(WALLET_SUMMARY_KEY, fetchSummary, {
-        refreshInterval: 60_000,
+        // While a top-up is in flight the credit lands within seconds (DevDiem
+        // webhook); refresh often then, and rarely otherwise.
+        refreshInterval: (latest) => (latest?.openTopUps?.count ? OPEN_TOPUP_REFRESH_MS : IDLE_REFRESH_MS),
         revalidateOnFocus: true,
     });
 }

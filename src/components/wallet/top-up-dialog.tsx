@@ -34,6 +34,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { TopUp } from "@/lib/devdiem/stored-value";
 import { BALANCE_TONE_CLASS, balancePresentation, formatMoney } from "@/lib/wallet/balance";
+import { postFormWithProgress, receiptForm, sendReceiptBatches, type UploadResult } from "@/lib/wallet/receipt-upload";
+import {
+    EVIDENCE_MAX_FILES,
+    evidenceCountLabel,
+    isEvidenceStorageError,
+    planEvidenceBatches,
+} from "@/lib/wallet/topup-evidence";
 import {
     BREB_MAX_PER_TRANSACTION_COP,
     TOPUP_MIN_COP,
@@ -50,6 +57,7 @@ import {
 } from "@/lib/wallet/topups";
 import { cn } from "@/lib/utils";
 
+import { ReceiptPicker, useReceipts } from "./receipt-picker";
 import { WALLET_SUMMARY_KEY, useWalletSummary } from "./wallet-balance-chip";
 
 export const WALLET_TOPUPS_KEY = "/api/wallet/topups";
@@ -66,6 +74,14 @@ async function readJson(response: Response) {
     if (!response.ok) throw new Error(body?.message || "No pudimos completar la operación. Intenta de nuevo.");
     return body;
 }
+
+function uploadMessage(result: UploadResult) {
+    const message = result.body.message;
+    return typeof message === "string" && message ? message : "No pudimos subir el comprobante. Intenta de nuevo.";
+}
+
+const RECEIPT_STORAGE_NOTICE =
+    "Tu pago quedó reportado, pero no pudimos guardar el comprobante en este momento. Intenta adjuntarlo de nuevo aquí en unos minutos.";
 
 async function fetchTopUp(url: string): Promise<TopUp> {
     return (await readJson(await fetch(url, { cache: "no-store" }))).topUp;
@@ -211,6 +227,12 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
         refreshInterval: 10_000,
     });
     const current = live ?? topUp;
+    const liveKey = topUp ? `/api/wallet/topups/${topUp.id}` : null;
+    // Receipts chosen in the pay step travel with the report; under review they are added later.
+    const attachedCount = step === "status" ? current?.evidence_count ?? 0 : 0;
+    const receipts = useReceipts(attachedCount);
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+    const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
 
     const { data: existing } = useSWR(open && step === "amount" && !topUp ? WALLET_TOPUPS_KEY : null, fetchTopUps);
     const resumable = existing?.find((candidate) => candidate.state === "created" && !timeRemaining(candidate.expires_at).expired);
@@ -230,6 +252,8 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
         setTopUp(null);
         setError(null);
         setIdempotencyKey(crypto.randomUUID());
+        receipts.drop();
+        setReceiptNotice(null);
     }
 
     async function createTopUp() {
@@ -257,17 +281,55 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
 
     async function reportPayment() {
         if (!topUp || bankReference.trim().length < 3) return;
+        const reportUrl = `${WALLET_TOPUPS_KEY}/${topUp.id}/report`;
+        const evidenceUrl = `${WALLET_TOPUPS_KEY}/${topUp.id}/evidence`;
+        const reference = bankReference.trim();
+        const reportPlain = async (): Promise<TopUp> => (await readJson(
+            await fetch(reportUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bankReference: reference }),
+            }),
+        )).topUp;
+        // The first batch goes with the report (all or nothing); the rest are added right after.
+        const batches = planEvidenceBatches(receipts.receipts.map((receipt) => receipt.file));
         setSubmitting(true);
         setError(null);
+        setReceiptNotice(null);
         try {
-            const body = await readJson(
-                await fetch(`${WALLET_TOPUPS_KEY}/${topUp.id}/report`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ bankReference: bankReference.trim() }),
-                }),
-            );
-            setTopUp(body.topUp);
+            let reported: TopUp;
+            let notice: string | null = null;
+            if (batches.length === 0) {
+                reported = await reportPlain();
+            } else {
+                setUploadProgress(0);
+                const [first] = batches;
+                const results = await sendReceiptBatches(
+                    batches,
+                    (batch, onProgress) => postFormWithProgress(
+                        batch === first ? reportUrl : evidenceUrl,
+                        receiptForm(batch, batch === first ? { bankReference: reference } : {}),
+                        onProgress,
+                    ),
+                    setUploadProgress,
+                );
+                const [report, ...added] = results;
+                if (isEvidenceStorageError(report.status, report.body.error)) {
+                    // Never lose the report for a receipt: report without it and keep the files to retry.
+                    reported = await reportPlain();
+                    notice = RECEIPT_STORAGE_NOTICE;
+                } else if (!report.ok) {
+                    throw new Error(uploadMessage(report));
+                } else {
+                    const delivered = results.filter((result) => result.ok);
+                    reported = delivered[delivered.length - 1].body.topUp as TopUp;
+                    receipts.drop(batches.slice(0, delivered.length).flat());
+                    const failed = added.find((result) => !result.ok);
+                    if (failed) notice = `Tu pago quedó reportado. ${uploadMessage(failed)}`;
+                }
+            }
+            setTopUp(reported);
+            setReceiptNotice(notice);
             setStep("status");
             mutate(WALLET_SUMMARY_KEY);
             mutate(WALLET_TOPUPS_KEY);
@@ -275,6 +337,40 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
             setError((cause as Error).message);
         } finally {
             setSubmitting(false);
+            setUploadProgress(null);
+        }
+    }
+
+    async function attachReceipts() {
+        if (!current || receipts.receipts.length === 0) return;
+        const url = `${WALLET_TOPUPS_KEY}/${current.id}/evidence`;
+        const batches = planEvidenceBatches(receipts.receipts.map((receipt) => receipt.file));
+        setSubmitting(true);
+        setUploadProgress(0);
+        setReceiptNotice(null);
+        receipts.setError(null);
+        try {
+            const results = await sendReceiptBatches(
+                batches,
+                (batch, onProgress) => postFormWithProgress(url, receiptForm(batch), onProgress),
+                setUploadProgress,
+            );
+            const delivered = results.filter((result) => result.ok);
+            receipts.drop(batches.slice(0, delivered.length).flat());
+            if (delivered.length > 0) {
+                const updated = delivered[delivered.length - 1].body.topUp as TopUp;
+                setTopUp(updated);
+                if (liveKey) mutate(liveKey, updated, { revalidate: false });
+                mutate(WALLET_TOPUPS_KEY);
+            }
+            const failed = results.find((result) => !result.ok);
+            if (failed) receipts.setError(uploadMessage(failed));
+            else toast.success("Comprobante enviado. Finanzas lo verá al revisar tu pago.");
+        } catch (cause) {
+            receipts.setError((cause as Error).message);
+        } finally {
+            setSubmitting(false);
+            setUploadProgress(null);
         }
     }
 
@@ -539,6 +635,9 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
                             <p id="topup-bank-ref-help" className="text-xs text-muted-foreground">
                                 Aparece en el comprobante de la transferencia. Con ella finanzas encuentra tu pago.
                             </p>
+                            <div className="pt-2">
+                                <ReceiptPicker state={receipts} disabled={submitting} progress={uploadProgress} />
+                            </div>
                         </div>
 
                         {errorBlock}
@@ -549,7 +648,12 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
                             <Button
                                 size="lg"
                                 onClick={reportPayment}
-                                disabled={bankReference.trim().length < 3 || submitting || Boolean(remaining?.expired)}
+                                disabled={
+                                    bankReference.trim().length < 3
+                                    || submitting
+                                    || receipts.preparing
+                                    || Boolean(remaining?.expired)
+                                }
                             >
                                 {submitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
                                 Ya hice la transferencia
@@ -600,6 +704,40 @@ export function TopUpDialog({ open, resume, onOpenChange }: {
                             ))}
                         </ol>
 
+                        {receiptNotice ? (
+                            <p role="status" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> {receiptNotice}
+                            </p>
+                        ) : null}
+                        {current.state === "under_review" ? (
+                            <section aria-labelledby="topup-receipts-title" className="space-y-3 rounded-xl border p-4">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h3 id="topup-receipts-title" className="text-sm font-medium">Comprobante</h3>
+                                    <span className="text-xs text-muted-foreground">{evidenceCountLabel(attachedCount)}</span>
+                                </div>
+                                {attachedCount < EVIDENCE_MAX_FILES ? (
+                                    <>
+                                        <p className="text-xs text-muted-foreground">
+                                            {attachedCount === 0
+                                                ? "Si lo adjuntas, finanzas encuentra y confirma tu pago más rápido."
+                                                : "Puedes agregar otro si hace falta."}
+                                        </p>
+                                        <ReceiptPicker state={receipts} disabled={submitting} progress={uploadProgress} />
+                                        {receipts.receipts.length > 0 ? (
+                                            <Button
+                                                size="lg"
+                                                className="w-full sm:w-auto"
+                                                onClick={attachReceipts}
+                                                disabled={submitting || receipts.preparing}
+                                            >
+                                                {submitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+                                                Enviar comprobante
+                                            </Button>
+                                        ) : null}
+                                    </>
+                                ) : null}
+                            </section>
+                        ) : null}
                         {current.state === "under_review" ? (
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
                                 <p className="font-medium">No tienes que esperar para comprar.</p>

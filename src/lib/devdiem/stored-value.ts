@@ -35,7 +35,12 @@ export type TopUp = {
     credited_at?: string | null;
     gateway_transaction_id?: string;
     partner_acknowledged_at?: string | null;
+    /** Receipts attached and not deleted; only finance can open them. */
+    evidence_count?: number;
 };
+
+/** A receipt already validated by the portal, forwarded to DevDiem as is. */
+export type EvidenceUpload = { name: string; data: Blob };
 
 export type StoredValueConfig = {
     channel: string;
@@ -112,12 +117,50 @@ export async function getTopUp(companyId: string, topUpId: string): Promise<TopU
     return parse<TopUp>(response);
 }
 
-export async function reportTopUp(companyId: string, topUpId: string, bankReference: string): Promise<TopUp> {
+function evidenceForm(files: EvidenceUpload[]): FormData {
+    const form = new FormData();
+    for (const file of files) form.append('files', file.data, file.name);
+    return form;
+}
+
+/**
+ * "Ya pagué" with the bank reference and, optionally, receipts in the same
+ * request (all or nothing). Idempotent in DevDiem for the same reference.
+ */
+export async function reportTopUp(
+    companyId: string,
+    topUpId: string,
+    bankReference: string,
+    files: EvidenceUpload[] = [],
+): Promise<TopUp> {
     const { config, base } = accountPath(companyId);
-    const response = await fetch(`${base}/topups/${encodeURIComponent(topUpId)}/report/`, {
+    const url = `${base}/topups/${encodeURIComponent(topUpId)}/report/`;
+    if (files.length === 0) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: headers(config, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ bank_reference: bankReference }),
+        });
+        return parse<TopUp>(response);
+    }
+    const form = evidenceForm(files);
+    form.append('bank_reference', bankReference);
+    // No Content-Type: fetch sets multipart/form-data with its boundary.
+    const response = await fetch(url, { method: 'POST', headers: headers(config), body: form });
+    return parse<TopUp>(response);
+}
+
+/** Adds receipts to a top-up already reported and still under review. */
+export async function attachTopUpEvidence(
+    companyId: string,
+    topUpId: string,
+    files: EvidenceUpload[],
+): Promise<TopUp> {
+    const { config, base } = accountPath(companyId);
+    const response = await fetch(`${base}/topups/${encodeURIComponent(topUpId)}/evidence/`, {
         method: 'POST',
-        headers: headers(config, { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ bank_reference: bankReference }),
+        headers: headers(config),
+        body: evidenceForm(files),
     });
     return parse<TopUp>(response);
 }

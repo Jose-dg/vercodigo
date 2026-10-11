@@ -14,7 +14,7 @@
     "test:qr": "node --test --experimental-strip-types tests/qr-catalog.test.mjs",
     "test:account-statements": "node --test --experimental-strip-types tests/account-statements.test.mjs",
     "test:wallet": "node --test --experimental-strip-types tests/wallet-presentation.test.mjs tests/wallet-effective-time.test.mjs",
-    "test:wallet-topups": "node --test --experimental-strip-types tests/wallet-topups.test.mjs",
+    "test:wallet-topups": "node --test --experimental-strip-types tests/wallet-topups.test.mjs tests/wallet-topup-evidence.test.mjs",
     "test:wallet-ledger": "node --test --experimental-strip-types tests/wallet-ledger.test.mjs tests/purchase-finalization-idempotency.test.mjs tests/ledger-verification.test.mjs",
     "test:purchase-quote": "node --test --experimental-strip-types tests/company-rate.test.mjs tests/purchase-quote.test.mjs",
     "test:buy-codes-catalog": "node --test --experimental-strip-types tests/buy-codes-catalog.test.mjs",

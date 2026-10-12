@@ -12,6 +12,9 @@ import {
   GalleryVerticalEnd,
   SquareTerminal,
   Bot,
+  ShoppingCart,
+  CreditCard,
+  Wallet,
 } from "lucide-react"
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
@@ -34,11 +37,26 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 const data = {
   navMain: [
     {
-      title: "Home",
+      title: "Inicio",
       url: "/admin",
       icon: Home,
-      // isActive: true,
       // No items to make it non-collapsible
+    },
+    // Daily actions stay top-level so nobody has to hunt for them in a group.
+    {
+      title: "Comprar códigos",
+      url: "/codes/purchase",
+      icon: ShoppingCart,
+    },
+    {
+      title: "Activar tarjeta",
+      url: "/activate",
+      icon: CreditCard,
+    },
+    {
+      title: "Mi billetera",
+      url: "/wallet",
+      icon: Wallet,
     },
     {
       title: "Playground",
@@ -144,20 +162,8 @@ const data = {
       icon: Zap,
       items: [
         {
-          title: "Activate Card",
-          url: "/activate",
-        },
-        {
           title: "Scan QR",
           url: "/scan",
-        },
-        {
-          title: "Buy Codes",
-          url: "/codes/purchase",
-        },
-        {
-          title: "Mi Wallet",
-          url: "/wallet",
         },
         {
           title: "Activations",
@@ -328,13 +334,19 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
       .map((group) => {
         const newGroup = {
           ...group,
-          url: group.title === "Home" && currentUser?.role
+          url: group.title === "Inicio" && currentUser?.role
             ? homePathForRole(currentUser.role)
             : group.url,
         };
 
         if (newGroup.url !== "#" && !newGroup.items) {
           if (!isNavItemVisible(newGroup.url, currentUser?.role)) return null;
+          // The operator's home already is the purchase page: no duplicate entry.
+          if (
+            newGroup.title !== "Inicio" &&
+            currentUser?.role &&
+            newGroup.url === homePathForRole(currentUser.role)
+          ) return null;
         }
 
         if (newGroup.items) {

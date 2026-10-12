@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { CreditCard, Plus, ShoppingCart } from "lucide-react";
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context";
+import { useTopUp } from "@/components/wallet/top-up-provider";
+import { useWalletSummary } from "@/components/wallet/wallet-balance-chip";
+import { Button } from "@/components/ui/button";
 import {
     Table,
     TableBody,
@@ -52,14 +57,59 @@ function formatMoney(amount: number, currency: string) {
     return new Intl.NumberFormat("es-CO", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
 }
 
-function StatCard({ title, value, hint }: { title: string; value: string | number; hint?: string }) {
+function StatCard({
+    title,
+    value,
+    hint,
+    action,
+}: {
+    title: string;
+    value: string | number;
+    hint?: string;
+    action?: ReactNode;
+}) {
     return (
-        <Card>
+        <Card className="flex flex-col">
             <CardHeader className="pb-2">
                 <CardDescription>{title}</CardDescription>
-                <CardTitle className="text-3xl font-mono">{value}</CardTitle>
+                <CardTitle className="text-3xl font-mono tabular-nums break-all">{value}</CardTitle>
             </CardHeader>
-            {hint && <CardContent className="text-xs text-muted-foreground pt-0">{hint}</CardContent>}
+            <CardContent className="mt-auto space-y-3 pt-0">
+                {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+                {action}
+            </CardContent>
+        </Card>
+    );
+}
+
+/** Entry point to the daily actions, so nobody has to search the menu for them. */
+function QuickActionsCard({ canBuy, canActivate }: { canBuy: boolean; canActivate: boolean }) {
+    return (
+        <Card className="flex flex-col justify-between lg:col-span-2">
+            <CardHeader>
+                <CardTitle className="text-xl">Compra de códigos</CardTitle>
+                <CardDescription className="max-w-md">
+                    Elige producto, región y cantidad. Los códigos quedan disponibles al instante en el historial de compras.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+                {canBuy && (
+                    <Button asChild size="lg">
+                        <Link href="/codes/purchase">
+                            <ShoppingCart aria-hidden="true" className="size-4" />
+                            Comprar códigos
+                        </Link>
+                    </Button>
+                )}
+                {canActivate && (
+                    <Button asChild size="lg" variant="outline">
+                        <Link href="/activate">
+                            <CreditCard aria-hidden="true" className="size-4" />
+                            Activar tarjeta
+                        </Link>
+                    </Button>
+                )}
+            </CardContent>
         </Card>
     );
 }
@@ -73,6 +123,10 @@ export default function CompanyOverviewPage() {
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
     const [companyId, setCompanyId] = useState("");
     const [loading, setLoading] = useState(true);
+    const { canTopUp, openTopUp } = useTopUp();
+    const { data: walletSummary } = useWalletSummary();
+    // Same rule as the top bar: offered only when DevDiem can complete it.
+    const topUpReady = !isPlatform && canTopUp && walletSummary?.topUpsAvailable === true;
 
     const fetchOverview = useCallback(async (cId?: string) => {
         setLoading(true);
@@ -138,20 +192,35 @@ export default function CompanyOverviewPage() {
                 <div className="text-center text-muted-foreground py-16">Cargando...</div>
             ) : (
                 <>
-                    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-                        <StatCard title="Activaciones hoy" value={data.stats.activationsToday} />
-                        <StatCard title="Activaciones 30 días" value={data.stats.activations30d} />
-                        <StatCard title="Compras de códigos hoy" value={data.stats.purchasesToday} />
-                        <StatCard title="Compras 30 días" value={data.stats.purchases30d} />
-                        <StatCard
-                            title="Consumo 30 días"
-                            value={formatMoney(data.stats.consumption30d, data.wallet.currency)}
-                        />
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        {!isPlatform && (
+                            <QuickActionsCard
+                                canBuy={ability.can("create", "CodePurchase")}
+                                canActivate={ability.can("activate", "Card")}
+                            />
+                        )}
                         <StatCard
                             title="Saldo wallet"
                             value={formatMoney(data.wallet.balance, data.wallet.currency)}
                             hint={data.wallet.balance < 0 ? "Saldo pendiente por abonar" : undefined}
+                            action={topUpReady ? (
+                                <Button size="sm" className="rounded-full" onClick={() => openTopUp()}>
+                                    <Plus aria-hidden="true" className="size-4" />
+                                    Recargar saldo
+                                </Button>
+                            ) : undefined}
                         />
+                        <StatCard
+                            title="Consumo 30 días"
+                            value={formatMoney(data.stats.consumption30d, data.wallet.currency)}
+                        />
+                    </div>
+
+                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+                        <StatCard title="Compras de códigos hoy" value={data.stats.purchasesToday} />
+                        <StatCard title="Compras 30 días" value={data.stats.purchases30d} />
+                        <StatCard title="Activaciones hoy" value={data.stats.activationsToday} />
+                        <StatCard title="Activaciones 30 días" value={data.stats.activations30d} />
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-2">
@@ -222,8 +291,8 @@ export default function CompanyOverviewPage() {
                                                     <TableCell>
                                                         <span
                                                             className={`px-2 py-1 rounded text-xs ${a.type === "ACTIVATION"
-                                                                ? "bg-blue-100 text-blue-800"
-                                                                : "bg-purple-100 text-purple-800"
+                                                                ? "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300"
+                                                                : "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300"
                                                                 }`}
                                                         >
                                                             {a.type === "ACTIVATION" ? "Activación" : "Códigos"}

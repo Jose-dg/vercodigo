@@ -2,6 +2,7 @@
 
 import { ChevronRight, type LucideIcon } from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 import {
   Collapsible,
@@ -19,6 +20,11 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 
+function isCurrent(pathname: string, url: string) {
+  if (url === "#") return false
+  return pathname === url || pathname.startsWith(`${url}/`)
+}
+
 export function NavMain({
   items,
   label = "Navegación",
@@ -35,6 +41,8 @@ export function NavMain({
   }[]
   label?: string
 }) {
+  const pathname = usePathname()
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
@@ -45,7 +53,7 @@ export function NavMain({
             <Collapsible
               key={item.title}
               asChild
-              defaultOpen={item.isActive}
+              defaultOpen={item.isActive || item.items.some((sub) => isCurrent(pathname, sub.url))}
               className="group/collapsible"
             >
               <SidebarMenuItem>
@@ -60,7 +68,7 @@ export function NavMain({
                   <SidebarMenuSub>
                     {item.items?.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
-                        <SidebarMenuSubButton asChild>
+                        <SidebarMenuSubButton asChild isActive={isCurrent(pathname, subItem.url)}>
                           <Link href={subItem.url}>
                             <span>{subItem.title}</span>
                           </Link>
@@ -74,7 +82,11 @@ export function NavMain({
           ) : (
             // Si no tiene subitems, renderiza como enlace directo
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title} isActive={item.isActive}>
+              <SidebarMenuButton
+                asChild
+                tooltip={item.title}
+                isActive={item.isActive || isCurrent(pathname, item.url)}
+              >
                 <Link href={item.url}>
                   {item.icon && <item.icon aria-hidden="true" />}
                   <span>{item.title}</span>

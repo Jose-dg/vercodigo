@@ -1,0 +1,16 @@
+node_modules/
+.next/
+dist/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+public/uploads/
+.env
+.env.*
+env.local
+graphify-out/
+.claude/
+.cursor/
+.codex/
+.agents/

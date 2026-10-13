@@ -46,6 +46,6 @@ next-env.d.ts
 /graphify-out/
 /.claude/
 /.cursor/
-/.graphifyignore
+/.codex/hooks.json
 /CLAUDE.md
 /.secure/

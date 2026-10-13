@@ -108,6 +108,44 @@ export interface ResultData {
     };
 }
 
+export interface PendingActivationData {
+    jobId: string;
+    status: string;
+    message?: string;
+    lastError?: string | null;
+    processing: boolean;
+    card?: {
+        uuid: string;
+        product: string;
+        store: string;
+    };
+}
+
+export function PendingActivationCard({ data, onReset }: { data: PendingActivationData; onReset: () => void }) {
+    const needsAction = data.status === "ACTION_REQUIRED" || data.status === "FAILED";
+    return (
+        <Card className={`w-full max-w-md mx-auto mt-8 shadow-lg ${needsAction ? "border-red-200" : "border-amber-200"}`}>
+            <CardHeader className={needsAction ? "bg-red-50" : "bg-amber-50"}>
+                <div className="flex items-center gap-3">
+                    {needsAction ? <AlertTriangle className="h-6 w-6 text-red-600" /> : <Loader2 className="h-6 w-6 animate-spin text-amber-600" />}
+                    <div>
+                        <CardTitle className={needsAction ? "text-red-700" : "text-amber-800"}>
+                            {needsAction ? "Activación requiere atención" : "Esperando código/stock"}
+                        </CardTitle>
+                        <p className="mt-1 text-xs text-muted-foreground">Estado: {data.status}</p>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-6 text-sm">
+                <p>{data.lastError || data.message || "Diem está abasteciendo y asignando el código. Esta pantalla se actualizará automáticamente."}</p>
+                {data.card ? <p className="text-muted-foreground">{data.card.product} · {data.card.store} · {data.card.uuid}</p> : null}
+                <p className="font-mono text-xs text-muted-foreground">Trabajo: {data.jobId}</p>
+            </CardContent>
+            <CardFooter><Button onClick={onReset} variant={needsAction ? "default" : "outline"} className="w-full">Escanear otra tarjeta</Button></CardFooter>
+        </Card>
+    );
+}
+
 interface ResultCardProps {
     data: ResultData;
     onReset: () => void;

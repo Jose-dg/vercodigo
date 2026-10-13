@@ -42,7 +42,9 @@ async function handler(req: NextRequest, _ctx: unknown, _ability: AppAbility, us
             quotedRate: body.quotedRate,
         });
 
-        return NextResponse.json(result, { status: result.success ? 200 : 409 });
+        return NextResponse.json(result, {
+            status: result.success ? (result.processing ? 202 : 200) : 409,
+        });
     } catch (e: unknown) {
         if (e instanceof AppError) {
             return NextResponse.json(

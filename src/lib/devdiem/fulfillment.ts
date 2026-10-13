@@ -221,6 +221,8 @@ export type CodeRequest = {
     commercial_order_id: string;
     status: FulfillmentStatus;
     external_reference: string;
+    last_error_code?: string;
+    last_error_summary?: string;
 };
 
 function requireCommercialOrder(request: CodeRequest): CodeRequest {

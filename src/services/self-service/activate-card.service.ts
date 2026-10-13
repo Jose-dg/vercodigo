@@ -237,18 +237,23 @@ export async function processActivationJob(jobId: string) {
             await updateOpenActivationJob(prisma, job.id, {
                 status: "ACTION_REQUIRED",
                 fulfillmentStatus: remote.status,
-                ...(remote.status === "pending_review"
-                    ? { lastError: "Diem exige revisión manual de esta solicitud. No se debitó la wallet." }
-                    : {}),
+                lastError: remote.last_error_summary
+                    || (remote.last_error_code === "procurement_route_missing"
+                        ? "Diem no tiene una ruta automática de abastecimiento aprobada para este producto."
+                        : remote.status === "pending_review"
+                            ? "Diem exige revisión manual de esta solicitud. No se debitó la wallet."
+                            : "Diem requiere una acción operativa antes de completar la activación."),
                 nextRetryAt: null,
             });
             return { status: "ACTION_REQUIRED", jobId: job.id };
         }
         if (!["allocated", "delivery_pending", "delivered", "partially_delivered"].includes(remote.status)) {
+            const delayMinutes = Math.min(30, 2 ** Math.min(job.attempts + 1, 5));
             await updateOpenActivationJob(prisma, job.id, {
                 status: remote.status === "awaiting_stock" ? "AWAITING_STOCK" : "PROCESSING",
                 fulfillmentStatus: remote.status,
-                nextRetryAt: null,
+                attempts: { increment: 1 },
+                nextRetryAt: new Date(Date.now() + delayMinutes * 60_000),
             });
             return { status: remote.status, jobId: job.id };
         }
@@ -585,6 +590,10 @@ export async function activateCard(params: {
         success: true,
         processing: true,
         jobId: job.id,
+        status: (await prisma.activationJob.findUnique({
+            where: { id: job.id },
+            select: { status: true },
+        }))?.status ?? "PROCESSING",
         message: "Activación recibida. Diem está asignando el código.",
         card: cardSummary,
     };

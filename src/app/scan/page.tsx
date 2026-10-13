@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertCircle, Camera, Keyboard, Search, ArrowRight } from 'lucide-react';
-import { ActivationModal, ResultCard, ResultData } from '@/components/scan/scanner-components';
+import { ActivationModal, PendingActivationCard, PendingActivationData, ResultCard, ResultData } from '@/components/scan/scanner-components';
 import { toast } from 'sonner';
 
 export default function ScanPage() {
@@ -16,13 +16,14 @@ export default function ScanPage() {
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [activationResult, setActivationResult] = useState<ResultData | null>(null);
+    const [pendingResult, setPendingResult] = useState<PendingActivationData | null>(null);
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
     // Initialize Scanner
     useEffect(() => {
         // Only init if element exists and not already initialized
         const element = document.getElementById('reader');
-        if (element && !scannerRef.current && !scanResult && !activationResult) {
+        if (element && !scannerRef.current && !scanResult && !activationResult && !pendingResult) {
             const scanner = new Html5QrcodeScanner(
                 'reader',
                 {
@@ -52,7 +53,35 @@ export default function ScanPage() {
                 scannerRef.current = null;
             }
         };
-    }, [scanResult, activationResult]); // Re-init if they are cleared
+    }, [scanResult, activationResult, pendingResult]); // Re-init if they are cleared
+
+    useEffect(() => {
+        if (!pendingResult?.processing || !pendingResult.jobId) return;
+        const poll = async () => {
+            try {
+                const response = await fetch(`/api/jobs/activation/${pendingResult.jobId}`, { cache: 'no-store' });
+                const data = await response.json();
+                if (!response.ok) return;
+                if (data.status === 'COMPLETED' && data.activation && data.card) {
+                    setPendingResult(null);
+                    setActivationResult(data as ResultData);
+                    toast.success("¡Tarjeta activada exitosamente!");
+                    return;
+                }
+                setPendingResult(current => current ? {
+                    ...current,
+                    status: data.status,
+                    processing: Boolean(data.processing),
+                    lastError: data.lastError,
+                } : current);
+            } catch {
+                // La reconciliación del servidor continúa aunque este refresco local falle.
+            }
+        };
+        void poll();
+        const timer = window.setInterval(poll, 5_000);
+        return () => window.clearInterval(timer);
+    }, [pendingResult?.jobId, pendingResult?.processing]);
 
     const handleScan = (decodedText: string) => {
         // Simple validation or extraction logic
@@ -105,8 +134,8 @@ export default function ScanPage() {
             const data = await res.json();
 
             if (!res.ok) {
-                if (res.status === 409) {
-                    toast.error("Esta tarjeta ya estaba activada.");
+                if (data.status === "ACTION_REQUIRED" || data.status === "FAILED") {
+                    setPendingResult({ ...data, processing: false });
                 } else {
                     toast.error(data.message || "Error al activar tarjeta");
                 }
@@ -115,8 +144,13 @@ export default function ScanPage() {
                 setIsConfirmOpen(false);
                 if (scannerRef.current) scannerRef.current.resume();
             } else {
-                toast.success("¡Tarjeta activada exitosamente!");
-                setActivationResult(data); // { success, activation, card }
+                if (res.status === 202 || data.processing) {
+                    setPendingResult(data);
+                    toast.info("Activación recibida; esperando código o stock.");
+                } else {
+                    toast.success("¡Tarjeta activada exitosamente!");
+                    setActivationResult(data);
+                }
                 setIsConfirmOpen(false);
                 if (scannerRef.current) scannerRef.current.clear();
             }
@@ -133,6 +167,7 @@ export default function ScanPage() {
     const handleReset = () => {
         setScanResult(null);
         setActivationResult(null);
+        setPendingResult(null);
         setManualUuid('');
         setIsConfirmOpen(false);
         // Effect will re-init scanner
@@ -152,6 +187,14 @@ export default function ScanPage() {
         return (
             <div className="min-h-screen bg-gray-50 p-4 flex flex-col items-center justify-center">
                 <ResultCard data={activationResult} onReset={handleReset} />
+            </div>
+        );
+    }
+
+    if (pendingResult) {
+        return (
+            <div className="min-h-screen bg-gray-50 p-4 flex flex-col items-center justify-center">
+                <PendingActivationCard data={pendingResult} onReset={handleReset} />
             </div>
         );
     }

@@ -15,19 +15,20 @@ async function handler(
     // Solo lectura local. El avance lo dispara el webhook Diem → /api/webhook/fulfillment.
     const owned = await prisma.activationJob.findFirst({
         where: { id, userId: user.id },
-        select: {
-            id: true,
-            status: true,
-            lastError: true,
-            nextRetryAt: true,
-            fulfillmentStatus: true,
-            diemRequestId: true,
+        include: {
+            card: {
+                include: {
+                    product: true,
+                    store: true,
+                    activation: true,
+                },
+            },
         },
     });
     if (!owned) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     return NextResponse.json({
-        success: true,
+        success: owned.status === "COMPLETED",
         processing: !isFulfillmentWaitLocal(owned.status),
         jobId: owned.id,
         status: owned.status,
@@ -35,6 +36,19 @@ async function handler(
         nextRetryAt: owned.nextRetryAt,
         fulfillmentStatus: owned.fulfillmentStatus,
         diemRequestId: owned.diemRequestId,
+        ...(owned.status === "COMPLETED" && owned.card.activation
+            ? {
+                activation: {
+                    id: owned.card.activation.id,
+                    activatedAt: owned.card.activation.activatedAt,
+                },
+                card: {
+                    uuid: owned.card.uuid,
+                    product: owned.card.product.name,
+                    store: owned.card.store.name,
+                },
+            }
+            : {}),
     });
 }
 
@@ -49,7 +63,9 @@ async function retryHandler(
     const { id } = await context.params;
     const owned = await prisma.activationJob.findFirst({
         where: { id, userId: user.id },
-        select: { id: true },
+        select: {
+            id: true,
+        },
     });
     if (!owned) return NextResponse.json({ error: "Not found" }, { status: 404 });
     try {

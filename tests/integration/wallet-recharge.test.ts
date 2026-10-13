@@ -41,6 +41,7 @@ const server = createServer((req, res) => {
 let prisma: typeof import("@/lib/prisma").default;
 let wallet: typeof import("@/services/wallet/wallet.service");
 let gateway: typeof import("@/services/wallet/gateway-topup.service");
+let timeCorrection: typeof import("@/services/wallet/recharge-time-correction.service");
 let verifyLedger: typeof import("@/lib/wallet/ledger-verification").verifyLedger;
 let fingerprint: typeof import("@/lib/wallet/recharge-request").manualRechargeFingerprint;
 let defineAbilitiesFor: typeof import("@/lib/auth/abilities").defineAbilitiesFor;
@@ -107,6 +108,7 @@ before(async () => {
     prisma = (await import("@/lib/prisma")).default;
     wallet = await import("@/services/wallet/wallet.service");
     gateway = await import("@/services/wallet/gateway-topup.service");
+    timeCorrection = await import("@/services/wallet/recharge-time-correction.service");
     ({ verifyLedger } = await import("@/lib/wallet/ledger-verification"));
     ({ manualRechargeFingerprint: fingerprint } = await import("@/lib/wallet/recharge-request"));
     ({ defineAbilitiesFor } = await import("@/lib/auth/abilities"));
@@ -123,6 +125,7 @@ beforeEach(async () => {
     acknowledged.length = 0;
     remoteTopUps.clear();
     await removeStatements();
+    await prisma.auditLog.deleteMany({ where: { action: "WALLET_RECHARGE_TIME_CORRECTED" } });
     await prisma.walletTransaction.deleteMany();
     await prisma.wallet.deleteMany();
     // Other integration files share this disposable database.
@@ -433,4 +436,154 @@ test("webhooks for unknown accounts or malformed payloads are rejected", async (
     );
     assert.equal(gateway.parseTopUpStateWebhook({ type: "topup.state_changed", topup_id: 1 }), null);
     assert.equal(gateway.parseTopUpStateWebhook(null), null);
+});
+
+// -- Payment-time correction of manual top-ups --------------------------------
+
+async function issueStatementUntil(periodEnd: Date) {
+    const record = await prisma.wallet.findUniqueOrThrow({ where: { companyId } });
+    await prisma.accountStatement.create({
+        data: {
+            statementNumber: "EC-2026-999101",
+            sequenceYear: 2026,
+            sequenceNumber: 999_101,
+            companyId,
+            walletId: record.id,
+            issuedById: actorId,
+            currency: "COP",
+            periodStart: record.createdAt,
+            periodEnd,
+            openingBalance: 0,
+            consumptions: 0,
+            recharges: 0,
+            refunds: 0,
+            adjustments: 0,
+            closingBalance: 0,
+            totalPending: 0,
+            creditBalance: 0,
+            issuerSnapshot: {},
+            customerSnapshot: {},
+            previewFingerprint: "test",
+        },
+    });
+}
+
+function correct(transaction: { id: string; occurredAt: Date }, paidAt: Date, reason = "El comprobante dice otra hora") {
+    return timeCorrection.correctRechargeTime({
+        transactionId: transaction.id,
+        paidAt,
+        expectedOccurredAt: transaction.occurredAt,
+        reason,
+        actorId,
+    });
+}
+
+test("correcting a top-up's payment time re-sorts the ledger, keeps the final balance and is audited", async () => {
+    await wallet.debit({ companyId, amount: 100_000, currency: "COP" });
+    await sleep(30);
+    const realPaymentTime = new Date();
+    await sleep(30);
+    await wallet.debit({ companyId, amount: 50_000, currency: "COP" });
+    await sleep(30);
+    // Registered with the wrong time: after both purchases.
+    const { transaction } = await manual({ amount: 300_000, occurredAt: new Date(), reference: "TRF-FIX-1", key: "key-fix-0001" });
+
+    const preview = await timeCorrection.previewRechargeTimeCorrection({ transactionId: transaction.id, paidAt: realPaymentTime });
+    assert.deepEqual(preview.lines.map((line) => [line.type, line.balanceBefore, line.balanceAfter]), [
+        ["RECHARGE", 150_000, 200_000],
+        ["CONSUMPTION", -150_000, 150_000],
+    ]);
+    assert.equal(preview.finalBalanceAfter, preview.finalBalanceBefore);
+    assert.equal((await prisma.walletTransaction.findUniqueOrThrow({ where: { id: transaction.id } })).occurredAt.getTime(),
+        transaction.occurredAt.getTime(), "the preview writes nothing");
+
+    const result = await correct(transaction, realPaymentTime);
+
+    assert.equal(result.changed, true);
+    assert.equal(result.transaction.occurredAt.getTime(), realPaymentTime.getTime());
+    assert.equal(result.transaction.occurredAtSource, "PAYMENT");
+    const rows = await prisma.walletTransaction.findMany({
+        where: { wallet: { companyId } },
+        orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],
+    });
+    assert.deepEqual(rows.map((row) => [row.type, row.balanceAfter]), [
+        ["CONSUMPTION", -100_000],
+        ["RECHARGE", 200_000],
+        ["CONSUMPTION", 150_000],
+    ]);
+    assert.equal((await prisma.wallet.findUniqueOrThrow({ where: { companyId } })).balance, 150_000);
+    assert.deepEqual(await ledgerFindings(), []);
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "WALLET_RECHARGE_TIME_CORRECTED", entityId: transaction.id } });
+    assert.equal(audit.userId, actorId);
+    assert.deepEqual(audit.before, { occurredAt: transaction.occurredAt.toISOString() });
+    assert.deepEqual(audit.after, { occurredAt: realPaymentTime.toISOString() });
+    assert.equal((audit.details as { reason: string }).reason, "El comprobante dice otra hora");
+});
+
+test("a correction is rejected when stale, in the future, without reason, or the same time is a no-op", async () => {
+    const { transaction } = await manual({ amount: 40_000, occurredAt: new Date(Date.now() - 60_000), reference: "TRF-FIX-2", key: "key-fix-0002" });
+
+    await rejectsWith(timeCorrection.correctRechargeTime({
+        transactionId: transaction.id,
+        paidAt: new Date(Date.now() - 120_000),
+        expectedOccurredAt: new Date(transaction.occurredAt.getTime() - 1),
+        reason: "Otra hora",
+        actorId,
+    }), 409);
+    await rejectsWith(correct(transaction, new Date(Date.now() + 60 * 60_000)), 400);
+    await rejectsWith(correct(transaction, new Date(Date.now() - 120_000), "  "), 400);
+    const same = await correct(transaction, transaction.occurredAt);
+    assert.equal(same.changed, false);
+    assert.equal(await prisma.auditLog.count({ where: { action: "WALLET_RECHARGE_TIME_CORRECTED" } }), 0);
+});
+
+test("a top-up in an issued statement, or moved into a closed period, is not corrected", async () => {
+    const early = await manual({ amount: 10_000, occurredAt: new Date(Date.now() - 120_000), reference: "TRF-FIX-3A", key: "key-fix-0003a" });
+    await sleep(20);
+    const cut = new Date();
+    await issueStatementUntil(cut);
+    await sleep(20);
+    const late = await manual({ amount: 20_000, occurredAt: new Date(), reference: "TRF-FIX-3B", key: "key-fix-0003b" });
+
+    await rejectsWith(correct(early.transaction, new Date(Date.now() - 200_000)), 409, "PERIOD_CLOSED");
+    await rejectsWith(correct(late.transaction, new Date(cut.getTime() - 10)), 409, "PERIOD_CLOSED");
+    const stored = await prisma.walletTransaction.findUniqueOrThrow({ where: { id: late.transaction.id } });
+    assert.equal(stored.occurredAt.getTime(), late.transaction.occurredAt.getTime());
+});
+
+test("a top-up cannot be moved before the wallet's opening balance", async () => {
+    const record = await prisma.wallet.findUniqueOrThrow({ where: { companyId } });
+    const openingAt = new Date(Date.now() - 60 * 60_000);
+    await prisma.walletTransaction.create({
+        data: {
+            walletId: record.id, type: "OPENING_BALANCE", status: "CONFIRMED", amount: 100_000,
+            balanceAfter: -100_000, occurredAt: openingAt, occurredAtSource: "SOURCE_SYSTEM",
+        },
+    });
+    await prisma.wallet.update({ where: { id: record.id }, data: { balance: -100_000 } });
+    const { transaction } = await manual({ amount: 50_000, occurredAt: new Date(Date.now() - 30 * 60_000), reference: "TRF-FIX-4", key: "key-fix-0004" });
+
+    await rejectsWith(correct(transaction, new Date(openingAt.getTime() - 60_000)), 409);
+    assert.equal((await prisma.wallet.findUniqueOrThrow({ where: { id: record.id } })).balance, -50_000);
+});
+
+test("only manual top-ups are correctable: a Bre-B credit keeps DevDiem's time", async () => {
+    const creditedAt = new Date(Date.now() - 90_000).toISOString();
+    const entry = await gateway.creditTopUp(companyId, {
+        id: "6f0f2d4e-1111-4c4c-9999-0000000000f1",
+        status: "succeeded",
+        state: "credited" as const,
+        amount: "70000.00",
+        bonus_amount: "0.00",
+        currency: "COP",
+        method_type: "BRE_B_MANUAL",
+        action: null,
+        expires_at: creditedAt,
+        succeeded_at: creditedAt,
+        credited_at: creditedAt,
+        partner_acknowledged_at: null,
+    });
+    assert.ok(entry);
+
+    await rejectsWith(correct(entry, new Date(Date.now() - 200_000)), 400);
 });

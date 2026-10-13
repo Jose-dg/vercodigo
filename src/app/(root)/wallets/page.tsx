@@ -24,7 +24,8 @@ import {
 import { List, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AccountStatementDialog } from "@/components/account-statements/AccountStatementDialog";
-import { useWalletMovements, WalletMovementsTable } from "@/components/wallet/wallet-movements-table";
+import { useWalletMovements, WalletMovementsTable, type WalletMovement } from "@/components/wallet/wallet-movements-table";
+import { CorrectRechargeTimeDialog } from "@/components/wallet/correct-recharge-time-dialog";
 import { bogotaLocalNow, bogotaLocalToIso } from "@/lib/wallet/effective-time";
 
 interface WalletSummary {
@@ -47,9 +48,25 @@ function formatMoney(amount: number, currency: string) {
 }
 
 /** Keyed by company so page and filter start fresh for each one. */
-function CompanyMovements({ companyId }: { companyId: string }) {
+function CompanyMovements({ companyId, onLedgerChanged }: { companyId: string; onLedgerChanged: () => void }) {
     const movements = useWalletMovements(`/api/wallets/${encodeURIComponent(companyId)}/transactions`);
-    return <WalletMovementsTable movements={movements} />;
+    const [correcting, setCorrecting] = useState<WalletMovement | null>(null);
+    return (
+        <>
+            <WalletMovementsTable movements={movements} onCorrectPaidAt={setCorrecting} />
+            <CorrectRechargeTimeDialog
+                movement={correcting}
+                currency={movements.data?.wallet.currency ?? "COP"}
+                onOpenChange={(open) => {
+                    if (!open) setCorrecting(null);
+                }}
+                onCorrected={() => {
+                    void movements.reload();
+                    onLedgerChanged();
+                }}
+            />
+        </>
+    );
 }
 
 export default function WalletsAdminPage() {
@@ -370,7 +387,7 @@ export default function WalletsAdminPage() {
                     </SheetHeader>
                     <div className="px-4 pb-6">
                         {movementsCompany ? (
-                            <CompanyMovements key={movementsCompany.companyId} companyId={movementsCompany.companyId} />
+                            <CompanyMovements key={movementsCompany.companyId} companyId={movementsCompany.companyId} onLedgerChanged={fetchData} />
                         ) : null}
                     </div>
                 </SheetContent>

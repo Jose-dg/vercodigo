@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rebuildBalances } from "../src/lib/wallet/ledger.ts";
+import { previewOccurredAtShift, rebuildBalances } from "../src/lib/wallet/ledger.ts";
 
 test("an opening balance resets earlier history without creating an adjustment", () => {
     const row = (id, type, amount, occurredAt, occurredSequence = 0) => ({ id, type, amount, occurredAt: new Date(occurredAt), occurredSequence, status: "CONFIRMED" });
@@ -77,4 +77,35 @@ test("a failed duplicate consumption is retained for audit but excluded from the
 
     assert.equal(result.balance, -1_031_900);
     assert.equal(result.balances.has("duplicate"), false);
+});
+
+const shiftRow = (id, type, amount, occurredAt) => ({ id, type, amount, occurredAt: new Date(occurredAt), occurredSequence: 0, status: "CONFIRMED" });
+const shiftLedger = () => [
+    shiftRow("opening", "OPENING_BALANCE", 100_000, "2026-10-01T08:00:00-05:00"),
+    shiftRow("buy-1", "CONSUMPTION", 50_000, "2026-10-02T10:00:00-05:00"),
+    shiftRow("payment", "RECHARGE", 200_000, "2026-10-05T09:00:00-05:00"),
+    shiftRow("buy-2", "CONSUMPTION", 30_000, "2026-10-06T10:00:00-05:00"),
+];
+
+test("moving a top-up earlier changes only the balances it crosses", () => {
+    const shift = previewOccurredAtShift(shiftLedger(), "payment", new Date("2026-10-01T09:00:00-05:00"));
+    assert.deepEqual(shift.lines.map((line) => [line.id, line.balanceBefore, line.balanceAfter]), [
+        ["payment", 50_000, 100_000],
+        ["buy-1", -150_000, 50_000],
+    ]);
+    assert.equal(shift.finalBalanceBefore, 20_000);
+    assert.equal(shift.finalBalanceAfter, 20_000);
+    assert.equal(shift.newlyNegative, 0);
+});
+
+test("moving a top-up later reports balances that become negative", () => {
+    const shift = previewOccurredAtShift(shiftLedger(), "payment", new Date("2026-10-07T09:00:00-05:00"));
+    assert.deepEqual(shift.lines.map((line) => line.id), ["buy-2", "payment"]);
+    assert.equal(shift.newlyNegative, 1);
+    assert.equal(shift.finalBalanceAfter, shift.finalBalanceBefore);
+});
+
+test("moving a top-up before the opening changes the final balance", () => {
+    const shift = previewOccurredAtShift(shiftLedger(), "payment", new Date("2026-09-30T09:00:00-05:00"));
+    assert.notEqual(shift.finalBalanceAfter, shift.finalBalanceBefore);
 });

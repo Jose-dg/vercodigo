@@ -37,3 +37,43 @@ export function rebuildBalances(rows: LedgerRow[]): { balances: Map<string, numb
     }
     return { balances, balance };
 }
+
+export type OccurredAtShiftLine = {
+    id: string;
+    type: LedgerRow["type"];
+    amount: number;
+    occurredAt: Date;
+    balanceBefore: number | null;
+    balanceAfter: number | null;
+};
+
+export type OccurredAtShift = {
+    /** Movements whose running balance changes, in their new effective order. */
+    lines: OccurredAtShiftLine[];
+    finalBalanceBefore: number;
+    finalBalanceAfter: number;
+    /** Movements that were not negative and would be after the shift. */
+    newlyNegative: number;
+};
+
+/**
+ * What moving one movement to `newOccurredAt` does to the running balances.
+ * Only intermediate balances may change: a different final balance means the
+ * movement would leave the active ledger (e.g. moved before the opening).
+ */
+export function previewOccurredAtShift(rows: LedgerRow[], transactionId: string, newOccurredAt: Date): OccurredAtShift {
+    const before = rebuildBalances(rows);
+    const shifted = rows.map((row) => row.id === transactionId ? { ...row, occurredAt: newOccurredAt } : row);
+    const after = rebuildBalances(shifted);
+    const lines: OccurredAtShiftLine[] = [];
+    let newlyNegative = 0;
+    for (const id of new Set([...after.balances.keys(), ...before.balances.keys()])) {
+        const balanceBefore = before.balances.get(id) ?? null;
+        const balanceAfter = after.balances.get(id) ?? null;
+        if (balanceBefore === balanceAfter) continue;
+        const row = shifted.find((candidate) => candidate.id === id)!;
+        lines.push({ id, type: row.type, amount: row.amount, occurredAt: row.occurredAt, balanceBefore, balanceAfter });
+        if (balanceAfter !== null && balanceAfter < 0 && (balanceBefore === null || balanceBefore >= 0)) newlyNegative += 1;
+    }
+    return { lines, finalBalanceBefore: before.balance, finalBalanceAfter: after.balance, newlyNegative };
+}

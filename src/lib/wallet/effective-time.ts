@@ -98,3 +98,19 @@ export function effectiveTimeLabel(source: WalletTimeSource, createdAt: Date | s
 export function normalizeBankReference(reference: string): string {
     return reference.trim().replace(/\s+/g, " ").toUpperCase();
 }
+
+/**
+ * Manual top-ups whose payment time a platform admin may correct. Gateway
+ * top-ups keep the time DevDiem confirmed; historical ones have no payment time.
+ */
+export function isCorrectableRecharge(movement: {
+    type: string;
+    status: string;
+    method: string | null;
+    occurredAtSource: string;
+}): boolean {
+    return movement.type === "RECHARGE"
+        && movement.status === "CONFIRMED"
+        && movement.method === "MANUAL"
+        && movement.occurredAtSource === "PAYMENT";
+}

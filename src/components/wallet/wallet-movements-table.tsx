@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { formatMoney as formatAmount } from "@/lib/wallet/balance";
-import { formatLedgerDateTime, type WalletTimeSource } from "@/lib/wallet/effective-time";
+import { formatLedgerDateTime, isCorrectableRecharge, type WalletTimeSource } from "@/lib/wallet/effective-time";
 import { formatWalletRunningBalance } from "@/lib/wallet/presentation";
 
 export type WalletMovementType = "OPENING_BALANCE" | "RECHARGE" | "CONSUMPTION" | "ADJUSTMENT" | "REFUND";
@@ -23,6 +24,7 @@ export interface WalletMovement {
     id: string;
     type: WalletMovementType;
     status: "PENDING" | "CONFIRMED" | "FAILED";
+    method: "MANUAL" | "PSE" | "CREDIT_CARD" | "BRE_B" | null;
     amount: number;
     balanceAfter: number | null;
     originalAmount: number | null;
@@ -99,7 +101,14 @@ export function useWalletMovements(endpoint: string | null) {
     return { data, loading, page, setPage, type, setType: changeType, reload: load };
 }
 
-export function WalletMovementsTable({ movements }: { movements: ReturnType<typeof useWalletMovements> }) {
+export function WalletMovementsTable({
+    movements,
+    onCorrectPaidAt,
+}: {
+    movements: ReturnType<typeof useWalletMovements>;
+    /** Platform only: opens the payment-time correction of a manual top-up. */
+    onCorrectPaidAt?: (movement: WalletMovement) => void;
+}) {
     const { data, loading, page, setPage, type, setType } = movements;
     const totalPages = data ? Math.max(1, Math.ceil(data.pagination.total / data.pagination.pageSize)) : 1;
 
@@ -146,6 +155,18 @@ export function WalletMovementsTable({ movements }: { movements: ReturnType<type
                                     <TableRow key={tx.id}>
                                         <TableCell className="whitespace-nowrap">
                                             <time dateTime={tx.occurredAt}>{formatLedgerDateTime(tx.occurredAt)}</time>
+                                            {onCorrectPaidAt && isCorrectableRecharge(tx) ? (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="ml-1 size-6 align-middle"
+                                                    title="Corregir hora del pago"
+                                                    aria-label="Corregir hora del pago"
+                                                    onClick={() => onCorrectPaidAt(tx)}
+                                                >
+                                                    <Pencil className="size-3" />
+                                                </Button>
+                                            ) : null}
                                             {tx.effectiveTimeLabel ? (
                                                 <div
                                                     className={`mt-0.5 text-xs ${tx.occurredAtSource === "REGISTRATION_ONLY" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}

@@ -9,7 +9,7 @@ import { rebuildBalances } from "@/lib/wallet/ledger";
  * changed the ledger, so a movement placed in the past never leaves later
  * balances stale.
  */
-async function ledgerRows(tx: Prisma.TransactionClient, walletId: string) {
+export async function ledgerRows(tx: Prisma.TransactionClient, walletId: string) {
     return tx.walletTransaction.findMany({
         where: { walletId },
         orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],

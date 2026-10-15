@@ -515,8 +515,8 @@ test("correcting a top-up's payment time re-sorts the ledger, keeps the final ba
     assert.deepEqual(await ledgerFindings(), []);
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "WALLET_RECHARGE_TIME_CORRECTED", entityId: transaction.id } });
     assert.equal(audit.userId, actorId);
-    assert.deepEqual(audit.before, { occurredAt: transaction.occurredAt.toISOString() });
-    assert.deepEqual(audit.after, { occurredAt: realPaymentTime.toISOString() });
+    assert.deepEqual(audit.before, { occurredAt: transaction.occurredAt.toISOString(), occurredAtSource: "PAYMENT" });
+    assert.deepEqual(audit.after, { occurredAt: realPaymentTime.toISOString(), occurredAtSource: "PAYMENT" });
     assert.equal((audit.details as { reason: string }).reason, "El comprobante dice otra hora");
 });
 
@@ -565,6 +565,38 @@ test("a top-up cannot be moved before the wallet's opening balance", async () =>
 
     await rejectsWith(correct(transaction, new Date(openingAt.getTime() - 60_000)), 409);
     assert.equal((await prisma.wallet.findUniqueOrThrow({ where: { id: record.id } })).balance, -50_000);
+});
+
+test("a top-up registered without payment time gets one and stops being registration-only", async () => {
+    const { transaction } = await manual({ amount: 30_000, occurredAt: new Date(), reference: "TRF-FIX-5", key: "key-fix-0005" });
+    // Top-ups registered before the payment time existed carry only their registration time.
+    const legacy = await prisma.walletTransaction.update({
+        where: { id: transaction.id },
+        data: { occurredAt: transaction.createdAt, occurredAtSource: "REGISTRATION_ONLY" },
+    });
+    const paidAt = new Date(legacy.occurredAt.getTime() - 10 * 60_000);
+
+    const result = await correct(legacy, paidAt);
+
+    assert.equal(result.changed, true);
+    assert.equal(result.transaction.occurredAt.getTime(), paidAt.getTime());
+    assert.equal(result.transaction.occurredAtSource, "PAYMENT");
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "WALLET_RECHARGE_TIME_CORRECTED", entityId: legacy.id } });
+    assert.deepEqual(audit.before, { occurredAt: legacy.occurredAt.toISOString(), occurredAtSource: "REGISTRATION_ONLY" });
+    assert.deepEqual(await ledgerFindings(), []);
+});
+
+test("confirming a registration-only top-up at its registration time still records it as the payment time", async () => {
+    const { transaction } = await manual({ amount: 30_000, occurredAt: new Date(), reference: "TRF-FIX-6", key: "key-fix-0006" });
+    const legacy = await prisma.walletTransaction.update({
+        where: { id: transaction.id },
+        data: { occurredAt: transaction.createdAt, occurredAtSource: "REGISTRATION_ONLY" },
+    });
+
+    const result = await correct(legacy, legacy.occurredAt);
+
+    assert.equal(result.changed, true);
+    assert.equal(result.transaction.occurredAtSource, "PAYMENT");
 });
 
 test("only manual top-ups are correctable: a Bre-B credit keeps DevDiem's time", async () => {

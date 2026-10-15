@@ -8,8 +8,8 @@ import { previewOccurredAtShift, type OccurredAtShift } from "@/lib/wallet/ledge
 import { assertLedgerConsistent, assertOpenPeriod, ledgerRows, rebuildWalletLedger } from "./ledger-write";
 
 /**
- * Correction of the payment time of a manual top-up, mistyped when it was
- * registered. The time is the movement's effective time, so the running
+ * Correction of the payment time of a manual top-up, mistyped or missing when
+ * it was registered; afterwards its time is a payment time. The time is the movement's effective time, so the running
  * balances between the old and the new time are rebuilt; the final balance
  * never changes. Issued account statements are immutable: a top-up already
  * reported, or a time inside a closed period, is rejected.
@@ -76,7 +76,7 @@ export async function correctRechargeTime(params: {
         if (movement.occurredAt.getTime() !== params.expectedOccurredAt.getTime()) {
             throw conflict("La hora del abono cambió mientras la corregías; vuelve a cargarla");
         }
-        if (movement.occurredAt.getTime() === params.paidAt.getTime()) {
+        if (movement.occurredAtSource === "PAYMENT" && movement.occurredAt.getTime() === params.paidAt.getTime()) {
             return { transaction: movement, changed: false };
         }
         await assertLedgerConsistent(tx, movement.walletId, movement.wallet.balance);
@@ -84,7 +84,7 @@ export async function correctRechargeTime(params: {
 
         await tx.walletTransaction.update({
             where: { id: movement.id },
-            data: { occurredAt: params.paidAt },
+            data: { occurredAt: params.paidAt, occurredAtSource: "PAYMENT" },
         });
         await rebuildWalletLedger(tx, movement.walletId);
         await tx.auditLog.create({
@@ -94,8 +94,8 @@ export async function correctRechargeTime(params: {
                 companyId: movement.wallet.companyId,
                 entityType: "WalletTransaction",
                 entityId: movement.id,
-                before: { occurredAt: movement.occurredAt.toISOString() },
-                after: { occurredAt: params.paidAt.toISOString() },
+                before: { occurredAt: movement.occurredAt.toISOString(), occurredAtSource: movement.occurredAtSource },
+                after: { occurredAt: params.paidAt.toISOString(), occurredAtSource: "PAYMENT" },
                 details: {
                     reason,
                     externalReference: movement.externalReference,

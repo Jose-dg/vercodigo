@@ -160,8 +160,8 @@ export function WalletMovementsTable({
                                                     variant="ghost"
                                                     size="icon"
                                                     className="ml-1 size-6 align-middle"
-                                                    title="Corregir hora del pago"
-                                                    aria-label="Corregir hora del pago"
+                                                    title={tx.occurredAtSource === "REGISTRATION_ONLY" ? "Registrar hora del pago" : "Corregir hora del pago"}
+                                                    aria-label={tx.occurredAtSource === "REGISTRATION_ONLY" ? "Registrar hora del pago" : "Corregir hora del pago"}
                                                     onClick={() => onCorrectPaidAt(tx)}
                                                 >
                                                     <Pencil className="size-3" />

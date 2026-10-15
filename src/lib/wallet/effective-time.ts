@@ -100,8 +100,9 @@ export function normalizeBankReference(reference: string): string {
 }
 
 /**
- * Manual top-ups whose payment time a platform admin may correct. Gateway
- * top-ups keep the time DevDiem confirmed; historical ones have no payment time.
+ * Manual top-ups whose payment time a platform admin may set: a mistyped one,
+ * or one registered without it (its time is only the registration). Gateway
+ * top-ups keep the time DevDiem confirmed.
  */
 export function isCorrectableRecharge(movement: {
     type: string;
@@ -112,5 +113,5 @@ export function isCorrectableRecharge(movement: {
     return movement.type === "RECHARGE"
         && movement.status === "CONFIRMED"
         && movement.method === "MANUAL"
-        && movement.occurredAtSource === "PAYMENT";
+        && (movement.occurredAtSource === "PAYMENT" || movement.occurredAtSource === "REGISTRATION_ONLY");
 }

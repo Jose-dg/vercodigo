@@ -80,7 +80,9 @@ export function CorrectRechargeTimeDialog({
     }, [movement]);
 
     if (!movement) return null;
-    const unchanged = paidAt === bogotaLocalNow(new Date(movement.occurredAt));
+    // A top-up without payment time may be confirmed at its registration time.
+    const missingPaidAt = movement.occurredAtSource === "REGISTRATION_ONLY";
+    const unchanged = !missingPaidAt && paidAt === bogotaLocalNow(new Date(movement.occurredAt));
     // A preview is valid only for the time it was computed for.
     const previewCurrent = preview !== null && previewFor === paidAt;
 
@@ -141,9 +143,9 @@ export function CorrectRechargeTimeDialog({
         <Dialog open onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Corregir hora del pago</DialogTitle>
+                    <DialogTitle>{missingPaidAt ? "Registrar hora del pago" : "Corregir hora del pago"}</DialogTitle>
                     <DialogDescription>
-                        {movement.displayDescription} · +{formatMoney(movement.amount, currency, 2)} · registrada como{" "}
+                        {movement.displayDescription} · +{formatMoney(movement.amount, currency, 2)} · {missingPaidAt ? "sin hora de pago, registrada el" : "registrada como"}{" "}
                         {formatLedgerDateTime(movement.occurredAt)}
                     </DialogDescription>
                 </DialogHeader>

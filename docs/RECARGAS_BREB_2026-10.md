@@ -35,7 +35,6 @@ Una recarga dejada en "Pagar más tarde" se puede retomar desde el mismo diálog
 - `src/lib/devdiem/stored-value.ts`: cliente de DevDiem (usa la misma configuración y el mismo manejo de errores que el fulfillment).
 - `src/services/wallet/gateway-topup.service.ts`: registra en la billetera las recargas acreditadas, de forma idempotente, y envía el acuse.
 - `src/app/api/wallet/*`: BFF del portal (resumen de saldo, crear, consultar y reportar recarga).
-- `src/app/api/jobs/wallet-topups`: cron de recuperación. Registra las recargas acreditadas que nadie sincronizó. Se protege con `CRON_SECRET`.
 - `src/components/wallet/*`: barra superior (saldo o deuda, recargas en curso, Recargar y tema), diálogo de recarga. No se modifica `app-sidebar`.
 - `src/lib/wallet/balance.ts`: presentación del saldo, compartida con la página `/wallet`.
 
@@ -46,7 +45,7 @@ Una recarga dejada en "Pagar más tarde" se puede retomar desde el mismo diálog
 | `DIEM_TOPUP_PAYMENT_METHOD_ID` | `42` | `PaymentMethod` de DevDiem con `gateway_provider=manual_breb` |
 | `DIEM_TOPUP_METHOD_TYPE` | `BRE_B_MANUAL` | Cambia a `BRE_B` cuando haya proveedor con QR dinámico |
 | `DIEM_TOPUP_RETURN_URL` | `https://<portal>/wallet` | Debe estar en `STORED_VALUE_RETURN_URL_PREFIXES` de DevDiem |
-| `CRON_SECRET` | (ya existe) | Cron `/api/jobs/wallet-topups` cada 10 minutos |
+| `CRON_SECRET` | (ya existe) | Protege la recuperación manual `POST /api/jobs/fulfillment` |
 
 En DevDiem se configuran el service account (`stored_value:topups:create/read`), el `PaymentMethod` con `SIZU_BREB_KEY` y `SIZU_BREB_QR_PAYLOAD` en el entorno, y la `StoredValuePolicy` del canal: `funding_target=partner_wallet`, `allowed_payment_method_types=["BRE_B_MANUAL"]` y TTL de 72 h.
 

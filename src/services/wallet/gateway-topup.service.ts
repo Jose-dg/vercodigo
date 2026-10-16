@@ -72,7 +72,7 @@ export async function syncTopUp(companyId: string, topUpId: string, actorId?: st
 }
 
 /**
- * Recovery for the cron job: every credited top-up DevDiem still sees as not
+ * Recovery: every credited top-up DevDiem still sees as not
  * acknowledged gets its wallet entry (or just the acknowledgement).
  */
 export async function syncPendingCredits(companyIds: string[]) {

@@ -85,4 +85,4 @@
    - Fue la causa de los dos Roblox atascados del 10 oct.
 2. **Reemplazo en compras de varias unidades.** Diem bloquea el reveal si otra unidad se reveló hace más de 15 min (`FULFILLMENT_REREVEAL_WINDOW_SECONDS`). SAS deja el motivo en `lastError`, pero el reemplazo requiere intervención.
 3. **Activación REVERSED.** La tarjeta queda activada con un código anulado. Falta definir el flujo de reemisión (liberar la tarjeta frente a la facturación de la `CardActivation`).
-4. **Cron de reconciliación.** `vercel.json` tiene `crons: []`, así que `POST /api/jobs/fulfillment` no corre solo. Si un webhook se pierde, el pedido espera hasta un reintento manual.
+4. **Sin crons.** El proyecto no programa trabajos en Vercel (el plan solo admite crons diarios y uno cada 5 min bloqueó los despliegues desde el 13 oct). Si un webhook se pierde, el pedido espera hasta un reintento manual con `POST /api/jobs/fulfillment`.

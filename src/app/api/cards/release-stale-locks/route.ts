@@ -10,7 +10,7 @@ const LOCK_TTL_MINUTES = 5;
  * Esto maneja el caso donde un operador cierra el navegador
  * o pierde conexión durante el proceso de activación.
  *
- * Puede ejecutarse via cron o manualmente.
+ * Se ejecuta manualmente.
  */
 export async function POST() {
     try {

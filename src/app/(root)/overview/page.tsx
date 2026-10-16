@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { CreditCard, Plus, ShoppingCart } from "lucide-react";
+import { ArrowRight, CreditCard, Plus, ShoppingCart } from "lucide-react";
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context";
 import { useTopUp } from "@/components/wallet/top-up-provider";
 import { useWalletSummary } from "@/components/wallet/wallet-balance-chip";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -18,6 +19,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { BALANCE_TONE_CLASS, balancePresentation, formatMoney as formatAmount } from "@/lib/wallet/balance";
+import { formatLedgerDateTime } from "@/lib/wallet/effective-time";
 
 interface Overview {
     wallet: { balance: number; currency: string };
@@ -54,7 +57,7 @@ interface CompanyOption {
 }
 
 function formatMoney(amount: number, currency: string) {
-    return new Intl.NumberFormat("es-CO", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+    return formatAmount(amount, currency, 2);
 }
 
 function StatCard({
@@ -62,17 +65,19 @@ function StatCard({
     value,
     hint,
     action,
+    valueClassName = "",
 }: {
     title: string;
-    value: string | number;
+    value: ReactNode;
     hint?: string;
     action?: ReactNode;
+    valueClassName?: string;
 }) {
     return (
-        <Card className="flex flex-col">
+        <Card className="flex flex-col shadow-none">
             <CardHeader className="pb-2">
                 <CardDescription>{title}</CardDescription>
-                <CardTitle className="text-3xl font-mono tabular-nums break-all">{value}</CardTitle>
+                <CardTitle className={`text-2xl font-semibold tabular-nums ${valueClassName}`}>{value}</CardTitle>
             </CardHeader>
             <CardContent className="mt-auto space-y-3 pt-0">
                 {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -82,10 +87,39 @@ function StatCard({
     );
 }
 
+/** Same reading of the balance as the wallet page: label, tone and absolute amount. */
+function BalanceCard({ balance, currency, action }: { balance: number; currency: string; action?: ReactNode }) {
+    const presentation = balancePresentation(balance);
+    return (
+        <StatCard
+            title={presentation.label}
+            valueClassName={BALANCE_TONE_CLASS[presentation.tone]}
+            value={
+                <span className="flex flex-wrap items-baseline gap-x-1.5">
+                    {formatMoney(presentation.amount, currency)}
+                    <span className="text-xs font-medium tracking-wide text-muted-foreground" translate="no">{currency}</span>
+                </span>
+            }
+            hint={presentation.description}
+            action={
+                <div className="flex flex-wrap items-center gap-2">
+                    {action}
+                    <Button asChild size="sm" variant="ghost" className="px-2">
+                        <Link href="/wallet">
+                            Ver movimientos
+                            <ArrowRight aria-hidden="true" className="size-4" />
+                        </Link>
+                    </Button>
+                </div>
+            }
+        />
+    );
+}
+
 /** Entry point to the daily actions, so nobody has to search the menu for them. */
 function QuickActionsCard({ canBuy, canActivate }: { canBuy: boolean; canActivate: boolean }) {
     return (
-        <Card className="flex flex-col justify-between lg:col-span-2">
+        <Card className="flex flex-col justify-between shadow-none md:col-span-2">
             <CardHeader>
                 <CardTitle className="text-xl">Compra de códigos</CardTitle>
                 <CardDescription className="max-w-md">
@@ -165,12 +199,15 @@ export default function CompanyOverviewPage() {
     }
 
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold tracking-tight">Mi Empresa</h1>
+        <div className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6 lg:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight text-balance">Mi Empresa</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">Resumen de tus locales, compras y activaciones.</p>
+                </div>
                 {isPlatform && (
                     <Select value={companyId} onValueChange={setCompanyId}>
-                        <SelectTrigger className="w-64">
+                        <SelectTrigger className="w-full sm:w-64">
                             <SelectValue placeholder="Seleccionar compañía..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -189,7 +226,7 @@ export default function CompanyOverviewPage() {
                     Selecciona una compañía para ver su resumen.
                 </div>
             ) : loading || !data ? (
-                <div className="text-center text-muted-foreground py-16">Cargando...</div>
+                <div className="py-16 text-center text-muted-foreground" role="status">Cargando…</div>
             ) : (
                 <>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -199,10 +236,9 @@ export default function CompanyOverviewPage() {
                                 canActivate={ability.can("activate", "Card")}
                             />
                         )}
-                        <StatCard
-                            title="Saldo wallet"
-                            value={formatMoney(data.wallet.balance, data.wallet.currency)}
-                            hint={data.wallet.balance < 0 ? "Saldo pendiente por abonar" : undefined}
+                        <BalanceCard
+                            balance={data.wallet.balance}
+                            currency={data.wallet.currency}
                             action={topUpReady ? (
                                 <Button size="sm" className="rounded-full" onClick={() => openTopUp()}>
                                     <Plus aria-hidden="true" className="size-4" />
@@ -213,18 +249,30 @@ export default function CompanyOverviewPage() {
                         <StatCard
                             title="Consumo 30 días"
                             value={formatMoney(data.stats.consumption30d, data.wallet.currency)}
+                            hint="Consumos confirmados de todos los locales."
                         />
                     </div>
 
-                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                        <StatCard title="Compras de códigos hoy" value={data.stats.purchasesToday} />
-                        <StatCard title="Compras 30 días" value={data.stats.purchases30d} />
-                        <StatCard title="Activaciones hoy" value={data.stats.activationsToday} />
-                        <StatCard title="Activaciones 30 días" value={data.stats.activations30d} />
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <StatCard
+                            title="Compras de códigos · 30 días"
+                            value={data.stats.purchases30d}
+                            hint={`${data.stats.purchasesToday} hoy`}
+                        />
+                        <StatCard
+                            title="Activaciones · 30 días"
+                            value={data.stats.activations30d}
+                            hint={`${data.stats.activationsToday} hoy`}
+                        />
+                        <StatCard
+                            title="Locales activos"
+                            value={data.stats.activeStores}
+                            hint={`de ${data.byStore.length} registrados`}
+                        />
                     </div>
 
-                    <div className="grid gap-6 lg:grid-cols-2">
-                        <Card>
+                    <div className="grid gap-6 lg:grid-cols-3">
+                        <Card className="shadow-none">
                             <CardHeader>
                                 <CardTitle>Por local (últimos 30 días)</CardTitle>
                             </CardHeader>
@@ -248,11 +296,11 @@ export default function CompanyOverviewPage() {
                                                     <TableCell className="font-medium">
                                                         {s.storeName}
                                                         {!s.isActive && (
-                                                            <span className="ml-2 text-xs text-red-500">(inactivo)</span>
+                                                            <Badge variant="secondary" className="ml-2 font-normal">Inactivo</Badge>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-right font-mono">{s.activations30d}</TableCell>
-                                                    <TableCell className="text-right font-mono">{s.purchases30d}</TableCell>
+                                                    <TableCell className="text-right tabular-nums">{s.activations30d}</TableCell>
+                                                    <TableCell className="text-right tabular-nums">{s.purchases30d}</TableCell>
                                                 </TableRow>
                                             ))
                                         )}
@@ -261,16 +309,16 @@ export default function CompanyOverviewPage() {
                             </CardContent>
                         </Card>
 
-                        <Card>
+                        <Card className="shadow-none lg:col-span-2">
                             <CardHeader>
                                 <CardTitle>Actividad reciente</CardTitle>
-                                <CardDescription>Solicitudes de todos los locales.</CardDescription>
+                                <CardDescription>Solicitudes de todos los locales, en hora de Colombia.</CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <Table>
+                            <CardContent className="overflow-x-auto">
+                                <Table className="min-w-[640px]">
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Fecha</TableHead>
+                                            <TableHead className="w-40">Fecha</TableHead>
                                             <TableHead>Tipo</TableHead>
                                             <TableHead>Producto</TableHead>
                                             <TableHead>Local</TableHead>
@@ -285,12 +333,12 @@ export default function CompanyOverviewPage() {
                                         ) : (
                                             data.recentActivity.map((a) => (
                                                 <TableRow key={`${a.type}-${a.id}`}>
-                                                    <TableCell className="whitespace-nowrap text-xs">
-                                                        {new Date(a.date).toLocaleString("es-CO")}
+                                                    <TableCell className="w-40 text-xs">
+                                                        <time dateTime={a.date} className="whitespace-nowrap">{formatLedgerDateTime(a.date)}</time>
                                                     </TableCell>
                                                     <TableCell>
                                                         <span
-                                                            className={`px-2 py-1 rounded text-xs ${a.type === "ACTIVATION"
+                                                            className={`whitespace-nowrap rounded px-2 py-1 text-xs ${a.type === "ACTIVATION"
                                                                 ? "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300"
                                                                 : "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300"
                                                                 }`}
@@ -299,8 +347,8 @@ export default function CompanyOverviewPage() {
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
-                                                        {a.productName}
-                                                        <span className="text-xs text-muted-foreground ml-1">{a.detail}</span>
+                                                        <div>{a.productName}</div>
+                                                        <div className="mt-0.5 text-xs text-muted-foreground">{a.detail}</div>
                                                     </TableCell>
                                                     <TableCell>{a.storeName}</TableCell>
                                                     <TableCell className="max-w-32 truncate">{a.requestedBy}</TableCell>

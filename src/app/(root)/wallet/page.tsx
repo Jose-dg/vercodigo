@@ -51,10 +51,6 @@ export default function CompanyWalletPage() {
                 </CardContent>
             </Card>
 
-            {data ? <TopUpHistory /> : null}
-
-            {data ? <AccountStatementsPanel /> : null}
-
             {data ? (
                 <Card className="shadow-none">
                     <CardHeader>
@@ -66,6 +62,10 @@ export default function CompanyWalletPage() {
                     </CardContent>
                 </Card>
             ) : null}
+
+            {data ? <TopUpHistory /> : null}
+
+            {data ? <AccountStatementsPanel /> : null}
         </div>
     );
 }

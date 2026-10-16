@@ -132,7 +132,7 @@ export function WalletMovementsTable({
                 <Table className="min-w-[760px]">
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Fecha</TableHead>
+                            <TableHead className="w-44">Fecha</TableHead>
                             <TableHead>Tipo</TableHead>
                             <TableHead>Descripción</TableHead>
                             <TableHead className="text-right">Monto</TableHead>
@@ -153,8 +153,8 @@ export function WalletMovementsTable({
                                 const isDebit = tx.type === "CONSUMPTION" || tx.type === "OPENING_BALANCE";
                                 return (
                                     <TableRow key={tx.id}>
-                                        <TableCell className="whitespace-nowrap">
-                                            <time dateTime={tx.occurredAt}>{formatLedgerDateTime(tx.occurredAt)}</time>
+                                        <TableCell className="w-44">
+                                            <time dateTime={tx.occurredAt} className="whitespace-nowrap">{formatLedgerDateTime(tx.occurredAt)}</time>
                                             {onCorrectPaidAt && isCorrectableRecharge(tx) ? (
                                                 <Button
                                                     variant="ghost"
@@ -169,7 +169,7 @@ export function WalletMovementsTable({
                                             ) : null}
                                             {tx.effectiveTimeLabel ? (
                                                 <div
-                                                    className={`mt-0.5 text-xs ${tx.occurredAtSource === "REGISTRATION_ONLY" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
+                                                    className={`mt-0.5 text-xs leading-snug ${tx.occurredAtSource === "REGISTRATION_ONLY" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
                                                 >
                                                     {tx.effectiveTimeLabel}
                                                 </div>

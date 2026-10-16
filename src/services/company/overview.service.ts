@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { bogotaLocalNow, bogotaLocalToIso } from "@/lib/wallet/effective-time";
 import { getOrCreateWallet } from "@/services/wallet/wallet.service";
 
 /**
@@ -8,8 +9,8 @@ import { getOrCreateWallet } from "@/services/wallet/wallet.service";
  */
 export async function getCompanyOverview(companyId: string) {
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
+    // "Hoy" es el día en Colombia, no el del servidor (UTC en producción).
+    const startOfToday = new Date(bogotaLocalToIso(`${bogotaLocalNow(now).slice(0, 10)}T00:00`));
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const stores = await prisma.store.findMany({

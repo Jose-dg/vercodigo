@@ -10,7 +10,8 @@ export type ManagementDestination =
     | "rates";
 
 export function homePathForRole(role: UserRole): string {
-    if (role === "SUPER_ADMIN" || role === "SYSTEM_ADMIN") return "/admin";
+    // Plataforma y dueños comparten el resumen; la plataforma elige la compañía allí.
+    if (role === "SUPER_ADMIN" || role === "SYSTEM_ADMIN") return "/overview";
     if (role === "OWNER" || role === "GENERAL_ADMIN") return "/overview";
     return "/codes/purchase";
 }

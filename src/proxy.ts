@@ -1,5 +1,7 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import type { UserRole } from "@prisma/client";
+import { homePathForRole } from "@/lib/auth/navigation";
 
 const PLATFORM_ROLES = new Set(["SUPER_ADMIN", "SYSTEM_ADMIN"]);
 const COMPANY_ADMIN_ROLES = new Set(["OWNER", "GENERAL_ADMIN"]);
@@ -16,7 +18,7 @@ export default withAuth(
         const isPlatform = PLATFORM_ROLES.has(role);
         const isCompanyAdmin = COMPANY_ADMIN_ROLES.has(role);
         const isStoreAdmin = STORE_ADMIN_ROLES.has(role);
-        const fallback = isPlatform ? "/admin" : isCompanyAdmin ? "/overview" : "/codes/purchase";
+        const fallback = homePathForRole(role as UserRole);
 
         if (startsWithAny(path, ["/admin", "/products", "/wallets", "/qr", "/cards", "/batches", "/keys", "/analytics"]) && !isPlatform) {
             return NextResponse.redirect(new URL(fallback, req.url));

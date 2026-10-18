@@ -7,7 +7,6 @@ import {
   Building2,
   QrCode,
   Zap,
-  Layers,
   Settings2,
   GalleryVerticalEnd,
   SquareTerminal,
@@ -32,7 +31,6 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 const data = {
   navMain: [
@@ -180,21 +178,6 @@ const data = {
         {
           title: "Ops Diem",
           url: "/ops/diem",
-        },
-      ],
-    },
-    {
-      title: "Analytics",
-      url: "#",
-      icon: Layers,
-      items: [
-        {
-          title: "Dashboard",
-          url: "/analytics",
-        },
-        {
-          title: "Mi Empresa",
-          url: "/overview",
         },
       ],
     },
@@ -349,6 +332,10 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
           ) return null;
         }
 
+        // Para empresas, Operations repite lo que ya está arriba: Comprar códigos y
+        // Activar tarjeta (con su escáner); sus solicitudes viven en Mis solicitudes.
+        if (newGroup.title === "Operations" && !(currentUser?.role && isPlatformRole(currentUser.role))) return null;
+
         if (newGroup.items) {
           if (newGroup.title === "Management" && currentUser?.role) {
             const allowed = new Set(managementDestinationsForRole(currentUser.role));
@@ -378,12 +365,6 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={teams} />
-        <div className="flex items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:justify-center">
-          <span className="text-xs font-medium text-muted-foreground group-data-[collapsible=icon]:hidden">
-            Apariencia
-          </span>
-          <ThemeToggle />
-        </div>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMainWithError} label={isPlatform ? "Plataforma" : "Navegación"} />

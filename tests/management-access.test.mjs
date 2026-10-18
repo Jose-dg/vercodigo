@@ -13,8 +13,8 @@ const expected = {
 };
 
 test("cada rol aterriza en su inicio operativo", () => {
-    assert.equal(homePathForRole("SUPER_ADMIN"), "/admin");
-    assert.equal(homePathForRole("SYSTEM_ADMIN"), "/admin");
+    assert.equal(homePathForRole("SUPER_ADMIN"), "/overview");
+    assert.equal(homePathForRole("SYSTEM_ADMIN"), "/overview");
     assert.equal(homePathForRole("OWNER"), "/overview");
     assert.equal(homePathForRole("GENERAL_ADMIN"), "/overview");
     assert.equal(homePathForRole("ADMIN"), "/codes/purchase");

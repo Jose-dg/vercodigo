@@ -11,6 +11,7 @@ import {
     type ActivationOrderSource,
 } from "@/lib/codes/fulfillment-order";
 import { processActivationJob } from "@/services/self-service/activate-card.service";
+import { notifyActivationJob } from "@/modules/notifications/order-notifications.service";
 import {
     listSerializedCodePurchases,
     type Actor,
@@ -219,5 +220,7 @@ export async function retryActivationOrderForUser(user: Actor, cardUuid: string)
     if (card.activation || !job || !OPEN_ACTIVATION_JOB_STATUSES.includes(job.status)) {
         throw conflict("Esta activación no tiene una solicitud abierta en Diem.");
     }
-    return processActivationJob(job.id);
+    const result = await processActivationJob(job.id);
+    notifyActivationJob(job.id);
+    return result;
 }

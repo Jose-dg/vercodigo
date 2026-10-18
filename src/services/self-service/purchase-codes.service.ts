@@ -14,6 +14,7 @@ import {
 } from "@/lib/devdiem/fulfillment";
 import { debit } from "@/services/wallet/wallet.service";
 import { resolveCost } from "@/services/costing/costing.service";
+import { notifyCodePurchase } from "@/modules/notifications/order-notifications.service";
 import { summarizeCodeDelivery } from "@/lib/codes/delivery-counts";
 import { buildPurchaseTimeline } from "@/lib/codes/purchase-timeline";
 import { resolvePurchaseOrigin, type RequestedOrigin } from "@/services/purchases/purchase-origin";
@@ -197,7 +198,18 @@ async function settleCodePurchase(purchaseId: string, productName: string) {
     }
 }
 
+/**
+ * Procesa una compra y avisa por correo según el estado en que queda (listo,
+ * requiere atención). Lo usan el checkout, "Consultar Diem", la recuperación
+ * manual y el webhook de DevDiem.
+ */
 export async function processCodePurchase(purchaseId: string) {
+    const result = await processCodePurchaseState(purchaseId);
+    notifyCodePurchase(purchaseId);
+    return result;
+}
+
+async function processCodePurchaseState(purchaseId: string) {
     let purchase = await prisma.codePurchase.findUnique({
         where: { id: purchaseId },
         include: { denomination: true },
@@ -389,7 +401,14 @@ export async function processCodePurchase(purchaseId: string) {
     }
 }
 
-export async function purchaseCodes(params: {
+/** Crea la compra y avisa al comprador, al dueño de la empresa y al equipo Diem. */
+export async function purchaseCodes(params: Parameters<typeof placeCodePurchase>[0]) {
+    const result = await placeCodePurchase(params);
+    notifyCodePurchase(result.id, { created: true });
+    return result;
+}
+
+async function placeCodePurchase(params: {
     userId: string;
     actorRole: string;
     targetCompanyId?: string;
@@ -546,7 +565,8 @@ export async function purchaseCodes(params: {
     }
 
     try {
-        return await processCodePurchase(purchase.id);
+        // Sin aviso aquí: purchaseCodes avisa una sola vez con el estado final.
+        return await processCodePurchaseState(purchase.id);
     } catch (error) {
         const pending = await prisma.codePurchase.findUniqueOrThrow({
             where: { id: purchase.id },

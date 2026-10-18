@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AppError } from "@/lib/errors";
 import { extractRequestContext } from "@/lib/request-context";
 import { activateCard } from "@/services/self-service/activate-card.service";
+import { notifyActivationJob } from "@/modules/notifications/order-notifications.service";
 import { ActivateCardBody } from "@/services/self-service/dto";
 import { withAuth } from "@/lib/auth/guard";
 import type { AppAbility } from "@/lib/auth/abilities";
@@ -42,6 +43,10 @@ async function handler(req: NextRequest, _ctx: unknown, _ability: AppAbility, us
             quotedRate: body.quotedRate,
         });
 
+        // Avisos de la activación (comprador, dueño y equipo Diem) según su estado.
+        if ("jobId" in result && typeof result.jobId === "string") {
+            notifyActivationJob(result.jobId, { created: true });
+        }
         return NextResponse.json(result, {
             status: result.success ? (result.processing ? 202 : 200) : 409,
         });

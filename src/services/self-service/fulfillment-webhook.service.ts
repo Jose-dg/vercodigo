@@ -2,6 +2,7 @@ import crypto from "crypto";
 
 import prisma from "@/lib/prisma";
 import { processActivationJob, updateOpenActivationJob } from "@/services/self-service/activate-card.service";
+import { notifyActivationJob } from "@/modules/notifications/order-notifications.service";
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
 import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
 import { updateOpenCodePurchase } from "@/services/self-service/code-purchase-state";
@@ -205,6 +206,7 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
             };
         }
         const processed = await processActivationJob(job.id);
+        notifyActivationJob(job.id);
         return {
             ok: true,
             handled: true,

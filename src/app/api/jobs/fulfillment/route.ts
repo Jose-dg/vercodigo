@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { checkDiemConnection, getDiemConfig } from "@/lib/devdiem/fulfillment";
 import { processActivationJob } from "@/services/self-service/activate-card.service";
+import { notifyActivationJob } from "@/modules/notifications/order-notifications.service";
 import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
 
 function isAuthorized(request: NextRequest) {
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
     for (const job of activationJobs) {
         try {
             const processed = await processActivationJob(job.id);
+            notifyActivationJob(job.id);
             activationResults.push({ id: job.id, status: processed.status });
         } catch (error) {
             activationResults.push({

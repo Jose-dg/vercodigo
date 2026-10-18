@@ -138,7 +138,50 @@ export function filterProductsByRegionAndBrand(
 ): CatalogProduct[] {
     return filterProductsByRegion(products, region)
         .filter((p) => p.brand === brand)
-        .sort((a, b) => a.name.localeCompare(b.name, "es"));
+        .sort(compareByAmount);
+}
+
+function smallestAmount(product: CatalogProduct): number {
+    const amounts = product.denominations.map((denomination) => denomination.amount);
+    return amounts.length > 0 ? Math.min(...amounts) : Number.POSITIVE_INFINITY;
+}
+
+/** Por valor (US$1, US$2 … US$250), no alfabético (US$1, US$10, US$100, US$2…). */
+function compareByAmount(a: CatalogProduct, b: CatalogProduct): number {
+    return smallestAmount(a) - smallestAmount(b) || a.name.localeCompare(b.name, "es", { numeric: true });
+}
+
+const SUFFIX_SEPARATORS = new Set(["—", "–", "-", "·"]);
+
+/**
+ * Lo que distingue a cada producto dentro de una lista de la misma marca, para tarjetas
+ * compactas: quita las palabras iniciales comunes ("PlayStation Gift Card") y un sufijo
+ * común solo si empieza con separador ("— USA"). "Free Fire 100 diamantes" conserva
+ * "diamantes". El nombre completo se sigue mostrando en el pedido.
+ */
+export function distinctiveProductLabels(products: Pick<CatalogProduct, "id" | "name">[]): Map<string, string> {
+    const labels = new Map<string, string>();
+    if (products.length < 2) {
+        for (const product of products) labels.set(product.id, product.name);
+        return labels;
+    }
+    const words = products.map((product) => product.name.trim().split(/\s+/));
+    const shortest = Math.min(...words.map((tokens) => tokens.length));
+    let prefix = 0;
+    while (prefix < shortest - 1 && words.every((tokens) => tokens[prefix] === words[0][prefix])) prefix += 1;
+    let suffix = 0;
+    while (
+        suffix < shortest - prefix - 1
+        && words.every((tokens) => tokens[tokens.length - 1 - suffix] === words[0][words[0].length - 1 - suffix])
+    ) suffix += 1;
+    // El sufijo común solo se quita si empieza con un separador ("— USA").
+    while (suffix > 0 && !SUFFIX_SEPARATORS.has(words[0][words[0].length - suffix])) suffix -= 1;
+    products.forEach((product, index) => {
+        const tokens = words[index];
+        const label = tokens.slice(prefix, tokens.length - suffix).join(" ").trim();
+        labels.set(product.id, label || product.name);
+    });
+    return labels;
 }
 
 /** Brand-specific accent for tile UI (not product logos). */

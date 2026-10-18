@@ -105,8 +105,8 @@ function useAnimatedNumber(value: number, durationMs = 350): number {
 
 function SummaryRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
     return (
-        <div className="flex items-center gap-3 border-b py-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <div className="flex items-center gap-3 border-b py-2">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                 {icon}
             </span>
             <span className="flex-1 text-sm text-muted-foreground">{label}</span>
@@ -229,314 +229,305 @@ export function CheckoutPanel({
         setQuantityDraft(null);
     }
 
+    // Una sola columna: con una denominación (la mayoría de productos) no hay nada que
+    // elegir y la denominación queda en el resumen; con varias, se eligen arriba.
+    const hasChoices = rows.length > 1;
+
     return (
-        <div className="grid gap-5 lg:grid-cols-2">
-            <section className="flex flex-col rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-                <div className="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span>Denominaciones</span>
-                    <span>Precio</span>
-                </div>
-                {rows.length > 6 && (
-                    <div className="relative mb-3">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            value={query}
-                            onChange={(event) => setQuery(event.target.value)}
-                            placeholder="Buscar denominación"
-                            className="h-11 pl-9"
-                        />
-                    </div>
-                )}
-                <ul className="-mx-2 max-h-[26rem] space-y-1 overflow-y-auto px-2" role="listbox" aria-label="Denominaciones">
-                    {filtered.length === 0 && (
-                        <li className="py-6 text-center text-sm text-muted-foreground">Sin resultados</li>
+        <section className="mx-auto flex w-full max-w-xl flex-col rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+            {hasChoices && (
+                <div className="mb-5">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor</p>
+                    {rows.length > 6 && (
+                        <div className="relative mb-3">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={query}
+                                onChange={(event) => setQuery(event.target.value)}
+                                placeholder="Buscar valor"
+                                className="h-11 pl-9"
+                            />
+                        </div>
                     )}
-                    {filtered.map((row) => {
-                        const active = row.id === selected?.id;
-                        const empty = row.stock != null && row.stock <= 0;
-                        return (
-                            <li key={row.id ?? 'single'}>
-                                <button
-                                    type="button"
-                                    role="option"
-                                    aria-selected={active}
-                                    onClick={() => selectRow(row.id)}
-                                    className={cn(
-                                        'relative flex min-h-14 w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition-all',
-                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                        active ? 'bg-primary/10' : 'hover:bg-muted/60',
-                                    )}
-                                >
-                                    <span
+                    {filtered.length === 0 ? (
+                        <p className="py-4 text-center text-sm text-muted-foreground">Sin resultados</p>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="listbox" aria-label="Valor">
+                            {filtered.map((row) => {
+                                const active = row.id === selected?.id;
+                                const empty = row.stock != null && row.stock <= 0;
+                                return (
+                                    <button
+                                        key={row.id ?? 'single'}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={active}
+                                        onClick={() => selectRow(row.id)}
                                         className={cn(
-                                            'absolute inset-y-2 left-0 w-1 rounded-full bg-primary transition-opacity',
-                                            active ? 'opacity-100' : 'opacity-0',
-                                        )}
-                                        aria-hidden
-                                    />
-                                    <span className="min-w-0">
-                                        <span className="block font-medium">{row.label}</span>
-                                        {empty && <span className="text-xs text-amber-700 dark:text-amber-400">Sin stock · queda en espera</span>}
-                                    </span>
-                                    <span
-                                        className={cn(
-                                            'shrink-0 rounded-lg px-2.5 py-1 font-mono text-sm tabular-nums transition-colors',
-                                            active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                                            'flex flex-col items-start gap-0.5 rounded-xl border-2 px-3 py-2.5 text-left transition-colors',
+                                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                            active ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted/40',
                                         )}
                                     >
-                                        {row.price?.salePrice != null
-                                            ? formatMoney(row.price.salePrice, row.price.currency ?? priceCurrency)
-                                            : pricesLoading
-                                                ? <Skeleton className="h-4 w-16" aria-label="Cargando precio" />
-                                                : '—'}
-                                    </span>
-                                </button>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </section>
-
-            <section className="flex flex-col rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-                <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tu orden</h2>
-
-                {region && (
-                    <p className="mb-5 rounded-xl bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
-                        {REGION_META[region].flag} Región {REGION_META[region].label}: {REGION_META[region].description.toLowerCase()}.
-                        Los códigos quedan guardados en tus solicitudes.
-                    </p>
-                )}
-
-                {isPlatform && (
-                    <div className="mb-5 grid gap-3 rounded-xl border border-amber-300/60 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-500/10 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="target-company" className="flex items-center gap-1.5 text-xs">
-                                <Building2 className="size-3.5" /> Empresa que paga
-                            </Label>
-                            <Select
-                                value={targetCompanyId || undefined}
-                                onValueChange={(value) => {
-                                    onTargetCompanyChange(value);
-                                    onTargetStoreChange('');
-                                    onTargetOriginPhoneChange('');
-                                }}
-                            >
-                                <SelectTrigger id="target-company" className="h-11 bg-background">
-                                    <SelectValue placeholder="Seleccionar empresa..." />
-                                </SelectTrigger>
-                                <SelectContent position="popper" className="z-[100]">
-                                    {companies.map((company) => (
-                                        <SelectItem key={company.companyId} value={company.companyId}>
-                                            {company.companyName}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                        <span className="font-semibold">{row.label}</span>
+                                        <span className={cn('font-mono text-xs tabular-nums', active ? 'text-primary' : 'text-muted-foreground')}>
+                                            {row.price?.salePrice != null
+                                                ? formatMoney(row.price.salePrice, row.price.currency ?? priceCurrency)
+                                                : pricesLoading
+                                                    ? <Skeleton className="h-3 w-14" aria-label="Cargando precio" />
+                                                    : '—'}
+                                        </span>
+                                        {empty && <span className="text-[11px] text-amber-700 dark:text-amber-400">Sin stock · en espera</span>}
+                                    </button>
+                                );
+                            })}
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="target-origin" className="text-xs">
-                                Origen <span className="font-normal text-muted-foreground">(sede o número)</span>
-                            </Label>
-                            <Select value={originValue} onValueChange={selectOrigin} disabled={!targetCompanyId}>
-                                <SelectTrigger id="target-origin" className="h-11 bg-background">
-                                    <SelectValue placeholder="Seleccionar origen..." />
-                                </SelectTrigger>
-                                <SelectContent position="popper" className="z-[100]">
-                                    {storesForSelectedCompany.length > 0 && (
-                                        <SelectGroup>
-                                            <SelectLabel>Sedes</SelectLabel>
-                                            {storesForSelectedCompany.map((store) => (
-                                                <SelectItem key={store.id} value={`store:${store.id}`}>
-                                                    {store.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectGroup>
-                                    )}
-                                    {originPhones.length > 0 && (
-                                        <SelectGroup>
-                                            <SelectLabel>Números</SelectLabel>
-                                            {originPhones.map((phone) => (
-                                                <SelectItem key={phone.id} value={`phone:${phone.id}`}>
-                                                    {phone.label} · {phone.phone}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectGroup>
-                                    )}
-                                    {storesForSelectedCompany.length === 0 && originPhones.length === 0 && (
-                                        <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                                            La empresa no tiene sedes ni números de origen.
-                                        </p>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                )}
-
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cantidad</p>
-                <div className="mb-2 grid gap-3 sm:grid-cols-[1.1fr_1fr]">
-                    <div className="flex h-14 items-stretch overflow-hidden rounded-xl border">
-                        <button
-                            type="button"
-                            className="flex w-14 items-center justify-center border-r text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
-                            onClick={() => setClampedQuantity(quantity - 1)}
-                            disabled={quantity <= 1}
-                            aria-label="Disminuir cantidad"
-                        >
-                            <Minus className="size-5" />
-                        </button>
-                        <input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={maxQuantity}
-                            value={quantityDraft ?? quantity}
-                            onChange={(event) => {
-                                const raw = event.target.value;
-                                const next = parseInt(raw, 10);
-                                if (raw === '' || Number.isNaN(next)) {
-                                    setQuantityDraft(raw);
-                                    return;
-                                }
-                                setQuantityDraft(null);
-                                setQuantity(Math.min(maxQuantity, Math.max(1, next)));
-                            }}
-                            onBlur={() => {
-                                if (quantityDraft !== null) setClampedQuantity(quantity);
-                            }}
-                            className="w-full min-w-0 bg-transparent text-center font-mono text-xl font-semibold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                            aria-label="Cantidad"
-                        />
-                        <button
-                            type="button"
-                            className="flex w-14 items-center justify-center border-l text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
-                            onClick={() => setClampedQuantity(quantity + 1)}
-                            disabled={quantity >= maxQuantity}
-                            aria-label="Aumentar cantidad"
-                        >
-                            <Plus className="size-5" />
-                        </button>
-                    </div>
-                    <div className="flex h-14 items-center justify-between rounded-xl border px-4 text-sm">
-                        <span className="text-muted-foreground">En stock</span>
-                        <span className={cn('font-mono font-semibold tabular-nums', outOfStock && 'text-amber-700 dark:text-amber-400')}>
-                            {selected?.stock == null ? '—' : selected.stock}
-                        </span>
-                    </div>
-                </div>
-                {outOfStock && (
-                    <p className="mb-2 text-sm text-amber-800 dark:text-amber-300">
-                        Sin stock ahora: el pedido queda en espera hasta que Diem reponga códigos y lo asigne.
-                    </p>
-                )}
-                {exceedsStock && (
-                    <p className="mb-2 text-sm text-amber-800 dark:text-amber-300">
-                        Solo hay {selected?.stock} código(s) ahora. El resto queda en espera.
-                    </p>
-                )}
-
-                <div className="mt-3">
-                    <SummaryRow icon={<Gift className="size-4" />} label="Denominación" value={selected?.label ?? '—'} />
-                    {selected?.price?.effectiveRateCopPerUsd != null && (
-                        <SummaryRow
-                            icon={<Wallet className="size-4" />}
-                            label="Tasa aplicada"
-                            value={<span className="font-mono">{formatMoney(selected.price.effectiveRateCopPerUsd, 'COP')} / USD</span>}
-                        />
-                    )}
-                    <SummaryRow
-                        icon={<Gift className="size-4" />}
-                        label="Por unidad"
-                        value={
-                            unitPrice != null
-                                ? <span className="font-mono">{formatMoney(unitPrice, priceCurrency)}</span>
-                                : pricesLoading
-                                    ? <Skeleton className="ml-auto h-4 w-20" aria-label="Cargando precio" />
-                                    : <span className="font-mono">Sin precio</span>
-                        }
-                    />
-                    {balance && (
-                        <SummaryRow
-                            icon={<Wallet className="size-4" />}
-                            label="Saldo"
-                            value={<span className="font-mono">{formatMoney(balance.amount, balance.currency)}</span>}
-                        />
                     )}
                 </div>
+            )}
 
-                {selected && unitPrice == null && pricesStatus === 'ready' && (
-                    <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
-                        <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                        Este producto no tiene costo configurado para la empresa. Pide a plataforma que lo configure en Costos.
-                    </p>
-                )}
-                {pricesStatus === 'error' && (
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                        <span className="flex items-start gap-2">
-                            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                            No pudimos cargar los precios.
-                        </span>
-                        <Button type="button" variant="outline" size="sm" onClick={onRetryPrices}>
-                            <RefreshCw className="size-4" aria-hidden="true" />
-                            Reintentar
-                        </Button>
-                    </div>
-                )}
-                {insufficientBalance && (
-                    <p className="mt-3 flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
-                        <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                        El total supera el saldo actual. La wallet se debita al completar la entrega.
-                    </p>
-                )}
+            {region && (
+                <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+                    {REGION_META[region].flag} Región {REGION_META[region].label}: {REGION_META[region].description.toLowerCase()}.
+                    Los códigos quedan guardados en tus solicitudes.
+                </p>
+            )}
 
-                <div className="mt-auto pt-5">
-                    <div className="flex items-end justify-between border-t border-dashed pt-5">
-                        <span className="text-sm text-muted-foreground">A pagar</span>
-                        <span className="font-mono text-3xl font-semibold tabular-nums text-primary sm:text-4xl">
-                            {total != null
-                                ? formatMoney(animatedTotal, priceCurrency)
-                                : pricesLoading
-                                    ? <Skeleton className="h-9 w-36 sm:h-10" aria-label="Calculando total" />
-                                    : '—'}
-                        </span>
+            {isPlatform && (
+                <div className="mb-5 grid gap-3 rounded-xl border border-amber-300/60 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-500/10 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="target-company" className="flex items-center gap-1.5 text-xs">
+                            <Building2 className="size-3.5" /> Empresa que paga
+                        </Label>
+                        <Select
+                            value={targetCompanyId || undefined}
+                            onValueChange={(value) => {
+                                onTargetCompanyChange(value);
+                                onTargetStoreChange('');
+                                onTargetOriginPhoneChange('');
+                            }}
+                        >
+                            <SelectTrigger id="target-company" className="h-11 bg-background">
+                                <SelectValue placeholder="Seleccionar empresa..." />
+                            </SelectTrigger>
+                            <SelectContent position="popper" className="z-[100]">
+                                {companies.map((company) => (
+                                    <SelectItem key={company.companyId} value={company.companyId}>
+                                        {company.companyName}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <Button
-                        className="mt-5 h-14 w-full rounded-xl text-base font-semibold transition-transform active:scale-[0.98]"
-                        size="lg"
-                        disabled={isPurchasing || !canConfirm}
-                        onClick={() =>
-                            selected && unitPrice != null && onPurchase({
-                                productId: product.id,
-                                denominationId: selected.id,
-                                count: quantity,
-                                quotedUnitAmount: unitPrice,
-                                quotedCurrency: priceCurrency,
-                                quotedRate: selected.price?.rateCopPerUsd,
-                            })
-                        }
+                    <div className="space-y-1.5">
+                        <Label htmlFor="target-origin" className="text-xs">
+                            Origen <span className="font-normal text-muted-foreground">(sede o número)</span>
+                        </Label>
+                        <Select value={originValue} onValueChange={selectOrigin} disabled={!targetCompanyId}>
+                            <SelectTrigger id="target-origin" className="h-11 bg-background">
+                                <SelectValue placeholder="Seleccionar origen..." />
+                            </SelectTrigger>
+                            <SelectContent position="popper" className="z-[100]">
+                                {storesForSelectedCompany.length > 0 && (
+                                    <SelectGroup>
+                                        <SelectLabel>Sedes</SelectLabel>
+                                        {storesForSelectedCompany.map((store) => (
+                                            <SelectItem key={store.id} value={`store:${store.id}`}>
+                                                {store.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                )}
+                                {originPhones.length > 0 && (
+                                    <SelectGroup>
+                                        <SelectLabel>Números</SelectLabel>
+                                        {originPhones.map((phone) => (
+                                            <SelectItem key={phone.id} value={`phone:${phone.id}`}>
+                                                {phone.label} · {phone.phone}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                )}
+                                {storesForSelectedCompany.length === 0 && originPhones.length === 0 && (
+                                    <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                                        La empresa no tiene sedes ni números de origen.
+                                    </p>
+                                )}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            )}
+
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cantidad</p>
+            <div className="mb-2 grid gap-3 sm:grid-cols-[1.1fr_1fr]">
+                <div className="flex h-14 items-stretch overflow-hidden rounded-xl border">
+                    <button
+                        type="button"
+                        className="flex w-14 items-center justify-center border-r text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+                        onClick={() => setClampedQuantity(quantity - 1)}
+                        disabled={quantity <= 1}
+                        aria-label="Disminuir cantidad"
                     >
-                        {isPurchasing ? (
-                            <>
-                                <Loader2 className="mr-2 size-5 animate-spin" />
-                                Procesando…
-                            </>
-                        ) : (
-                            <>
-                                {pricesLoading
-                                    ? 'Cargando precio…'
-                                    : outOfStock
-                                        ? 'Pedir (queda en espera de stock)'
-                                        : 'Realizar la orden'}
-                                <ArrowRight className="ml-2 size-5" />
-                            </>
-                        )}
-                    </Button>
-                    <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                        <ShieldCheck className="size-3.5" />
-                        Entrega protegida: la wallet se debita solo cuando la entrega se completa.
-                    </p>
+                        <Minus className="size-5" />
+                    </button>
+                    <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={maxQuantity}
+                        value={quantityDraft ?? quantity}
+                        onChange={(event) => {
+                            const raw = event.target.value;
+                            const next = parseInt(raw, 10);
+                            if (raw === '' || Number.isNaN(next)) {
+                                setQuantityDraft(raw);
+                                return;
+                            }
+                            setQuantityDraft(null);
+                            setQuantity(Math.min(maxQuantity, Math.max(1, next)));
+                        }}
+                        onBlur={() => {
+                            if (quantityDraft !== null) setClampedQuantity(quantity);
+                        }}
+                        className="w-full min-w-0 bg-transparent text-center font-mono text-xl font-semibold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                        aria-label="Cantidad"
+                    />
+                    <button
+                        type="button"
+                        className="flex w-14 items-center justify-center border-l text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+                        onClick={() => setClampedQuantity(quantity + 1)}
+                        disabled={quantity >= maxQuantity}
+                        aria-label="Aumentar cantidad"
+                    >
+                        <Plus className="size-5" />
+                    </button>
                 </div>
-            </section>
-        </div>
+                <div className="flex h-14 items-center justify-between rounded-xl border px-4 text-sm">
+                    <span className="text-muted-foreground">En stock</span>
+                    <span className={cn('font-mono font-semibold tabular-nums', outOfStock && 'text-amber-700 dark:text-amber-400')}>
+                        {selected?.stock == null ? '—' : selected.stock}
+                    </span>
+                </div>
+            </div>
+            {outOfStock && (
+                <p className="mb-2 text-sm text-amber-800 dark:text-amber-300">
+                    Sin stock ahora: el pedido queda en espera hasta que Diem reponga códigos y lo asigne.
+                </p>
+            )}
+            {exceedsStock && (
+                <p className="mb-2 text-sm text-amber-800 dark:text-amber-300">
+                    Solo hay {selected?.stock} código(s) ahora. El resto queda en espera.
+                </p>
+            )}
+
+            <div className="mt-3">
+                <SummaryRow icon={<Gift className="size-4" />} label="Denominación" value={selected?.label ?? '—'} />
+                {selected?.price?.effectiveRateCopPerUsd != null && (
+                    <SummaryRow
+                        icon={<Wallet className="size-4" />}
+                        label="Tasa aplicada"
+                        value={<span className="font-mono">{formatMoney(selected.price.effectiveRateCopPerUsd, 'COP')} / USD</span>}
+                    />
+                )}
+                <SummaryRow
+                    icon={<Gift className="size-4" />}
+                    label="Por unidad"
+                    value={
+                        unitPrice != null
+                            ? <span className="font-mono">{formatMoney(unitPrice, priceCurrency)}</span>
+                            : pricesLoading
+                                ? <Skeleton className="ml-auto h-4 w-20" aria-label="Cargando precio" />
+                                : <span className="font-mono">Sin precio</span>
+                    }
+                />
+                {balance && (
+                    <SummaryRow
+                        icon={<Wallet className="size-4" />}
+                        label="Saldo"
+                        value={<span className="font-mono">{formatMoney(balance.amount, balance.currency)}</span>}
+                    />
+                )}
+            </div>
+
+            {selected && unitPrice == null && pricesStatus === 'ready' && (
+                <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    Este producto no tiene costo configurado para la empresa. Pide a plataforma que lo configure en Costos.
+                </p>
+            )}
+            {pricesStatus === 'idle' && isPlatform && (
+                <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+                    <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    Elige la empresa que paga para ver su precio.
+                </p>
+            )}
+            {pricesStatus === 'error' && (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    <span className="flex items-start gap-2">
+                        <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                        No pudimos cargar los precios.
+                    </span>
+                    <Button type="button" variant="outline" size="sm" onClick={onRetryPrices}>
+                        <RefreshCw className="size-4" aria-hidden="true" />
+                        Reintentar
+                    </Button>
+                </div>
+            )}
+            {insufficientBalance && (
+                <p className="mt-3 flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    El total supera el saldo actual. La wallet se debita al completar la entrega.
+                </p>
+            )}
+
+            <div className="mt-auto pt-5">
+                <div className="flex items-end justify-between border-t border-dashed pt-5">
+                    <span className="text-sm text-muted-foreground">A pagar</span>
+                    <span className="font-mono text-3xl font-semibold tabular-nums text-primary sm:text-4xl">
+                        {total != null
+                            ? formatMoney(animatedTotal, priceCurrency)
+                            : pricesLoading
+                                ? <Skeleton className="h-9 w-36 sm:h-10" aria-label="Calculando total" />
+                                : '—'}
+                    </span>
+                </div>
+                <Button
+                    className="mt-5 h-14 w-full rounded-xl text-base font-semibold transition-transform active:scale-[0.98]"
+                    size="lg"
+                    disabled={isPurchasing || !canConfirm}
+                    onClick={() =>
+                        selected && unitPrice != null && onPurchase({
+                            productId: product.id,
+                            denominationId: selected.id,
+                            count: quantity,
+                            quotedUnitAmount: unitPrice,
+                            quotedCurrency: priceCurrency,
+                            quotedRate: selected.price?.rateCopPerUsd,
+                        })
+                    }
+                >
+                    {isPurchasing ? (
+                        <>
+                            <Loader2 className="mr-2 size-5 animate-spin" />
+                            Procesando…
+                        </>
+                    ) : (
+                        <>
+                            {pricesLoading
+                                ? 'Cargando precio…'
+                                : outOfStock
+                                    ? 'Pedir (queda en espera de stock)'
+                                    : 'Realizar la orden'}
+                            <ArrowRight className="ml-2 size-5" />
+                        </>
+                    )}
+                </Button>
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                    <ShieldCheck className="size-3.5" />
+                    Entrega protegida: la wallet se debita solo cuando la entrega se completa.
+                </p>
+            </div>
+        </section>
     );
 }

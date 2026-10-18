@@ -11,14 +11,16 @@ import {
     REGION_META,
     brandAccent,
     brandsInRegion,
+    distinctiveProductLabels,
     filterProductsByRegion,
     filterProductsByRegionAndBrand,
-    formatDenomAmount,
     productRegions,
     productStock,
     stockLabel,
 } from '@/lib/codes/catalog-regions';
 import { CheckoutPanel, type OriginPhone, type PriceRow, type PricesStatus, type WalletBalance } from './CheckoutPanel';
+import { formatMoney } from './order-format';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export type { OriginPhone, PriceRow, PricesStatus, WalletBalance } from './CheckoutPanel';
 
@@ -223,6 +225,15 @@ export function PurchaseWizard({
     );
 
     const selectedProduct = regionProducts.find((p) => p.id === productId);
+    const productLabels = useMemo(() => distinctiveProductLabels(regionProducts), [regionProducts]);
+
+    /** Precio unitario (o el menor, si el producto tiene varios valores) para la tarjeta. */
+    function tilePrice(product: CatalogProduct): { amount: number; currency: string; from: boolean } | null {
+        const rows = prices.filter((row) => row.productId === product.id && row.salePrice != null);
+        if (rows.length === 0) return null;
+        const cheapest = rows.reduce((min, row) => ((row.salePrice ?? 0) < (min.salePrice ?? 0) ? row : min));
+        return { amount: cheapest.salePrice ?? 0, currency: cheapest.currency ?? 'COP', from: product.denominations.length > 1 };
+    }
 
     function goBack() {
         if (wizard.depth > 0) {
@@ -259,7 +270,7 @@ export function PurchaseWizard({
     if (step === 'order' && selectedProduct) {
         const accent = brandAccent(brand ?? selectedProduct.brand);
         return (
-            <div className="space-y-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
+            <div className="mx-auto max-w-xl space-y-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
                 <button
                     type="button"
                     onClick={goBack}
@@ -268,10 +279,10 @@ export function PurchaseWizard({
                     <ChevronLeft className="size-4" />
                     {regionProducts.length > 1 ? `Productos de ${brand}` : 'Todas las marcas'}
                 </button>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     <span
                         className={cn(
-                            'flex size-14 shrink-0 items-center justify-center rounded-2xl shadow-inner sm:size-16',
+                            'flex size-12 shrink-0 items-center justify-center rounded-2xl shadow-inner sm:size-14',
                             accent.bg,
                             accent.fg,
                         )}
@@ -279,8 +290,9 @@ export function PurchaseWizard({
                         {region ? <RegionFlag region={region} className="text-3xl" /> : <Package className="size-6" />}
                     </span>
                     <div className="min-w-0">
-                        <h2 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">{brand}</h2>
-                        <p className="truncate text-sm text-muted-foreground sm:text-base">{selectedProduct.name}</p>
+                        <h2 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{brand}</h2>
+                        {/* Nombre completo: sin truncar, es lo que identifica el producto pedido. */}
+                        <p className="text-sm leading-snug text-muted-foreground sm:text-base">{selectedProduct.name}</p>
                     </div>
                 </div>
                 <CheckoutPanel
@@ -437,52 +449,39 @@ export function PurchaseWizard({
                 )}
 
                 {step === 'product' && (
-                    <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {regionProducts.length === 0 && (
-                            <p className="text-sm text-muted-foreground">No hay productos para esta marca.</p>
+                            <p className="col-span-full text-sm text-muted-foreground">No hay productos para esta marca.</p>
                         )}
                         {regionProducts.map((product) => {
-                            const denomSummary =
-                                product.denominations.length === 1
-                                    ? formatDenomAmount(
-                                        product.denominations[0].amount,
-                                        product.denominations[0].currency,
-                                    )
-                                    : `${product.denominations.length} valores`;
                             const units = productStock(product);
                             const label = stockLabel(units);
+                            const price = tilePrice(product);
+                            const empty = units != null && units <= 0;
                             return (
                                 <SelectionTile
                                     key={product.id}
                                     selected={productId === product.id}
                                     onClick={() => selectProduct(product.id)}
-                                    className="min-h-[4.75rem]"
+                                    className="min-h-0 flex-col items-start gap-0.5 rounded-xl px-3 py-2.5"
                                 >
-                                    <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                        <Package className="size-5" />
-                                    </div>
-                                    <div className="min-w-0 flex-1 pr-2">
-                                        <p className="text-base font-semibold leading-snug">{product.name}</p>
-                                        <p className="mt-0.5 text-sm text-muted-foreground">
-                                            {region && (
-                                                <>
-                                                    <RegionFlag region={region} className="mr-1 text-sm" />
-                                                    {REGION_META[region].shortLabel}
-                                                    {' · '}
-                                                </>
-                                            )}
-                                            {denomSummary}
-                                            {label && (
-                                                <>
-                                                    {' · '}
-                                                    <span className={units != null && units <= 0 ? 'font-medium text-amber-800' : ''}>
-                                                        {label}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </p>
-                                    </div>
-                                    <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
+                                    <span className="w-full text-base font-semibold leading-snug" title={product.name}>
+                                        {productLabels.get(product.id) ?? product.name}
+                                    </span>
+                                    <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                                        {price
+                                            ? `${price.from ? 'desde ' : ''}${formatMoney(price.amount, price.currency)}`
+                                            : pricesStatus === 'loading'
+                                                ? <Skeleton className="h-3 w-16" aria-label="Cargando precio" />
+                                                : product.denominations.length > 1
+                                                    ? `${product.denominations.length} valores`
+                                                    : '—'}
+                                    </span>
+                                    {label && (
+                                        <span className={cn('text-[11px]', empty ? 'font-medium text-amber-800 dark:text-amber-400' : 'text-muted-foreground')}>
+                                            {label}
+                                        </span>
+                                    )}
                                 </SelectionTile>
                             );
                         })}

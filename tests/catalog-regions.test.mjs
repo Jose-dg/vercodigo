@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import {
     brandAccent,
+    distinctiveProductLabels,
     filterProductsByRegion,
+    filterProductsByRegionAndBrand,
     maxPurchasableQuantity,
     productRegions,
     productStock,
@@ -111,4 +113,27 @@ test('sums reported denomination stock and labels out-of-stock', () => {
     // Zero stock does not cap the order: Diem parks it as awaiting_stock (2cf83ba).
     assert.equal(maxPurchasableQuantity(0), 100);
     assert.equal(maxPurchasableQuantity(null), 100);
+});
+
+test("los productos de una marca se ordenan por valor, no alfabéticamente", () => {
+    const product = (id, amount) => ({
+        id, name: `PlayStation Gift Card US$${amount} — USA`, brand: "PlayStation", isActive: true,
+        countryRegion: "united_states", denominations: [{ id: `d${id}`, amount, currency: "USD", countryRegion: "united_states" }],
+    });
+    const ordered = filterProductsByRegionAndBrand(
+        [product("a", 100), product("b", 2), product("c", 10), product("d", 1), product("e", 25)],
+        "US",
+        "PlayStation",
+    );
+    assert.deepEqual(ordered.map((p) => p.denominations[0].amount), [1, 2, 10, 25, 100]);
+});
+
+test("las tarjetas compactas muestran solo lo que distingue a cada producto", () => {
+    const labels = (names) => [...distinctiveProductLabels(names.map((name, i) => ({ id: String(i), name }))).values()];
+    assert.deepEqual(labels(["PlayStation Gift Card US$1 — USA", "PlayStation Gift Card US$250 — USA"]), ["US$1", "US$250"]);
+    assert.deepEqual(labels(["Xbox Game Pass Core 12 Meses", "Xbox Game Pass Ultimate 1 Mes"]), ["Core 12 Meses", "Ultimate 1 Mes"]);
+    // Un sufijo común sin separador es parte del nombre: no se quita.
+    assert.deepEqual(labels(["Free Fire 100 diamantes", "Free Fire 1060 diamantes"]), ["100 diamantes", "1060 diamantes"]);
+    // Un solo producto conserva su nombre completo.
+    assert.deepEqual(labels(["Roblox"]), ["Roblox"]);
 });

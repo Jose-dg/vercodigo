@@ -18,6 +18,9 @@ export default function PurchaseCodesPage() {
     const router = useRouter();
     const { status: sessionStatus } = useSession();
     const [effectiveRole, setEffectiveRole] = useState<UserRole | null>(null);
+    // Hasta conocer el rol no se cotiza: plataforma necesita una empresa elegida y una
+    // cotización sin ella respondería 400.
+    const [roleResolved, setRoleResolved] = useState(false);
     const isPlatform = effectiveRole != null && isPlatformRole(effectiveRole);
     const [products, setProducts] = useState<CatalogProduct[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
@@ -62,10 +65,16 @@ export default function PurchaseCodesPage() {
             })
             .then((data) => {
                 const role = data.user?.role;
-                if (!cancelled) setEffectiveRole(typeof role === 'string' ? role as UserRole : null);
+                if (!cancelled) {
+                    setEffectiveRole(typeof role === 'string' ? role as UserRole : null);
+                    setRoleResolved(true);
+                }
             })
             .catch(() => {
-                if (!cancelled) setEffectiveRole(null);
+                if (!cancelled) {
+                    setEffectiveRole(null);
+                    setRoleResolved(true);
+                }
             });
         return () => { cancelled = true; };
     }, [sessionStatus]);
@@ -163,7 +172,7 @@ export default function PurchaseCodesPage() {
     }, [effectiveRole, isPlatform]);
 
     useEffect(() => {
-        if (sessionStatus !== 'authenticated') return;
+        if (sessionStatus !== 'authenticated' || !roleResolved) return;
         if (isPlatform && !targetCompanyId) {
             setPrices([]);
             setPricesStatus('idle');
@@ -193,7 +202,7 @@ export default function PurchaseCodesPage() {
         return () => {
             cancelled = true;
         };
-    }, [sessionStatus, isPlatform, targetCompanyId, pricesReloadToken]);
+    }, [sessionStatus, roleResolved, isPlatform, targetCompanyId, pricesReloadToken]);
 
     useEffect(() => {
         if (!isPlatform) return;
@@ -354,20 +363,21 @@ export default function PurchaseCodesPage() {
 
     return (
         <main className="min-h-full bg-muted/20">
-            <div className="container max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-                <header className="mb-6 flex items-start gap-4 sm:mb-8">
+            <div className="container max-w-6xl px-4 py-4 sm:px-6 sm:py-10">
+                <header className="mb-4 flex items-start gap-4 sm:mb-8">
                     <div className="hidden size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm sm:flex">
                         <ShoppingCart className="size-5" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">Comprar códigos</h1>
-                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                        {/* En celular la frase se omite: cada píxel cuenta para no hacer scroll en el pedido. */}
+                        <p className="mt-1 hidden max-w-2xl text-sm leading-relaxed text-muted-foreground sm:block sm:text-base">
                             Elige región, marca y producto paso a paso. Pensado para comprar fácil desde el celular.
                         </p>
                     </div>
                 </header>
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
                     <TabsList className="grid h-12 w-full max-w-sm grid-cols-2 p-1">
                         <TabsTrigger value="order" className="text-sm">Nueva orden</TabsTrigger>
                         <TabsTrigger value="history" className="text-sm">Mis solicitudes</TabsTrigger>

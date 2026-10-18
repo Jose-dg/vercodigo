@@ -27,15 +27,15 @@ export function PurchaseWizardSkeleton() {
 export function PurchasePageSkeleton() {
     return (
         <main className="min-h-full bg-muted/20">
-            <div className="container max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-                <div className="mb-6 flex items-start gap-4 sm:mb-8">
+            <div className="container max-w-6xl px-4 py-4 sm:px-6 sm:py-10">
+                <div className="mb-4 flex items-start gap-4 sm:mb-8">
                     <Skeleton className="hidden size-12 shrink-0 rounded-xl sm:block" />
                     <div className="space-y-2">
                         <Skeleton className="h-8 w-60 sm:h-10" />
-                        <Skeleton className="h-4 w-72 max-w-full" />
+                        <Skeleton className="hidden h-4 w-72 max-w-full sm:block" />
                     </div>
                 </div>
-                <Skeleton className="mb-6 h-12 w-full max-w-sm rounded-lg" />
+                <Skeleton className="mb-4 h-12 w-full max-w-sm rounded-lg sm:mb-6" />
                 <PurchaseWizardSkeleton />
             </div>
         </main>

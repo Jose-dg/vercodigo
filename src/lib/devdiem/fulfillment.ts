@@ -137,19 +137,22 @@ export function commercialLineMoney(totalAmount: number, quantity: number): {
     };
 }
 
-function commercialAccountPrefix(): string {
-    return (process.env.DIEM_COMMERCIAL_ACCOUNT_PREFIX || 'diem-sas').trim() || 'diem-sas';
-}
+/**
+ * Prefijo de la cuenta comercial de cada empresa en DevDiem (`diem-sas:<companyId>`).
+ * Fijo a propósito: las cuentas existentes se identifican con él; cambiarlo las
+ * desvincularía de su saldo e historial.
+ */
+const COMMERCIAL_ACCOUNT_PREFIX = 'diem-sas';
 
 export function buildCommercialAccountCode(companyId: string): string {
     const id = companyId.trim();
     if (!id) throw new Error('companyId es requerido para account_code comercial');
-    return `${commercialAccountPrefix()}:${id}`;
+    return `${COMMERCIAL_ACCOUNT_PREFIX}:${id}`;
 }
 
 /** Inverse of buildCommercialAccountCode; null for codes of other partners. */
 export function companyIdFromCommercialAccountCode(accountCode: string): string | null {
-    const prefix = `${commercialAccountPrefix()}:`;
+    const prefix = `${COMMERCIAL_ACCOUNT_PREFIX}:`;
     const code = accountCode.trim();
     if (!code.startsWith(prefix)) return null;
     const id = code.slice(prefix.length);

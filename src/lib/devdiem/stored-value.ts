@@ -42,24 +42,21 @@ export type TopUp = {
 /** A receipt already validated by the portal, forwarded to DevDiem as is. */
 export type EvidenceUpload = { name: string; data: Blob };
 
-export type StoredValueConfig = {
-    channel: string;
-    paymentMethodId: number;
-    methodType: string;
-    returnUrl: string;
-};
+/** Canal de Vercode en DevDiem (tienda "Ver código"): define límites, medios y URLs de retorno. */
+const STORED_VALUE_CHANNEL = 'vercode-b2b';
+/** Medio con el que se cobra hoy; pasa a 'BRE_B' cuando haya proveedor con QR dinámico. */
+const TOPUP_METHOD_TYPE = 'BRE_B_MANUAL';
+/** Ruta del portal a la que vuelve quien paga; DevDiem la valida contra el canal. */
+export const TOPUP_RETURN_PATH = '/wallet';
 
-export function getStoredValueConfig(): StoredValueConfig {
-    const channel = process.env.DIEM_STORED_VALUE_CHANNEL?.trim();
-    const paymentMethodId = Number(process.env.DIEM_TOPUP_PAYMENT_METHOD_ID);
-    const methodType = (process.env.DIEM_TOPUP_METHOD_TYPE || 'BRE_B_MANUAL').trim();
-    const returnUrl = process.env.DIEM_TOPUP_RETURN_URL?.trim();
-    if (!channel) throw new Error('DIEM_STORED_VALUE_CHANNEL no está configurada');
-    if (!Number.isInteger(paymentMethodId) || paymentMethodId < 1) {
-        throw new Error('DIEM_TOPUP_PAYMENT_METHOD_ID no está configurada');
-    }
-    if (!returnUrl) throw new Error('DIEM_TOPUP_RETURN_URL no está configurada');
-    return { channel, paymentMethodId, methodType, returnUrl };
+/**
+ * Id del medio de pago en DevDiem. Transitorio: es un id de otra base de datos y
+ * DevDiem lo resolverá desde la política del canal; entonces se elimina esta variable.
+ */
+function topUpPaymentMethodId(): number {
+    const id = Number(process.env.DIEM_TOPUP_PAYMENT_METHOD_ID);
+    if (!Number.isInteger(id) || id < 1) throw new Error('DIEM_TOPUP_PAYMENT_METHOD_ID no está configurada');
+    return id;
 }
 
 function accountPath(companyId: string) {
@@ -85,8 +82,9 @@ export async function createTopUp(params: {
     payerEmail: string;
     acceptedTerms: boolean;
     idempotencyKey: string;
+    /** URL absoluta del portal a la que vuelve quien paga (origen de la solicitud + TOPUP_RETURN_PATH). */
+    returnUrl: string;
 }): Promise<TopUp> {
-    const settings = getStoredValueConfig();
     const { config, base } = accountPath(params.companyId);
     const response = await fetch(`${base}/topups/`, {
         method: 'POST',
@@ -95,14 +93,14 @@ export async function createTopUp(params: {
             'Idempotency-Key': params.idempotencyKey,
         }),
         body: JSON.stringify({
-            channel: settings.channel,
-            payment_method_id: settings.paymentMethodId,
-            method_type: settings.methodType,
+            channel: STORED_VALUE_CHANNEL,
+            payment_method_id: topUpPaymentMethodId(),
+            method_type: TOPUP_METHOD_TYPE,
             amount: params.amount,
             payer_email: params.payerEmail,
             accept_terms: params.acceptedTerms,
             accept_personal_data: params.acceptedTerms,
-            return_url: settings.returnUrl,
+            return_url: params.returnUrl,
         }),
     });
     return parse<TopUp>(response);

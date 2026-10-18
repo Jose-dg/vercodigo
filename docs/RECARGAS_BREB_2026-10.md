@@ -38,14 +38,26 @@ Una recarga dejada en "Pagar más tarde" se puede retomar desde el mismo diálog
 - `src/components/wallet/*`: barra superior (saldo o deuda, recargas en curso, Recargar y tema), diálogo de recarga. No se modifica `app-sidebar`.
 - `src/lib/wallet/balance.ts`: presentación del saldo, compartida con la página `/wallet`.
 
-## Variables de entorno (Vercel)
-| Variable | Ejemplo | Para qué |
+## Configuración (oct 2026: de 5 variables a 1)
+Las variables de entorno quedan solo para secretos e infraestructura.
+
+| Qué | Dónde | Valor |
 |---|---|---|
-| `DIEM_STORED_VALUE_CHANNEL` | `vercode-b2b` | Slug del canal de Vercode en DevDiem (tienda "Ver código") |
-| `DIEM_TOPUP_PAYMENT_METHOD_ID` | `42` | `PaymentMethod` de DevDiem con `gateway_provider=manual_breb` |
-| `DIEM_TOPUP_METHOD_TYPE` | `BRE_B_MANUAL` | Cambia a `BRE_B` cuando haya proveedor con QR dinámico |
-| `DIEM_TOPUP_RETURN_URL` | `https://<portal>/wallet` | Debe estar en `STORED_VALUE_RETURN_URL_PREFIXES` de DevDiem |
-| `CRON_SECRET` | (ya existe) | Protege la recuperación manual `POST /api/jobs/fulfillment` |
+| Canal de Vercode en DevDiem | Constante en `src/lib/devdiem/stored-value.ts` | `vercode-b2b` |
+| Medio de cobro | Constante en `stored-value.ts` | `BRE_B_MANUAL` (pasa a `BRE_B` con el proveedor de QR dinámico) |
+| URL de retorno tras pagar | Se calcula del portal que hace la solicitud | `<origen>/wallet` (debe estar en `return_url_prefixes` del canal en DevDiem) |
+| Prefijo de la cuenta comercial | Constante en `src/lib/devdiem/fulfillment.ts` | `diem-sas` (cuentas `diem-sas:<companyId>`; no se puede cambiar sin desvincular las existentes) |
+| Recargas habilitadas | Base de datos: `SystemConfig WALLET_TOPUPS_ENABLED` | `'true'` para activarlas; si no existe, apagadas (no se ofrece el botón y el cierre de estados de cuenta no consulta DevDiem) |
+| `DIEM_TOPUP_PAYMENT_METHOD_ID` | Variable de entorno (**transitoria**) | `PaymentMethod` de DevDiem con `gateway_provider=manual_breb`. Se elimina cuando DevDiem resuelva el medio desde la política del canal |
+| `CRON_SECRET` | Variable de entorno (secreto, ya existía) | Protege la recuperación manual `POST /api/jobs/fulfillment` |
+
+Para activar las recargas:
+
+```sql
+INSERT INTO "SystemConfig"(id, key, value, "updatedAt")
+VALUES ('wallet-topups-enabled', 'WALLET_TOPUPS_ENABLED', 'true', now())
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = now();
+```
 
 En DevDiem se configuran el service account (`stored_value:topups:create/read`), el `PaymentMethod` con `SIZU_BREB_KEY` y `SIZU_BREB_QR_PAYLOAD` en el entorno, y la `StoredValuePolicy` del canal: `funding_target=partner_wallet`, `allowed_payment_method_types=["BRE_B_MANUAL"]` y TTL de 72 h.
 
@@ -58,5 +70,5 @@ La activación en producción requiere el **corte de Vercode a la tienda "Ver c�
 - Pendiente: prueba de punta a punta con DevDiem local y un usuario de empresa.
 
 ## Lo que sigue
-- **QR dinámico** cuando se cierre el acuerdo con un proveedor. Solo cambia el adaptador en DevDiem y `DIEM_TOPUP_METHOD_TYPE`; la interfaz ya maneja QR y llave.
+- **QR dinámico** cuando se cierre el acuerdo con un proveedor. Solo cambia el adaptador en DevDiem y la constante del medio de cobro; la interfaz ya maneja QR y llave.
 - **Pantalla de revisión en diem-app** (la API ya existe en DevDiem).

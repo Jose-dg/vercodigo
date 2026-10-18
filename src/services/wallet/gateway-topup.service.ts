@@ -13,7 +13,6 @@ import { companyIdFromCommercialAccountCode } from '@/lib/devdiem/fulfillment';
 import prisma from '@/lib/prisma';
 import {
     acknowledgeTopUp,
-    getStoredValueConfig,
     getTopUp,
     listTopUps,
     type TopUp,
@@ -92,13 +91,16 @@ export async function syncPendingCredits(companyIds: string[]) {
     return stats;
 }
 
-function topUpsConfigured(): boolean {
-    try {
-        getStoredValueConfig();
-        return true;
-    } catch {
-        return false;
-    }
+const TOPUPS_ENABLED_KEY = 'WALLET_TOPUPS_ENABLED';
+
+/**
+ * Las recargas por pasarela se habilitan como decisión de negocio, en base de datos
+ * (SystemConfig WALLET_TOPUPS_ENABLED = 'true'), cuando DevDiem tiene el canal listo.
+ * Apagadas: no se ofrece el botón y el cierre de estados de cuenta no consulta DevDiem.
+ */
+export async function topUpsEnabled(): Promise<boolean> {
+    const row = await prisma.systemConfig.findUnique({ where: { key: TOPUPS_ENABLED_KEY } });
+    return row?.value === 'true';
 }
 
 /**
@@ -107,7 +109,7 @@ function topUpsConfigured(): boolean {
  * when top-ups are not configured for this deployment (nothing can be pending).
  */
 export async function syncCreditedTopUpsBeforeClosing(companyId: string): Promise<boolean> {
-    if (!topUpsConfigured()) return true;
+    if (!(await topUpsEnabled())) return true;
     const stats = await syncPendingCredits([companyId]);
     return stats.errors === 0;
 }

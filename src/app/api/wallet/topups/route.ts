@@ -3,7 +3,8 @@ import { z } from 'zod';
 
 import { withAuth } from '@/lib/auth/guard';
 import type { AuthenticatedActor } from '@/lib/auth/actor';
-import { createTopUp, listTopUps } from '@/lib/devdiem/stored-value';
+import { createTopUp, listTopUps, TOPUP_RETURN_PATH } from '@/lib/devdiem/stored-value';
+import { topUpsEnabled } from '@/services/wallet/gateway-topup.service';
 import { companyOrForbidden, topUpErrorResponse } from '@/lib/wallet/topup-api';
 import { validateTopUpAmount } from '@/lib/wallet/topups';
 
@@ -40,6 +41,12 @@ async function create(req: NextRequest, _ctx: unknown, _ability: unknown, user: 
             { status: 400 },
         );
     }
+    if (!(await topUpsEnabled())) {
+        return NextResponse.json(
+            { error: 'TOPUPS_DISABLED', message: 'Las recargas no están habilitadas por ahora.' },
+            { status: 409 },
+        );
+    }
     const amount = validateTopUpAmount(parsed.data.amount);
     if (!amount.ok) {
         return NextResponse.json({ error: 'INVALID_AMOUNT', message: amount.error }, { status: 400 });
@@ -51,6 +58,8 @@ async function create(req: NextRequest, _ctx: unknown, _ability: unknown, user: 
             payerEmail: user.email,
             acceptedTerms: true,
             idempotencyKey: `vercode:${companyId}:${idempotencyKey}`.slice(0, 200),
+            // El portal desde el que se pidió: DevDiem la valida contra las URLs del canal.
+            returnUrl: new URL(TOPUP_RETURN_PATH, req.nextUrl.origin).toString(),
         });
         return NextResponse.json({ topUp }, { status: 201 });
     } catch (error) {

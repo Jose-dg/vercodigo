@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedActor } from "@/lib/auth/actor";
 import { checkDiemConnection } from "@/lib/devdiem/fulfillment";
-import { createProductForActor, getProductsForManagement, getPurchasableProducts } from "@/services/product.service";
+import { createProductForActor, getProductsForManagement, getPurchasableProducts, syncDenominationRegions } from "@/services/product.service";
 import { AppError } from "@/lib/errors";
 
 const ProductBody = z.object({
@@ -33,6 +33,11 @@ export async function GET(req: NextRequest) {
             const products = await getPurchasableProducts(enabledIds);
             const regions = catalog.catalogProductRegions;
             const stock = catalog.catalogProductStock;
+            // La región decide si el precio sale de la TRM: se guarda con cada consulta
+            // del catálogo. Un fallo aquí no debe impedir mostrar el catálogo.
+            await syncDenominationRegions(products, regions).catch((error) => {
+                console.error("[products/purchasable] No se pudo sincronizar la región", error);
+            });
             return NextResponse.json(products.map((product) => ({
                 ...product,
                 countryRegion: product.devDiemProductId

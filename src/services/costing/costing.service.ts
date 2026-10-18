@@ -2,8 +2,8 @@ import prisma from "@/lib/prisma";
 import { Prisma, User, UserRole } from "@prisma/client";
 import { badRequest, forbidden, notFound } from "@/lib/errors";
 import { getOrCreateWallet } from "@/services/wallet/wallet.service";
-import { calculateCompanyRateAmount } from "@/lib/pricing/company-rate";
 import { computeCost, type ResolvedCost } from "@/lib/pricing/resolve-cost";
+import { getUsdWholesaleRate } from "@/services/pricing/trm.service";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -23,10 +23,10 @@ export async function resolveCost(
     denominationId?: string | null,
     tx: Db = prisma
 ): Promise<ResolvedCost | null> {
-    const [rate, wallet, denomination, usdCopConfig, costs] = await Promise.all([
-        tx.companyProductRate.findUnique({
-            where: { companyId_productId: { companyId, productId } },
-        }),
+    const [usdRate, wallet, denomination, usdCopConfig, costs] = await Promise.all([
+        // Dentro de una transacción solo se lee la TRM guardada (la cotización previa ya
+        // la trajo): una llamada HTTP dejaría la transacción abierta.
+        getUsdWholesaleRate({ db: tx, fetchIfMissing: tx === prisma }),
         tx.wallet.findUnique({ where: { companyId }, select: { currency: true } }),
         denominationId
             ? tx.productDenomination.findUnique({ where: { id: denominationId } })
@@ -44,7 +44,7 @@ export async function resolveCost(
     return computeCost({
         companyId,
         walletCurrency: wallet?.currency ?? null,
-        companyRateCopPerUsd: rate?.rateCopPerUsd ?? null,
+        usdWholesaleRateCopPerUsd: usdRate?.rateCopPerUsd ?? null,
         fallbackRateCopPerUsd: usdCopConfig ? Number(usdCopConfig.value) : null,
         denomination,
         costs,
@@ -67,12 +67,13 @@ export interface PurchaseQuote {
  * Usa computeCost, la misma regla que resolveCost aplica al cobrar.
  */
 export async function getPurchaseQuotes(companyId: string): Promise<PurchaseQuote[]> {
-    const [products, rates, wallet, usdCopConfig, costs] = await Promise.all([
+    const [products, usdRate, wallet, usdCopConfig, costs] = await Promise.all([
         prisma.product.findMany({
             where: { isActive: true },
-            select: { id: true, denominations: { select: { id: true, amount: true, currency: true } } },
+            select: { id: true, denominations: { select: { id: true, amount: true, currency: true, countryRegion: true } } },
         }),
-        prisma.companyProductRate.findMany({ where: { companyId } }),
+        // La cotización corre fuera de transacción: aquí se trae la TRM del día si falta.
+        getUsdWholesaleRate(),
         prisma.wallet.findUnique({ where: { companyId }, select: { currency: true } }),
         prisma.systemConfig.findUnique({ where: { key: "FX_USD_COP" } }),
         prisma.productCost.findMany({
@@ -80,16 +81,15 @@ export async function getPurchaseQuotes(companyId: string): Promise<PurchaseQuot
             select: { companyId: true, productId: true, denominationId: true, cost: true, currency: true },
         }),
     ]);
-    const rateByProduct = new Map(rates.map((rate) => [rate.productId, rate.rateCopPerUsd]));
     const fallbackRateCopPerUsd = usdCopConfig ? Number(usdCopConfig.value) : null;
     const quote = (
         productId: string,
-        denomination: { id: string; amount: number; currency: string } | null,
+        denomination: { id: string; amount: number; currency: string; countryRegion: string | null } | null,
     ): PurchaseQuote[] => {
         const cost = computeCost({
             companyId,
             walletCurrency: wallet?.currency ?? null,
-            companyRateCopPerUsd: rateByProduct.get(productId) ?? null,
+            usdWholesaleRateCopPerUsd: usdRate?.rateCopPerUsd ?? null,
             fallbackRateCopPerUsd,
             denomination,
             costs: costs.filter((row) => (
@@ -112,143 +112,6 @@ export async function getPurchaseQuotes(companyId: string): Promise<PurchaseQuot
             ? quote(product.id, null)
             : product.denominations.flatMap((denomination) => quote(product.id, denomination))
     ));
-}
-
-export async function getCompanyProductRates(companyId?: string | null) {
-    const companies = await prisma.company.findMany({
-        where: { isActive: true, ...(companyId ? { id: companyId } : {}) },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, wallet: { select: { currency: true } } },
-    });
-    const products = await prisma.product.findMany({
-        where: {
-            isActive: true,
-            denominations: { some: { currency: "USD" } },
-        },
-        orderBy: { name: "asc" },
-        select: {
-            id: true,
-            name: true,
-            brand: true,
-            denominations: {
-                where: { currency: "USD" },
-                orderBy: { amount: "asc" },
-                select: { id: true, amount: true, currency: true },
-            },
-        },
-    });
-    const [rates, costs, usdCopConfig] = await Promise.all([
-        prisma.companyProductRate.findMany({ where: companyId ? { companyId } : undefined }),
-        prisma.productCost.findMany({
-            where: { isActive: true, OR: [{ companyId: null }, ...(companyId ? [{ companyId }] : [])] },
-        }),
-        prisma.systemConfig.findUnique({ where: { key: "FX_USD_COP" } }),
-    ]);
-    const rateMap = new Map(rates.map((row) => [`${row.companyId}:${row.productId}`, row]));
-    const fallbackRate = usdCopConfig && Number(usdCopConfig.value) > 0
-        ? Number(usdCopConfig.value)
-        : null;
-    return {
-        companies: companies.map((company) => ({
-            id: company.id,
-            name: company.name,
-            walletCurrency: company.wallet?.currency ?? "COP",
-        })),
-        products,
-        rates: rates.map((rate) => ({
-            id: rate.id,
-            companyId: rate.companyId,
-            productId: rate.productId,
-            rateCopPerUsd: rate.rateCopPerUsd,
-            updatedAt: rate.updatedAt,
-        })),
-        rows: companyId
-            ? products.flatMap((product) => {
-                const rate = rateMap.get(`${companyId}:${product.id}`)?.rateCopPerUsd ?? null;
-                return product.denominations.map((denomination) => {
-                    const configured = costs.find((cost) =>
-                        cost.productId === product.id
-                        && cost.denominationId === denomination.id
-                        && cost.companyId === companyId,
-                    ) ?? costs.find((cost) =>
-                        cost.productId === product.id
-                        && cost.denominationId === denomination.id
-                        && cost.companyId === null,
-                    );
-                    const fallbackAmount = configured?.cost ?? denomination.amount;
-                    const fallbackCurrency = configured?.currency ?? denomination.currency;
-                    const convertedFallback = fallbackCurrency === "USD" && fallbackRate != null
-                        ? calculateCompanyRateAmount({ denominationUsd: fallbackAmount, rateCopPerUsd: fallbackRate }).unitAmountCop
-                        : fallbackAmount;
-                    return {
-                        productId: product.id,
-                        productName: product.name,
-                        brand: product.brand,
-                        denominationId: denomination.id,
-                        nominalAmount: denomination.amount,
-                        rateCopPerUsd: rate,
-                        effectiveRateCopPerUsd: rate ?? (
-                            fallbackCurrency === "USD"
-                                ? fallbackRate
-                                : moneyRate(convertedFallback, denomination.amount)
-                        ),
-                        salePrice: rate == null
-                            ? convertedFallback
-                            : calculateCompanyRateAmount({ denominationUsd: denomination.amount, rateCopPerUsd: rate }).unitAmountCop,
-                        currency: rate != null || (fallbackCurrency === "USD" && fallbackRate != null)
-                            ? "COP"
-                            : fallbackCurrency,
-                    };
-                });
-            })
-            : [],
-    };
-}
-
-function moneyRate(totalCop: number, denominationUsd: number) {
-    return denominationUsd > 0 ? Math.round((totalCop / denominationUsd) * 10000) / 10000 : null;
-}
-
-export async function upsertCompanyProductRate(params: {
-    companyId: string;
-    productId: string;
-    rateCopPerUsd: number;
-    actorId: string;
-}) {
-    if (!(params.rateCopPerUsd > 0) || !Number.isFinite(params.rateCopPerUsd)) {
-        throw badRequest("La tasa COP/USD debe ser mayor a cero");
-    }
-    const [company, product] = await Promise.all([
-        prisma.company.findUnique({
-            where: { id: params.companyId },
-            select: { wallet: { select: { currency: true } } },
-        }),
-        prisma.product.findUnique({
-            where: { id: params.productId },
-            select: { denominations: { where: { currency: "USD" }, select: { id: true } } },
-        }),
-    ]);
-    if (!company) throw notFound("Compañía no encontrada");
-    if ((company.wallet?.currency ?? "COP") !== "COP") {
-        throw badRequest("La tasa COP/USD solo aplica a wallets en COP");
-    }
-    if (!product) throw notFound("Producto no encontrado");
-    if (product.denominations.length === 0) {
-        throw badRequest("El producto no tiene denominaciones en USD");
-    }
-    return prisma.companyProductRate.upsert({
-        where: { companyId_productId: { companyId: params.companyId, productId: params.productId } },
-        create: {
-            companyId: params.companyId,
-            productId: params.productId,
-            rateCopPerUsd: params.rateCopPerUsd,
-            updatedById: params.actorId,
-        },
-        update: {
-            rateCopPerUsd: params.rateCopPerUsd,
-            updatedById: params.actorId,
-        },
-    });
 }
 
 /**

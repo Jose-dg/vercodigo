@@ -1,9 +1,10 @@
 import { calculateCompanyRateAmount } from "./company-rate.ts";
+import { TRM_PRICED_REGION } from "./trm.ts";
 
 export interface ResolvedCost {
     amount: number;
     currency: string;
-    source: "company_rate" | "company" | "global" | "denomination";
+    source: "trm" | "company" | "global" | "denomination";
     sourceAmount?: number;
     sourceCurrency?: string;
     exchangeRate?: number;
@@ -12,11 +13,15 @@ export interface ResolvedCost {
 export interface CostInputs {
     companyId: string;
     walletCurrency: string | null;
-    /** Tasa COP/USD negociada para la compañía y el producto, si existe. */
-    companyRateCopPerUsd: number | null;
+    /**
+     * Tasa mayorista COP/USD del día (TRM redondeada + margen). null si no hay TRM
+     * disponible: la denominación conserva su costo configurado.
+     */
+    usdWholesaleRateCopPerUsd: number | null;
     /** FX_USD_COP de plataforma; convierte costos USD a una wallet COP. */
     fallbackRateCopPerUsd: number | null;
-    denomination: { amount: number; currency: string } | null;
+    /** countryRegion: región del catálogo de Diem; solo "united_states" se cobra con la TRM. */
+    denomination: { amount: number; currency: string; countryRegion?: string | null } | null;
     /** Costos activos del producto/denominación (de la compañía y globales). */
     costs: ReadonlyArray<{ companyId: string | null; cost: number; currency: string }>;
 }
@@ -24,8 +29,8 @@ export interface CostInputs {
 /**
  * Regla única del costo que se debita de la wallet. El cobro y la cotización
  * del checkout la comparten para que el total mostrado sea el que se cobra.
- * Precedencia: tarifa negociada (solo denominaciones USD en wallet COP) →
- * costo de la compañía → costo global → valor nominal de la denominación.
+ * Precedencia: TRM del día (solo denominaciones USD de región USA en wallet COP)
+ * → costo de la compañía → costo global → valor nominal de la denominación.
  */
 export function computeCost(inputs: CostInputs): ResolvedCost | null {
     const cost = resolveCostRule(inputs);
@@ -54,22 +59,25 @@ function resolveCostRule(inputs: CostInputs): ResolvedCost | null {
     };
 
     const { denomination } = inputs;
+    const wholesaleRate = inputs.usdWholesaleRateCopPerUsd;
     if (
-        inputs.companyRateCopPerUsd != null
+        wholesaleRate != null
+        && wholesaleRate > 0
         && denomination
         && denomination.currency.toUpperCase() === "USD"
+        && denomination.countryRegion === TRM_PRICED_REGION
         && walletCurrency === "COP"
     ) {
         return {
             amount: calculateCompanyRateAmount({
                 denominationUsd: denomination.amount,
-                rateCopPerUsd: inputs.companyRateCopPerUsd,
+                rateCopPerUsd: wholesaleRate,
             }).unitAmountCop,
             currency: "COP",
-            source: "company_rate",
+            source: "trm",
             sourceAmount: denomination.amount,
             sourceCurrency: "USD",
-            exchangeRate: inputs.companyRateCopPerUsd,
+            exchangeRate: wholesaleRate,
         };
     }
 

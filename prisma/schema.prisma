@@ -272,8 +272,8 @@ model Product {
   companyRates     CompanyProductRate[]
 }
 
-// Tasa comercial vigente de una compañía para un producto denominado en USD.
-// Es un único valor mutable: no representa un historial de precios.
+// Obsoleto desde la TRM automática (oct 2026): ya no interviene en el precio.
+// Se conserva hasta confirmar en producción que no tiene filas y retirarlo.
 model CompanyProductRate {
   id            String   @id @default(cuid())
   companyId     String
@@ -294,6 +294,9 @@ model ProductDenomination {
   amount           Float
   currency         String                @default("USD")
   devDiemProductId String?               @unique
+  /// Región del producto en el catálogo de Diem (p. ej. "united_states", "colombia").
+  /// Se sincroniza al consultar el catálogo; decide si el precio se calcula con la TRM.
+  countryRegion    String?
   productId        String
   createdAt        DateTime              @default(now())
   cards            Card[]
@@ -728,4 +731,18 @@ model ActivationJob {
   @@index([cardId])
   @@index([createdAt])
   @@index([status, nextRetryAt])
+}
+
+/// TRM oficial COP/USD (Superfinanciera, datos.gov.co) por período de vigencia.
+/// Sin cron: la primera cotización que no encuentra la TRM vigente la consulta y la
+/// guarda; el resto del día se lee de aquí. Queda como historial de las tasas usadas.
+model TrmRate {
+  id        String   @id @default(cuid())
+  validFrom DateTime @unique @db.Date
+  validTo   DateTime @db.Date
+  valueCop  Float
+  source    String
+  fetchedAt DateTime @default(now())
+
+  @@index([validTo])
 }

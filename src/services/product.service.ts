@@ -5,7 +5,7 @@ import { actorIsPlatform } from "@/lib/auth/actor";
 import { AppError } from "@/lib/errors";
 import prisma from "@/lib/prisma";
 
-const denominationSelect = { id: true, amount: true, currency: true, devDiemProductId: true } as const;
+const denominationSelect = { id: true, amount: true, currency: true, devDiemProductId: true, countryRegion: true } as const;
 const productSelect = {
     id: true, name: true, sku: true, brand: true, category: true, imageUrl: true, isActive: true,
     isGiftCard: true, minAmount: true, maxAmount: true, devDiemProductId: true, createdAt: true,
@@ -23,6 +23,28 @@ export async function getPurchasableProducts(enabledIds: string[]) {
         select: productSelect,
         orderBy: { name: "asc" },
     });
+}
+
+/**
+ * Guarda en cada denominación la región que reporta el catálogo de Diem: decide si su
+ * precio se calcula con la TRM. Solo escribe las que cambiaron y nunca borra una región
+ * por ausencia en el catálogo. Devuelve cuántas actualizó.
+ */
+export async function syncDenominationRegions(
+    products: Awaited<ReturnType<typeof getPurchasableProducts>>,
+    regions: Record<string, string>,
+): Promise<number> {
+    const updates = products.flatMap((product) => product.denominations.flatMap((denomination) => {
+        const remoteId = denomination.devDiemProductId ?? product.devDiemProductId;
+        const region = remoteId ? regions[remoteId] : undefined;
+        return region && region !== denomination.countryRegion ? [{ id: denomination.id, region }] : [];
+    }));
+    if (updates.length === 0) return 0;
+    await prisma.$transaction(updates.map((update) => prisma.productDenomination.update({
+        where: { id: update.id },
+        data: { countryRegion: update.region },
+    })));
+    return updates.length;
 }
 
 export async function createProductForActor(actor: AuthenticatedActor, input: {

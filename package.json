@@ -16,7 +16,7 @@
     "test:wallet": "node --test --experimental-strip-types tests/wallet-presentation.test.mjs tests/wallet-effective-time.test.mjs",
     "test:wallet-topups": "node --test --experimental-strip-types tests/wallet-topups.test.mjs tests/wallet-topup-evidence.test.mjs",
     "test:wallet-ledger": "node --test --experimental-strip-types tests/wallet-ledger.test.mjs tests/purchase-finalization-idempotency.test.mjs tests/ledger-verification.test.mjs",
-    "test:purchase-quote": "node --test --experimental-strip-types tests/company-rate.test.mjs tests/purchase-quote.test.mjs",
+    "test:purchase-quote": "node --test --experimental-strip-types tests/company-rate.test.mjs tests/purchase-quote.test.mjs tests/trm.test.mjs",
     "test:buy-codes-catalog": "node --test --experimental-strip-types tests/buy-codes-catalog.test.mjs",
     "test:fulfillment-orders": "node --test --experimental-strip-types tests/fulfillment-order.test.mjs",
     "test:concurrency": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node -r ts-node/register -r tsconfig-paths/register --test --test-concurrency=1 tests/integration/code-purchase-concurrency.test.ts tests/integration/activation-settlement.test.ts tests/integration/diem-request-snapshot.test.ts tests/integration/post-delivery.test.ts tests/integration/wallet-recharge.test.ts",

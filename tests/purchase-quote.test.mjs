@@ -7,7 +7,7 @@ import { computeCost } from "../src/lib/pricing/resolve-cost.ts";
 const base = {
     companyId: "company-a",
     walletCurrency: "COP",
-    companyRateCopPerUsd: null,
+    usdWholesaleRateCopPerUsd: null,
     fallbackRateCopPerUsd: 3600,
 };
 
@@ -38,30 +38,59 @@ test("el costo de la compañía tiene prioridad sobre el global", () => {
     assert.equal(cost.source, "company");
 });
 
-test("la tarifa negociada aplica solo a denominaciones USD en wallet COP", () => {
+test("la TRM del día cobra las denominaciones USD de región USA en wallet COP", () => {
     const usd = computeCost({
         ...base,
-        companyRateCopPerUsd: 3370,
-        denomination: { amount: 10, currency: "USD" },
+        usdWholesaleRateCopPerUsd: 3170,
+        denomination: { amount: 10, currency: "USD", countryRegion: "united_states" },
         costs: [{ companyId: null, cost: 36000, currency: "COP" }],
     });
     assert.deepEqual(usd, {
-        amount: 33700,
+        amount: 31700,
         currency: "COP",
-        source: "company_rate",
+        source: "trm",
         sourceAmount: 10,
         sourceCurrency: "USD",
-        exchangeRate: 3370,
+        exchangeRate: 3170,
     });
+});
+
+test("la TRM no aplica a productos USD de otra región ni a productos COP", () => {
+    const colombia = computeCost({
+        ...base,
+        usdWholesaleRateCopPerUsd: 3170,
+        denomination: { amount: 10, currency: "USD", countryRegion: "colombia" },
+        costs: [{ companyId: null, cost: 40000, currency: "COP" }],
+    });
+    assert.equal(colombia.amount, 40000);
+    assert.equal(colombia.source, "global");
 
     const cop = computeCost({
         ...base,
-        companyRateCopPerUsd: 3370,
-        denomination: { amount: 20000, currency: "COP" },
+        usdWholesaleRateCopPerUsd: 3170,
+        denomination: { amount: 20000, currency: "COP", countryRegion: "united_states" },
         costs: [{ companyId: null, cost: 20000, currency: "COP" }],
     });
     assert.equal(cop.amount, 20000);
     assert.equal(cop.source, "global");
+});
+
+test("sin región sincronizada o sin TRM, la denominación USA conserva su costo configurado", () => {
+    const sinRegion = computeCost({
+        ...base,
+        usdWholesaleRateCopPerUsd: 3170,
+        denomination: { amount: 10, currency: "USD", countryRegion: null },
+        costs: [{ companyId: null, cost: 36000, currency: "COP" }],
+    });
+    assert.equal(sinRegion.amount, 36000);
+
+    const sinTrm = computeCost({
+        ...base,
+        denomination: { amount: 10, currency: "USD", countryRegion: "united_states" },
+        costs: [{ companyId: null, cost: 36000, currency: "COP" }],
+    });
+    assert.equal(sinTrm.amount, 36000);
+    assert.equal(sinTrm.source, "global");
 });
 
 test("un costo USD se convierte con FX_USD_COP a una wallet COP", () => {

@@ -57,12 +57,14 @@ export function ConfirmActivationModal({
     };
 
     const handleClose = () => {
+        // Durante el POST no se cierra: perdería la tarjeta en curso sin saber el resultado.
+        if (loading) return;
         setConfirmText('');
         onClose();
     };
 
     return (
-        <Dialog open={open} onOpenChange={handleClose}>
+        <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-amber-600">
@@ -154,6 +156,12 @@ export function ConfirmActivationModal({
                         className="font-mono uppercase"
                         disabled={loading}
                         autoComplete="off"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter') void handleConfirm();
+                        }}
                     />
                 </div>
 

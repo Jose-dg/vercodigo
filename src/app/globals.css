@@ -197,14 +197,6 @@ header {
   scroll-snap-align: start;
 }
 
-/* 🔹 Reducir animaciones en iPhone si el usuario lo prefiere */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
-
 /* 🔹 Ajustes en espaciado de texto para Retina Display */
 .text-sm {
   line-height: 1.25;
@@ -216,54 +208,93 @@ header {
   background-color: rgba(30, 30, 30, 0.9);
 }
 
-/* 🔹 Animaciones para el popup */
-@keyframes fade-in {
-  from {
-    opacity: 0;
+/* 🔹 Feedback de toque: sin el flash gris de iOS; el estado :active lo reemplaza */
+button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 🔹 Press feedback para todos los botones sin modificar components/ui.
+   - `a[data-slot="button"]` cubre `<Button asChild><Link/></Button>` (shadcn marca el slot).
+   - Usa la propiedad `scale` (no `transform`) para componer con los translate
+     de botones posicionados.
+   - Excluye controles donde encoger se siente raro: sidebar, switches, tabs,
+     items de colección Radix y triggers de select.
+   - Opt-in en otros links con `data-pressable`; opt-out con `data-no-press`. */
+@media (prefers-reduced-motion: no-preference) {
+  :is(button, [role="button"], a[data-slot="button"]).transition-colors {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, scale;
   }
-  to {
-    opacity: 1;
+
+  :is(button, [role="button"], a[data-pressable], a[data-slot="button"]):not(
+      :disabled,
+      [aria-disabled="true"],
+      [data-sidebar],
+      [data-no-press],
+      [data-radix-collection-item],
+      [role="switch"],
+      [role="checkbox"],
+      [role="radio"],
+      [role="tab"],
+      [role="combobox"],
+      [role="option"]
+    ):active {
+    scale: 0.97;
+  }
+
+  /* En botones de ancho completo el mismo factor desplaza demasiado el texto. */
+  :is(button, [role="button"], a[data-slot="button"]).w-full:not(
+      :disabled,
+      [aria-disabled="true"],
+      [data-sidebar],
+      [data-no-press],
+      [data-radix-collection-item],
+      [role="switch"],
+      [role="checkbox"],
+      [role="radio"],
+      [role="tab"],
+      [role="combobox"],
+      [role="option"]
+    ):active {
+    scale: 0.99;
   }
 }
 
-@keyframes slide-in-from-bottom-4 {
-  from {
-    transform: translateY(1rem);
-    opacity: 0;
+/* 🔹 Filas y opciones clicables: confirmar el toque, también en touch donde no hay hover. */
+tr.cursor-pointer:active,
+[role="option"]:not([aria-disabled="true"]):active {
+  background-color: hsl(var(--muted));
+}
+
+/* 🔹 Movimiento reducido: se quita el desplazamiento, no el feedback.
+   Los indicadores de carga (spinner, pulse) siguen animando. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
-  to {
-    transform: translateY(0);
-    opacity: 1;
+
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
-}
 
-@keyframes slide-in-from-bottom-0 {
-  from {
-    transform: translateY(0);
-    opacity: 0;
+  .animate-pulse {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
   }
-  to {
-    transform: translateY(0);
-    opacity: 1;
+
+  :is(button, [role="button"], a[data-pressable], a[data-slot="button"]):not(
+      :disabled,
+      [aria-disabled="true"],
+      [data-no-press]
+    ):active {
+    opacity: 0.8;
   }
-}
-
-.animate-in {
-  animation-fill-mode: both;
-  animation-duration: 150ms;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.fade-in-0 {
-  animation-name: fade-in;
-}
-
-.slide-in-from-bottom-4 {
-  animation-name: slide-in-from-bottom-4;
-}
-
-.slide-in-from-bottom-0 {
-  animation-name: slide-in-from-bottom-0;
 }
 
 /* Code purchase order: light sweep at the edge of the progress fill. */

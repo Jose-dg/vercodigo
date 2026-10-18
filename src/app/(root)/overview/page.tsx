@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, CreditCard, Plus, ShoppingCart } from "lucide-react";
+import { ArrowRight, CreditCard, Plus, RefreshCw, ShoppingCart } from "lucide-react";
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context";
 import { useTopUp } from "@/components/wallet/top-up-provider";
 import { useWalletSummary } from "@/components/wallet/wallet-balance-chip";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { BALANCE_TONE_CLASS, balancePresentation, formatMoney as formatAmount } from "@/lib/wallet/balance";
 import { formatLedgerDateTime } from "@/lib/wallet/effective-time";
@@ -148,6 +149,29 @@ function QuickActionsCard({ canBuy, canActivate }: { canBuy: boolean; canActivat
     );
 }
 
+/** Misma forma que el resumen cargado (acciones + saldo + consumo, KPIs, tablas) para que no salte. */
+function OverviewSkeleton() {
+    return (
+        <div role="status" aria-live="polite" className="space-y-6">
+            <span className="sr-only">Cargando resumen…</span>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Skeleton className="h-44 rounded-xl md:col-span-2" />
+                <Skeleton className="h-44 rounded-xl" />
+                <Skeleton className="h-44 rounded-xl" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+                {Array.from({ length: 3 }, (_, index) => (
+                    <Skeleton key={index} className="h-32 rounded-xl" />
+                ))}
+            </div>
+            <div className="grid gap-6 lg:grid-cols-3">
+                <Skeleton className="h-72 rounded-xl" />
+                <Skeleton className="h-72 rounded-xl lg:col-span-2" />
+            </div>
+        </div>
+    );
+}
+
 export default function CompanyOverviewPage() {
     const ability = useAbility();
     const currentUser = useCurrentUser();
@@ -157,23 +181,33 @@ export default function CompanyOverviewPage() {
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
     const [companyId, setCompanyId] = useState("");
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const requestSequenceRef = useRef(0);
     const { canTopUp, openTopUp } = useTopUp();
     const { data: walletSummary } = useWalletSummary();
     // Same rule as the top bar: offered only when DevDiem can complete it.
     const topUpReady = !isPlatform && canTopUp && walletSummary?.topUpsAvailable === true;
 
     const fetchOverview = useCallback(async (cId?: string) => {
+        // Plataforma cambiando de compañía rápido: una respuesta vieja no puede mostrar
+        // los datos de otra empresa bajo el nombre de la seleccionada.
+        const requestId = ++requestSequenceRef.current;
         setLoading(true);
+        setError(null);
         try {
-            const qs = cId ? `?companyId=${cId}` : "";
-            const res = await fetch(`/api/company/overview${qs}`);
-            const json = await res.json();
+            const qs = cId ? `?companyId=${encodeURIComponent(cId)}` : "";
+            const res = await fetch(`/api/company/overview${qs}`, { cache: "no-store" });
+            const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(json.message || "Error cargando resumen");
+            if (requestId !== requestSequenceRef.current) return;
             setData(json);
-        } catch (e: any) {
-            toast.error(e.message);
+        } catch (e: unknown) {
+            if (requestId !== requestSequenceRef.current) return;
+            const message = e instanceof Error ? e.message : "Error cargando resumen";
+            setError(message);
+            toast.error(message);
         } finally {
-            setLoading(false);
+            if (requestId === requestSequenceRef.current) setLoading(false);
         }
     }, []);
 
@@ -191,7 +225,10 @@ export default function CompanyOverviewPage() {
     }, [ability, isPlatform, fetchOverview]);
 
     useEffect(() => {
-        if (isPlatform && companyId) fetchOverview(companyId);
+        if (!isPlatform || !companyId) return;
+        // Otra compañía: no mostrar la anterior mientras carga.
+        setData(null);
+        void fetchOverview(companyId);
     }, [isPlatform, companyId, fetchOverview]);
 
     if (!ability.can("read", "Company")) {
@@ -225,9 +262,17 @@ export default function CompanyOverviewPage() {
                 <div className="text-center text-muted-foreground py-16">
                     Selecciona una compañía para ver su resumen.
                 </div>
-            ) : loading || !data ? (
-                <div className="py-16 text-center text-muted-foreground" role="status">Cargando…</div>
-            ) : (
+            ) : error && !data ? (
+                <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+                    <p>{error}</p>
+                    <Button variant="outline" size="sm" onClick={() => void fetchOverview(isPlatform ? companyId : undefined)}>
+                        <RefreshCw aria-hidden="true" className="size-4" />
+                        Reintentar
+                    </Button>
+                </div>
+            ) : loading && !data ? (
+                <OverviewSkeleton />
+            ) : !data ? null : (
                 <>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         {!isPlatform && (
@@ -237,8 +282,10 @@ export default function CompanyOverviewPage() {
                             />
                         )}
                         <BalanceCard
-                            balance={data.wallet.balance}
-                            currency={data.wallet.currency}
+                            // Empresa: misma fuente que el chip de la barra superior (se actualiza
+                            // solo y al acreditar recargas), para que ambos saldos coincidan.
+                            balance={!isPlatform && walletSummary ? walletSummary.balance : data.wallet.balance}
+                            currency={!isPlatform && walletSummary ? walletSummary.currency : data.wallet.currency}
                             action={topUpReady ? (
                                 <Button size="sm" className="rounded-full" onClick={() => openTopUp()}>
                                     <Plus aria-hidden="true" className="size-4" />

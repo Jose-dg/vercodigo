@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Package } from 'lucide-react';
@@ -18,16 +18,51 @@ import {
     productStock,
     stockLabel,
 } from '@/lib/codes/catalog-regions';
-import { CheckoutPanel, type OriginPhone, type PriceRow, type WalletBalance } from './CheckoutPanel';
+import { CheckoutPanel, type OriginPhone, type PriceRow, type PricesStatus, type WalletBalance } from './CheckoutPanel';
 
-export type { OriginPhone, PriceRow, WalletBalance } from './CheckoutPanel';
+export type { OriginPhone, PriceRow, PricesStatus, WalletBalance } from './CheckoutPanel';
 
 export type WizardStep = 'region' | 'brand' | 'product' | 'order';
+
+/**
+ * Cada paso es una entrada del historial del navegador: el gesto o botón "atrás" del
+ * celular vuelve un paso en vez de sacar al usuario de la compra. `depth` cuenta las
+ * entradas propias para que "Atrás" dentro de la página nunca salga del wizard.
+ */
+interface WizardSnapshot {
+    step: WizardStep;
+    region: BuyRegion | null;
+    brand: string | null;
+    productId: string;
+    depth: number;
+}
+
+const INITIAL_SNAPSHOT: WizardSnapshot = { step: 'region', region: null, brand: null, productId: '', depth: 0 };
+const HISTORY_KEY = 'purchaseWizard';
+
+/** Una entrada del historial puede apuntar a un producto que ya no está en el catálogo. */
+function validSnapshot(candidate: unknown, products: CatalogProduct[]): WizardSnapshot {
+    const snapshot = candidate as WizardSnapshot | undefined;
+    if (!snapshot || typeof snapshot !== 'object' || !snapshot.region) return INITIAL_SNAPSHOT;
+    const snapshotRegion = snapshot.region;
+    if (!products.some((product) => productRegions(product).includes(snapshotRegion))) {
+        return INITIAL_SNAPSHOT;
+    }
+    if (snapshot.brand && filterProductsByRegionAndBrand(products, snapshotRegion, snapshot.brand).length === 0) {
+        return { ...INITIAL_SNAPSHOT, step: 'brand', region: snapshotRegion, depth: snapshot.depth };
+    }
+    if (snapshot.step === 'order' && !products.some((product) => product.id === snapshot.productId)) {
+        return { ...snapshot, step: 'product', productId: '' };
+    }
+    return snapshot;
+}
 
 export interface PurchaseWizardProps {
     products: CatalogProduct[];
     productsError: string | null;
     prices: PriceRow[];
+    pricesStatus: PricesStatus;
+    onRetryPrices: () => void;
     balance: WalletBalance | null;
     isPlatform: boolean;
     companies: { companyId: string; companyName: string }[];
@@ -134,6 +169,8 @@ export function PurchaseWizard({
     products,
     productsError,
     prices,
+    pricesStatus,
+    onRetryPrices,
     balance,
     isPlatform,
     companies,
@@ -148,10 +185,27 @@ export function PurchaseWizard({
     isPurchasing,
     onPurchase,
 }: PurchaseWizardProps) {
-    const [step, setStep] = useState<WizardStep>('region');
-    const [region, setRegion] = useState<BuyRegion | null>(null);
-    const [brand, setBrand] = useState<string | null>(null);
-    const [productId, setProductId] = useState('');
+    // El wizard solo se monta en el cliente, con el catálogo ya cargado: se puede leer el
+    // historial al inicializar (recarga o regreso desde el detalle de una orden).
+    const [wizard, setWizard] = useState<WizardSnapshot>(() =>
+        validSnapshot(window.history.state?.[HISTORY_KEY], products),
+    );
+    const { step, region, brand, productId } = wizard;
+
+    useEffect(() => {
+        const onPopState = (event: PopStateEvent) => {
+            setWizard(validSnapshot(event.state?.[HISTORY_KEY], products));
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, [products]);
+
+    function advance(next: Omit<WizardSnapshot, 'depth'>) {
+        const snapshot = { ...next, depth: wizard.depth + 1 };
+        // Sin __NA propio: Next copia su estado interno y resuelve el "atrás" sin recargar.
+        window.history.pushState({ [HISTORY_KEY]: snapshot }, '');
+        setWizard(snapshot);
+    }
 
     const availableRegions = useMemo(() => {
         const present = new Set(products.flatMap(productRegions));
@@ -171,37 +225,35 @@ export function PurchaseWizard({
     const selectedProduct = regionProducts.find((p) => p.id === productId);
 
     function goBack() {
+        if (wizard.depth > 0) {
+            window.history.back();
+            return;
+        }
+        // Paso restaurado sin entradas propias detrás: retroceder sin salir de la página.
         if (step === 'order') {
-            setStep(regionProducts.length > 1 ? 'product' : 'brand');
+            setWizard({ ...wizard, step: regionProducts.length > 1 ? 'product' : 'brand', productId: '' });
         } else if (step === 'product') {
-            setStep('brand');
+            setWizard({ ...wizard, step: 'brand', productId: '' });
         } else if (step === 'brand') {
-            setStep('region');
+            setWizard(INITIAL_SNAPSHOT);
         }
     }
 
     function selectRegion(next: BuyRegion) {
-        setRegion(next);
-        setBrand(null);
-        setProductId('');
-        setStep('brand');
+        advance({ step: 'brand', region: next, brand: null, productId: '' });
     }
 
     function selectBrand(next: string) {
-        setBrand(next);
         const options = region ? filterProductsByRegionAndBrand(products, region, next) : [];
         if (options.length === 1) {
-            setProductId(options[0].id);
-            setStep('order');
+            advance({ step: 'order', region, brand: next, productId: options[0].id });
             return;
         }
-        setProductId('');
-        setStep('product');
+        advance({ step: 'product', region, brand: next, productId: '' });
     }
 
     function selectProduct(nextId: string) {
-        setProductId(nextId);
-        setStep('order');
+        advance({ step: 'order', region, brand, productId: nextId });
     }
 
     if (step === 'order' && selectedProduct) {
@@ -236,6 +288,8 @@ export function PurchaseWizard({
                     product={selectedProduct}
                     region={region}
                     prices={prices}
+                    pricesStatus={pricesStatus}
+                    onRetryPrices={onRetryPrices}
                     balance={balance}
                     isPlatform={isPlatform}
                     companies={companies}

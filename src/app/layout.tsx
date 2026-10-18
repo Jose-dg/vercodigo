@@ -30,6 +30,7 @@ export const viewport: Viewport = {
 };
 
 import { Toaster } from "@/components/ui/sonner"
+import { NavigationProgress } from "@/components/navigation-progress";
 import { Providers } from "@/providers/providers";
 
 export default function RootLayout({
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <ThemeColorSync />
+          <NavigationProgress />
           <Providers>{children}</Providers>
           <Toaster />
         </ThemeProvider>

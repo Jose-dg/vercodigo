@@ -20,6 +20,9 @@ interface QRScannerModalProps {
 export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
     const scannerRef = useRef<HTMLDivElement>(null);
     const html5QrCodeRef = useRef<any>(null);
+    // html5-qrcode decodifica a 10 fps y stop() es asíncrono: sin esta marca, el mismo QR
+    // dispara onScan varias veces (validaciones y toasts duplicados).
+    const handledRef = useRef(false);
     const [error, setError] = useState<string | null>(null);
     const [isStarting, setIsStarting] = useState(false);
 
@@ -45,6 +48,7 @@ export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
         }
 
         let mounted = true;
+        handledRef.current = false;
 
         const startScanner = async () => {
             setIsStarting(true);
@@ -76,6 +80,10 @@ export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
                         aspectRatio: 1,
                     },
                     (decodedText: string) => {
+                        if (handledRef.current) return;
+                        handledRef.current = true;
+                        // Confirmación física de la lectura en Android (iOS no expone vibrate).
+                        navigator.vibrate?.(40);
                         onScan(decodedText);
                         stopScanner();
                     },

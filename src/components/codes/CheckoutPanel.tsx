@@ -9,6 +9,7 @@ import {
     Loader2,
     Minus,
     Plus,
+    RefreshCw,
     Search,
     ShieldCheck,
     Wallet,
@@ -16,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
     Select,
     SelectContent,
@@ -47,6 +49,9 @@ export interface PriceRow {
     nominalAmount?: number | null;
 }
 
+/** idle: plataforma sin empresa elegida; loading/error: la cotización aún no se puede mostrar. */
+export type PricesStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 export interface OriginPhone {
     id: string;
     phone: string;
@@ -66,12 +71,22 @@ interface CheckoutRow {
 }
 
 /** Eases the displayed number towards `value` so totals don't jump. */
+function prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 function useAnimatedNumber(value: number, durationMs = 350): number {
     const [display, setDisplay] = useState(value);
     const fromRef = useRef(value);
+    const reduced = prefersReducedMotion();
     useEffect(() => {
         const from = fromRef.current;
         if (from === value) return;
+        // Movimiento reducido: el total se muestra directo (ver el return), sin interpolar.
+        if (prefersReducedMotion()) {
+            fromRef.current = value;
+            return;
+        }
         const start = performance.now();
         let frame = 0;
         const tick = (now: number) => {
@@ -85,7 +100,7 @@ function useAnimatedNumber(value: number, durationMs = 350): number {
         frame = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(frame);
     }, [value, durationMs]);
-    return display;
+    return reduced ? value : display;
 }
 
 function SummaryRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
@@ -104,6 +119,8 @@ export function CheckoutPanel({
     product,
     region,
     prices,
+    pricesStatus,
+    onRetryPrices,
     balance,
     isPlatform,
     companies,
@@ -121,6 +138,8 @@ export function CheckoutPanel({
     product: CatalogProduct;
     region: BuyRegion | null;
     prices: PriceRow[];
+    pricesStatus: PricesStatus;
+    onRetryPrices: () => void;
     balance: WalletBalance | null;
     isPlatform: boolean;
     companies: { companyId: string; companyName: string }[];
@@ -161,6 +180,9 @@ export function CheckoutPanel({
     const [selectedId, setSelectedId] = useState<string | null>(rows[0]?.id ?? null);
     const [query, setQuery] = useState('');
     const [quantity, setQuantity] = useState(1);
+    // Texto del input mientras se escribe: borrar para teclear otra cantidad no debe saltar a 1.
+    const [quantityDraft, setQuantityDraft] = useState<string | null>(null);
+    const pricesLoading = pricesStatus === 'loading';
 
     const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
     const filtered = query.trim()
@@ -198,11 +220,13 @@ export function CheckoutPanel({
 
     function setClampedQuantity(next: number) {
         setQuantity(Math.min(maxQuantity, Math.max(1, next)));
+        setQuantityDraft(null);
     }
 
     function selectRow(id: string | null) {
         setSelectedId(id);
         setQuantity(1);
+        setQuantityDraft(null);
     }
 
     return (
@@ -262,7 +286,9 @@ export function CheckoutPanel({
                                     >
                                         {row.price?.salePrice != null
                                             ? formatMoney(row.price.salePrice, row.price.currency ?? priceCurrency)
-                                            : '—'}
+                                            : pricesLoading
+                                                ? <Skeleton className="h-4 w-16" aria-label="Cargando precio" />
+                                                : '—'}
                                     </span>
                                 </button>
                             </li>
@@ -364,10 +390,19 @@ export function CheckoutPanel({
                             inputMode="numeric"
                             min={1}
                             max={maxQuantity}
-                            value={quantity}
+                            value={quantityDraft ?? quantity}
                             onChange={(event) => {
-                                const next = parseInt(event.target.value, 10);
-                                setClampedQuantity(Number.isNaN(next) ? 1 : next);
+                                const raw = event.target.value;
+                                const next = parseInt(raw, 10);
+                                if (raw === '' || Number.isNaN(next)) {
+                                    setQuantityDraft(raw);
+                                    return;
+                                }
+                                setQuantityDraft(null);
+                                setQuantity(Math.min(maxQuantity, Math.max(1, next)));
+                            }}
+                            onBlur={() => {
+                                if (quantityDraft !== null) setClampedQuantity(quantity);
                             }}
                             className="w-full min-w-0 bg-transparent text-center font-mono text-xl font-semibold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                             aria-label="Cantidad"
@@ -412,7 +447,13 @@ export function CheckoutPanel({
                     <SummaryRow
                         icon={<Gift className="size-4" />}
                         label="Por unidad"
-                        value={<span className="font-mono">{unitPrice != null ? formatMoney(unitPrice, priceCurrency) : 'Sin precio'}</span>}
+                        value={
+                            unitPrice != null
+                                ? <span className="font-mono">{formatMoney(unitPrice, priceCurrency)}</span>
+                                : pricesLoading
+                                    ? <Skeleton className="ml-auto h-4 w-20" aria-label="Cargando precio" />
+                                    : <span className="font-mono">Sin precio</span>
+                        }
                     />
                     {balance && (
                         <SummaryRow
@@ -423,11 +464,23 @@ export function CheckoutPanel({
                     )}
                 </div>
 
-                {selected && unitPrice == null && (
+                {selected && unitPrice == null && pricesStatus === 'ready' && (
                     <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
                         <AlertCircle className="mt-0.5 size-4 shrink-0" />
                         Este producto no tiene costo configurado para la empresa. Pide a plataforma que lo configure en Costos.
                     </p>
+                )}
+                {pricesStatus === 'error' && (
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                        <span className="flex items-start gap-2">
+                            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                            No pudimos cargar los precios.
+                        </span>
+                        <Button type="button" variant="outline" size="sm" onClick={onRetryPrices}>
+                            <RefreshCw className="size-4" aria-hidden="true" />
+                            Reintentar
+                        </Button>
+                    </div>
                 )}
                 {insufficientBalance && (
                     <p className="mt-3 flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
@@ -440,7 +493,11 @@ export function CheckoutPanel({
                     <div className="flex items-end justify-between border-t border-dashed pt-5">
                         <span className="text-sm text-muted-foreground">A pagar</span>
                         <span className="font-mono text-3xl font-semibold tabular-nums text-primary sm:text-4xl">
-                            {total != null ? formatMoney(animatedTotal, priceCurrency) : '—'}
+                            {total != null
+                                ? formatMoney(animatedTotal, priceCurrency)
+                                : pricesLoading
+                                    ? <Skeleton className="h-9 w-36 sm:h-10" aria-label="Calculando total" />
+                                    : '—'}
                         </span>
                     </div>
                     <Button
@@ -461,11 +518,15 @@ export function CheckoutPanel({
                         {isPurchasing ? (
                             <>
                                 <Loader2 className="mr-2 size-5 animate-spin" />
-                                Procesando...
+                                Procesando…
                             </>
                         ) : (
                             <>
-                                {outOfStock ? 'Pedir (queda en espera de stock)' : 'Realizar la orden'}
+                                {pricesLoading
+                                    ? 'Cargando precio…'
+                                    : outOfStock
+                                        ? 'Pedir (queda en espera de stock)'
+                                        : 'Realizar la orden'}
                                 <ArrowRight className="ml-2 size-5" />
                             </>
                         )}

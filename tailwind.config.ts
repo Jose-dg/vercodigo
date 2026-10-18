@@ -1,6 +1,10 @@
 import type { Config } from "tailwindcss"
 
 const config: Config = {
+  // En touch los hover:* se quedaban pegados tras tocar; solo aplican con puntero real.
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   darkMode: ["selector", ':is([data-theme="dark"], [data-theme="dark-blue"])'],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -86,27 +90,10 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        "fade-in": {
-          from: { opacity: "0" },
-          to: { opacity: "1" },
-        },
-        "slide-in-from-bottom-4": {
-          from: { transform: "translateY(1rem)", opacity: "0" },
-          to: { transform: "translateY(0)", opacity: "1" },
-        },
-        "slide-in-from-bottom-0": {
-          from: { transform: "translateY(0)", opacity: "0" },
-          to: { transform: "translateY(0)", opacity: "1" },
-        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 150ms cubic-bezier(0.4, 0, 0.2, 1)",
-        "slide-in-from-bottom-4":
-          "slide-in-from-bottom-4 150ms cubic-bezier(0.4, 0, 0.2, 1)",
-        "slide-in-from-bottom-0":
-          "slide-in-from-bottom-0 150ms cubic-bezier(0.4, 0, 0.2, 1)",
       },
     },
   },

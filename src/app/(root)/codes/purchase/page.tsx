@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { isPlatformRole } from '@/lib/auth/abilities';
-import { Loader2, ShoppingCart } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PurchaseHistoryPanel } from '@/components/codes/PurchaseHistoryPanel';
-import { PurchaseWizard, type PriceRow, type WalletBalance } from '@/components/codes/PurchaseWizard';
+import { PurchaseWizard, type PriceRow, type PricesStatus, type WalletBalance } from '@/components/codes/PurchaseWizard';
+import { PurchaseWizardSkeleton } from '@/components/codes/PurchaseWizardSkeleton';
+import { startNavigationProgress } from '@/components/navigation-progress';
 import type { CatalogProduct } from '@/lib/codes/catalog-regions';
 import type { UserRole } from '@prisma/client';
 
@@ -23,6 +25,9 @@ export default function PurchaseCodesPage() {
 
     const [isPurchasing, setIsPurchasing] = useState(false);
     const [prices, setPrices] = useState<PriceRow[]>([]);
+    // Sin esto, mientras llegan las cotizaciones el checkout decía "sin costo configurado".
+    const [pricesStatus, setPricesStatus] = useState<PricesStatus>('loading');
+    const [pricesReloadToken, setPricesReloadToken] = useState(0);
 
     const [activeTab, setActiveTab] = useState('order');
     const [historyTick, setHistoryTick] = useState(0);
@@ -161,16 +166,34 @@ export default function PurchaseCodesPage() {
         if (sessionStatus !== 'authenticated') return;
         if (isPlatform && !targetCompanyId) {
             setPrices([]);
+            setPricesStatus('idle');
             return;
         }
+        // Al cambiar de empresa rápido, solo la última cotización puede escribir.
+        let cancelled = false;
+        setPricesStatus('loading');
         const query = isPlatform
             ? `?companyId=${encodeURIComponent(targetCompanyId)}`
             : '';
         fetch(`/api/codes/quotes${query}`, { credentials: 'include', cache: 'no-store' })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => setPrices(Array.isArray(data?.rows) ? data.rows : []))
-            .catch(() => setPrices([]));
-    }, [sessionStatus, isPlatform, targetCompanyId]);
+            .then((res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then((data) => {
+                if (cancelled) return;
+                setPrices(Array.isArray(data?.rows) ? data.rows : []);
+                setPricesStatus('ready');
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setPrices([]);
+                setPricesStatus('error');
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [sessionStatus, isPlatform, targetCompanyId, pricesReloadToken]);
 
     useEffect(() => {
         if (!isPlatform) return;
@@ -254,6 +277,9 @@ export default function PurchaseCodesPage() {
         }
 
         setIsPurchasing(true);
+        // Tras una compra exitosa se navega al detalle: el botón sigue bloqueado hasta salir
+        // de la página, o un segundo toque crearía otra compra con una idempotency key nueva.
+        let leavingPage = false;
         if (!purchaseInFlightKey.current) {
             purchaseInFlightKey.current = crypto.randomUUID();
         }
@@ -311,24 +337,20 @@ export default function PurchaseCodesPage() {
                 toast.error('La solicitud necesita revisión.');
             }
             if (data.purchase?.id) {
+                leavingPage = true;
+                startNavigationProgress();
                 router.push(`/codes/purchases/${data.purchase.id}`);
             }
         } catch (error) {
             console.error('Purchase error:', error);
             toast.error('Error de conexión');
         } finally {
-            setIsPurchasing(false);
-            purchaseInFlightKey.current = null;
+            if (!leavingPage) {
+                setIsPurchasing(false);
+                purchaseInFlightKey.current = null;
+            }
         }
     };
-
-    if (loadingProducts) {
-        return (
-            <div className="flex h-[50vh] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-        );
-    }
 
     return (
         <main className="min-h-full bg-muted/20">
@@ -351,28 +373,35 @@ export default function PurchaseCodesPage() {
                         <TabsTrigger value="history" className="text-sm">Mis solicitudes</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="order" className="space-y-6">
-                        <PurchaseWizard
-                            products={products}
-                            productsError={productsError}
-                            prices={prices}
-                            balance={balance}
-                            isPlatform={isPlatform}
-                            companies={companies}
-                            storesForSelectedCompany={storesForSelectedCompany}
-                            targetCompanyId={targetCompanyId}
-                            targetStoreId={targetStoreId}
-                            onTargetCompanyChange={setTargetCompanyId}
-                            onTargetStoreChange={setTargetStoreId}
-                            targetOriginPhoneId={targetOriginPhoneId}
-                            originPhones={originPhones}
-                            onTargetOriginPhoneChange={setTargetOriginPhoneId}
-                            isPurchasing={isPurchasing}
-                            onPurchase={handlePurchase}
-                        />
+                    {/* forceMount: cambiar de pestaña no reinicia el wizard ni recarga el historial. */}
+                    <TabsContent value="order" forceMount className="space-y-6 data-[state=inactive]:hidden">
+                        {loadingProducts ? (
+                            <PurchaseWizardSkeleton />
+                        ) : (
+                            <PurchaseWizard
+                                products={products}
+                                productsError={productsError}
+                                prices={prices}
+                                pricesStatus={pricesStatus}
+                                onRetryPrices={() => setPricesReloadToken((token) => token + 1)}
+                                balance={balance}
+                                isPlatform={isPlatform}
+                                companies={companies}
+                                storesForSelectedCompany={storesForSelectedCompany}
+                                targetCompanyId={targetCompanyId}
+                                targetStoreId={targetStoreId}
+                                onTargetCompanyChange={setTargetCompanyId}
+                                onTargetStoreChange={setTargetStoreId}
+                                targetOriginPhoneId={targetOriginPhoneId}
+                                originPhones={originPhones}
+                                onTargetOriginPhoneChange={setTargetOriginPhoneId}
+                                isPurchasing={isPurchasing}
+                                onPurchase={handlePurchase}
+                            />
+                        )}
                     </TabsContent>
 
-                    <TabsContent value="history">
+                    <TabsContent value="history" forceMount className="data-[state=inactive]:hidden">
                         <PurchaseHistoryPanel refreshToken={historyTick} />
                     </TabsContent>
                 </Tabs>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,13 +67,20 @@ function formatMoney(amount: number, currency: string) {
  * the company, GET /api/wallets/:companyId/transactions for the platform).
  */
 export function useWalletMovements(endpoint: string | null) {
-    const [data, setData] = useState<WalletMovementsPage | null>(null);
+    // Los datos quedan asociados al endpoint que los trajo: al cambiar de empresa nunca
+    // se muestran movimientos de la anterior mientras carga la nueva.
+    const [loaded, setLoaded] = useState<{ endpoint: string; page: WalletMovementsPage } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [page, setPage] = useState(1);
     const [type, setType] = useState<WalletMovementType | typeof ALL_TYPES>(ALL_TYPES);
+    const requestSequenceRef = useRef(0);
+    const data = loaded && loaded.endpoint === endpoint ? loaded.page : null;
 
     const load = useCallback(async () => {
         if (!endpoint) return;
+        // Paginación o filtro rápidos: solo la última respuesta escribe el estado.
+        const requestId = ++requestSequenceRef.current;
         setLoading(true);
         try {
             const params = new URLSearchParams({ page: String(page) });
@@ -81,11 +88,15 @@ export function useWalletMovements(endpoint: string | null) {
             const response = await fetch(`${endpoint}?${params}`, { cache: "no-store" });
             if (!response.ok) throw new Error();
             const json = await response.json();
-            setData(json.transactions ? json : null);
+            if (requestId !== requestSequenceRef.current) return;
+            setLoaded(json.transactions ? { endpoint, page: json } : null);
+            setError(false);
         } catch {
+            if (requestId !== requestSequenceRef.current) return;
+            setError(true);
             toast.error("Error cargando los movimientos");
         } finally {
-            setLoading(false);
+            if (requestId === requestSequenceRef.current) setLoading(false);
         }
     }, [endpoint, page, type]);
 
@@ -98,7 +109,7 @@ export function useWalletMovements(endpoint: string | null) {
         setPage(1);
     }, []);
 
-    return { data, loading, page, setPage, type, setType: changeType, reload: load };
+    return { data, loading, error, page, setPage, type, setType: changeType, reload: load };
 }
 
 export function WalletMovementsTable({
@@ -109,7 +120,7 @@ export function WalletMovementsTable({
     /** Platform only: opens the payment-time correction of a manual top-up. */
     onCorrectPaidAt?: (movement: WalletMovement) => void;
 }) {
-    const { data, loading, page, setPage, type, setType } = movements;
+    const { data, loading, error, page, setPage, type, setType, reload } = movements;
     const totalPages = data ? Math.max(1, Math.ceil(data.pagination.total / data.pagination.pageSize)) : 1;
 
     return (
@@ -139,14 +150,34 @@ export function WalletMovementsTable({
                             <TableHead className="text-right">Balance</TableHead>
                         </TableRow>
                     </TableHeader>
-                    <TableBody>
-                        {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center" role="status">Cargando…</TableCell>
-                            </TableRow>
+                    {/* Tras la primera carga, cambiar de página o filtro atenúa las filas en vez de
+                        colapsar la tabla: la paginación no se mueve bajo el dedo. */}
+                    <TableBody
+                        aria-busy={loading}
+                        className={`transition-opacity duration-200 ${loading && data ? "opacity-60" : ""}`}
+                    >
+                        {loading && !data ? (
+                            Array.from({ length: 5 }, (_, index) => (
+                                <TableRow key={index} aria-hidden="true">
+                                    <TableCell colSpan={5}>
+                                        <div className="h-5 w-full animate-pulse rounded bg-accent" />
+                                    </TableCell>
+                                </TableRow>
+                            ))
                         ) : !data || data.transactions.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center">Sin movimientos.</TableCell>
+                                <TableCell colSpan={5} className="h-24 text-center">
+                                    {error && !data ? (
+                                        <span className="inline-flex items-center gap-3 text-muted-foreground">
+                                            No se pudieron cargar los movimientos.
+                                            <Button variant="outline" size="sm" onClick={() => void reload()}>
+                                                Reintentar
+                                            </Button>
+                                        </span>
+                                    ) : (
+                                        "Sin movimientos."
+                                    )}
+                                </TableCell>
                             </TableRow>
                         ) : (
                             data.transactions.map((tx) => {
@@ -179,10 +210,10 @@ export function WalletMovementsTable({
                                             <span
                                                 className={`rounded px-2 py-1 text-xs ${
                                                     tx.status === "PENDING"
-                                                        ? "bg-yellow-100 text-yellow-800"
+                                                        ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300"
                                                         : isDebit
-                                                          ? "bg-red-100 text-red-800"
-                                                          : "bg-green-100 text-green-800"
+                                                          ? "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300"
+                                                          : "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300"
                                                 }`}
                                             >
                                                 {TYPE_LABELS[tx.type]}
@@ -195,7 +226,7 @@ export function WalletMovementsTable({
                                                 <div className="mt-0.5 text-xs text-muted-foreground">{tx.originDescription}</div>
                                             ) : null}
                                         </TableCell>
-                                        <TableCell className={`text-right tabular-nums ${isDebit ? "text-red-700" : "text-emerald-700"}`}>
+                                        <TableCell className={`text-right tabular-nums ${isDebit ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                                             {tx.type === "OPENING_BALANCE"
                                                 ? formatMoney(tx.amount, data.wallet.currency)
                                                 : tx.status === "PENDING" && tx.originalAmount != null
@@ -204,7 +235,7 @@ export function WalletMovementsTable({
                                         </TableCell>
                                         <TableCell
                                             className={`whitespace-nowrap text-right text-sm tabular-nums ${
-                                                tx.balanceAfter != null && tx.balanceAfter < 0 ? "font-medium text-red-700" : "text-emerald-700"
+                                                tx.balanceAfter != null && tx.balanceAfter < 0 ? "font-medium text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"
                                             }`}
                                         >
                                             {tx.balanceAfter != null ? formatWalletRunningBalance(tx.balanceAfter, data.wallet.currency) : "—"}

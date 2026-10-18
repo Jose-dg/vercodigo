@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { AlertCircle, Check, ChevronRight, Copy, Eye, Loader2, QrCode, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface PurchaseHistoryItem {
     kind?: "purchase" | "activation";
@@ -97,6 +98,49 @@ function formatWhen(value: string | null | undefined) {
     }).format(new Date(value));
 }
 
+/**
+ * El operador copia los códigos para enviárselos al cliente: solo se confirma si el
+ * portapapeles los aceptó (iOS o permisos denegados hacen fallar writeText).
+ */
+async function copyCodesToClipboard(purchase: PurchaseHistoryItem): Promise<boolean> {
+    const text = purchase.keys.map((row) => row.code).join("\n");
+    try {
+        await navigator.clipboard.writeText(text);
+        toast.success(purchase.keys.length === 1 ? "Código copiado" : `${purchase.keys.length} códigos copiados`);
+        return true;
+    } catch {
+        toast.error("No se pudo copiar. Abre «Ver» y selecciona los códigos manualmente.");
+        return false;
+    }
+}
+
+/** Botón de copiar con confirmación visible en el propio botón durante 1,5 s. */
+function CopyCodesButton({ purchase, label = "Copiar", className }: { purchase: PurchaseHistoryItem; label?: string; className?: string }) {
+    const [copied, setCopied] = useState(false);
+    useEffect(() => {
+        if (!copied) return;
+        const timer = window.setTimeout(() => setCopied(false), 1500);
+        return () => window.clearTimeout(timer);
+    }, [copied]);
+
+    return (
+        <Button
+            variant="outline"
+            size="sm"
+            className={className}
+            disabled={!purchase.keys.length}
+            onClick={async () => setCopied(await copyCodesToClipboard(purchase))}
+        >
+            {copied ? (
+                <Check className="mr-2 h-3 w-3 text-emerald-600" aria-hidden="true" />
+            ) : (
+                <Copy className="mr-2 h-3 w-3" aria-hidden="true" />
+            )}
+            {copied ? "Copiado" : label}
+        </Button>
+    );
+}
+
 function ViewCodesDialog({
     purchase,
     open,
@@ -107,12 +151,6 @@ function ViewCodesDialog({
     onOpenChange: (open: boolean) => void;
 }) {
     if (!purchase) return null;
-
-    const copyCodes = () => {
-        const text = purchase.keys.map((row) => row.code).join("\n");
-        navigator.clipboard.writeText(text);
-        toast.success("Códigos copiados");
-    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -146,10 +184,7 @@ function ViewCodesDialog({
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cerrar
                     </Button>
-                    <Button onClick={copyCodes} disabled={!purchase.keys.length}>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copiar todos
-                    </Button>
+                    <CopyCodesButton purchase={purchase} label="Copiar todos" className="h-9 px-4" />
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -177,32 +212,30 @@ function PurchaseTable({
         );
     }
 
-    const copyCodes = (purchase: PurchaseHistoryItem) => {
-        const text = purchase.keys.map((row) => row.code).join("\n");
-        navigator.clipboard.writeText(text);
-        toast.success("Códigos copiados");
-    };
-
     return (
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>Fecha</TableHead>
+                    <TableHead className="hidden sm:table-cell">Fecha</TableHead>
                     <TableHead>Producto</TableHead>
                     <TableHead>Cant.</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Solicitó</TableHead>
+                    <TableHead className="hidden md:table-cell">Solicitó</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {rows.map((purchase) => (
                     <TableRow key={purchase.id}>
-                        <TableCell className="whitespace-nowrap text-sm">
+                        <TableCell className="hidden whitespace-nowrap text-sm sm:table-cell">
                             {formatWhen(purchase.occurredAt ?? purchase.completedAt ?? purchase.createdAt)}
                         </TableCell>
                         <TableCell>
                             <div className="font-medium">{purchase.productName ?? "Producto"}</div>
+                            {/* En celular la fecha va bajo el producto (la columna se oculta). */}
+                            <div className="text-xs text-muted-foreground sm:hidden">
+                                {formatWhen(purchase.occurredAt ?? purchase.completedAt ?? purchase.createdAt)}
+                            </div>
                             {purchase.kind === "activation" && (
                                 <Badge variant="outline" className="mt-1 gap-1 font-normal">
                                     <QrCode className="h-3 w-3" />
@@ -230,7 +263,7 @@ function PurchaseTable({
                         <TableCell>
                             <Badge variant={statusVariant(purchase)}>{statusLabel(purchase)}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
                             {purchase.requesterLabel ?? "—"}
                         </TableCell>
                         <TableCell className="text-right">
@@ -285,15 +318,7 @@ function PurchaseTable({
                                             <Eye className="mr-2 h-3 w-3" />
                                             Ver
                                         </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={!purchase.keys.length}
-                                            onClick={() => copyCodes(purchase)}
-                                        >
-                                            <Copy className="mr-2 h-3 w-3" />
-                                            Copiar
-                                        </Button>
+                                        <CopyCodesButton purchase={purchase} />
                                           </>
                                         ) : null}
                                     </div>
@@ -314,24 +339,43 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
     const [failed, setFailed] = useState<PurchaseHistoryItem[]>([]);
     const [viewingPurchase, setViewingPurchase] = useState<PurchaseHistoryItem | null>(null);
     const [retryingId, setRetryingId] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const requestSequenceRef = useRef(0);
+    const hasLoadedRef = useRef(false);
+    const [hasLoaded, setHasLoaded] = useState(false);
 
-    const loadHistory = useCallback(async (refresh = false) => {
-        if (refresh) setRefreshing(true);
-        else setLoading(true);
+    /**
+     * mode "initial": skeleton; "refresh": botón Actualizar; "poll": silencioso.
+     * Un poll fallido no muestra toast (con mala señal serían toasts cada 5 s) y
+     * solo la respuesta más reciente escribe el estado.
+     */
+    const loadHistory = useCallback(async (mode: "initial" | "refresh" | "poll" = "initial") => {
+        const requestId = ++requestSequenceRef.current;
+        if (mode === "refresh") setRefreshing(true);
+        if (mode === "initial") setLoading(true);
         try {
             const response = await fetch("/api/codes/purchases", { cache: "no-store" });
-            const data = await response.json();
+            const data = await response.json().catch(() => ({}));
             if (!response.ok) {
                 throw new Error(data.message || "No se pudo cargar el historial");
             }
+            if (requestId !== requestSequenceRef.current) return;
             setPending(data.pending ?? []);
             setCompleted(data.completed ?? []);
             setFailed(data.failed ?? []);
+            setLoadError(null);
+            hasLoadedRef.current = true;
+            setHasLoaded(true);
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Error cargando historial");
+            if (requestId !== requestSequenceRef.current) return;
+            const message = error instanceof Error ? error.message : "Error cargando historial";
+            setLoadError(message);
+            if (mode !== "poll") toast.error(message);
         } finally {
-            setLoading(false);
-            setRefreshing(false);
+            if (requestId === requestSequenceRef.current) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
     }, []);
 
@@ -354,7 +398,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                     ? "Entrega completada"
                     : "Estado actualizado desde Diem",
             );
-            await loadHistory(true);
+            await loadHistory("refresh");
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "No se pudo consultar Diem");
         } finally {
@@ -363,19 +407,39 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
     }, [loadHistory]);
 
     useEffect(() => {
-        loadHistory();
+        // Tras la primera carga, un refreshToken nuevo actualiza sin volver al skeleton.
+        void loadHistory(hasLoadedRef.current ? "poll" : "initial");
     }, [loadHistory, refreshToken]);
 
     useEffect(() => {
         if (!pending.length) return;
-        const timer = window.setInterval(() => loadHistory(true), 5000);
-        return () => window.clearInterval(timer);
+        // Sin pestaña visible no se consulta; al volver se actualiza de inmediato.
+        const timer = window.setInterval(() => {
+            if (document.visibilityState === "visible") void loadHistory("poll");
+        }, 5000);
+        const onVisibilityChange = () => {
+            if (document.visibilityState === "visible") void loadHistory("poll");
+        };
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () => {
+            window.clearInterval(timer);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+        };
     }, [pending.length, loadHistory]);
 
     if (loading) {
         return (
-            <div className="flex justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            <div role="status" aria-live="polite" className="space-y-6">
+                <span className="sr-only">Cargando solicitudes…</span>
+                <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-2">
+                        <Skeleton className="h-6 w-40" />
+                        <Skeleton className="h-4 w-80 max-w-full" />
+                    </div>
+                    <Skeleton className="h-8 w-28" />
+                </div>
+                <Skeleton className="h-40 rounded-xl" />
+                <Skeleton className="h-56 rounded-xl" />
             </div>
         );
     }
@@ -399,7 +463,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => loadHistory(true)}
+                    onClick={() => loadHistory("refresh")}
                     disabled={refreshing}
                 >
                     {refreshing ? (
@@ -410,6 +474,20 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                     Actualizar
                 </Button>
             </div>
+
+            {loadError && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                    <span className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {hasLoaded
+                            ? "No se pudo actualizar. Mostramos la última información disponible."
+                            : loadError}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => loadHistory("refresh")} disabled={refreshing}>
+                        Reintentar
+                    </Button>
+                </div>
+            )}
 
             <Card>
                 <CardHeader>

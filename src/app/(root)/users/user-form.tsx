@@ -26,6 +26,18 @@ import { useCurrentUser } from "@/components/auth/ability-context";
 import { getAssignableRoles } from "@/lib/auth/abilities";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
+import { Check, Copy, Eye, EyeOff, Wand2 } from "lucide-react";
+import { generateReadablePassword, PASSWORD_MIN_LENGTH } from "@/modules/identity/domain";
+
+/** Entero uniforme en [0, max) con Web Crypto (sin sesgo de módulo). */
+function webRandomInt(max: number): number {
+    const limit = Math.floor(0x100000000 / max) * max;
+    const buffer = new Uint32Array(1);
+    do {
+        crypto.getRandomValues(buffer);
+    } while (buffer[0] >= limit);
+    return buffer[0] % max;
+}
 
 const PLATFORM_ROLES: UserRole[] = [UserRole.SUPER_ADMIN, UserRole.SYSTEM_ADMIN];
 const COMPANY_WIDE_ROLES: UserRole[] = [UserRole.OWNER, UserRole.GENERAL_ADMIN];
@@ -71,6 +83,8 @@ interface UserFormProps {
 export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
     const currentUser = useCurrentUser();
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [copied, setCopied] = useState(false);
     const isEditing = !!user;
 
     // El actor de plataforma elige compañía/tienda; el de compañía queda fijado
@@ -127,13 +141,13 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         try {
             // La contraseña es obligatoria al crear y opcional al editar. En
             // edición, dejarla vacía conserva la contraseña actual.
-            if (!isEditing && (!data.password || data.password.length < 8)) {
-                form.setError("password", { message: "Password required (min 8 chars)" });
+            if (!isEditing && (!data.password || data.password.length < PASSWORD_MIN_LENGTH)) {
+                form.setError("password", { message: `Asigna una contraseña de mínimo ${PASSWORD_MIN_LENGTH} caracteres o genera una` });
                 setLoading(false);
                 return;
             }
-            if (isEditing && data.password && data.password.length < 8) {
-                form.setError("password", { message: "La nueva contraseña debe tener mínimo 8 caracteres" });
+            if (isEditing && data.password && data.password.length < PASSWORD_MIN_LENGTH) {
+                form.setError("password", { message: `La nueva contraseña debe tener mínimo ${PASSWORD_MIN_LENGTH} caracteres` });
                 setLoading(false);
                 return;
             }
@@ -218,20 +232,66 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                     name="password"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>{isEditing ? "Nueva contraseña" : "Contraseña"}</FormLabel>
-                            <FormControl>
-                                <Input
-                                    type="password"
-                                    autoComplete="new-password"
-                                    placeholder={isEditing ? "Dejar vacío para conservar la actual" : "Mínimo 8 caracteres"}
-                                    {...field}
-                                />
-                            </FormControl>
-                            {isEditing && (
-                                <FormDescription>
-                                    Completa este campo únicamente para restablecer la contraseña del usuario.
-                                </FormDescription>
-                            )}
+                            <FormLabel>{isEditing ? "Nueva contraseña" : "Contraseña inicial"}</FormLabel>
+                            <div className="flex gap-2">
+                                <FormControl>
+                                    <Input
+                                        type={showPassword ? "text" : "password"}
+                                        autoComplete="new-password"
+                                        autoCapitalize="none"
+                                        spellCheck={false}
+                                        className="font-mono"
+                                        placeholder={isEditing ? "Dejar vacío para conservar la actual" : `Mínimo ${PASSWORD_MIN_LENGTH} caracteres`}
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                    onClick={() => setShowPassword((value) => !value)}
+                                >
+                                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label="Copiar contraseña"
+                                    disabled={!field.value}
+                                    onClick={async () => {
+                                        try {
+                                            await navigator.clipboard.writeText(field.value ?? "");
+                                            setCopied(true);
+                                            window.setTimeout(() => setCopied(false), 1500);
+                                        } catch {
+                                            toast.error("No se pudo copiar; selecciónala y cópiala manualmente.");
+                                        }
+                                    }}
+                                >
+                                    {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+                                </Button>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="w-fit px-2"
+                                onClick={() => {
+                                    form.setValue("password", generateReadablePassword(webRandomInt), { shouldDirty: true });
+                                    form.clearErrors("password");
+                                    setShowPassword(true);
+                                }}
+                            >
+                                <Wand2 className="size-4" aria-hidden="true" />
+                                Generar contraseña
+                            </Button>
+                            <FormDescription>
+                                {isEditing
+                                    ? "Solo para restablecerla. El usuario verá un aviso para cambiarla por una suya."
+                                    : "Compártela con el usuario: entra de inmediato y luego se le sugiere cambiarla."}
+                            </FormDescription>
                             <FormMessage />
                         </FormItem>
                     )}

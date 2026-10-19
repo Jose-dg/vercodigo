@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { ChevronRight, type LucideIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -28,6 +29,7 @@ function isCurrent(pathname: string, url: string) {
 export function NavMain({
   items,
   label = "Navegación",
+  children,
 }: {
   items: {
     title: string
@@ -40,6 +42,8 @@ export function NavMain({
     }[]
   }[]
   label?: string
+  /** Entradas extra al final de la lista (p. ej. Configuración, que abre un modal). */
+  children?: ReactNode
 }) {
   const pathname = usePathname()
 
@@ -95,6 +99,7 @@ export function NavMain({
             </SidebarMenuItem>
           )
         ))}
+        {children}
       </SidebarMenu>
     </SidebarGroup>
   )

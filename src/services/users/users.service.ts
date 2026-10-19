@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { Prisma, UserRole } from "@prisma/client";
 import type { AuthenticatedActor } from "@/lib/auth/actor";
-import { hashPassword } from "@/lib/auth/password";
+import { createClerkUser, deleteClerkUser, syncClerkUser } from "@/modules/identity/clerk-users";
 import { AppError } from "@/lib/errors";
 import { getAssignableRoles } from "@/lib/auth/abilities";
 import { CreateUserInput, UpdateUserInput } from "./dto";
@@ -74,12 +74,21 @@ export async function createUser(data: CreateUserInput, actor: AuthenticatedActo
         throw new AppError("Email already exists", 409, "CONFLICT");
     }
 
-    // 3. Create
+    // 3. Create: primero la identidad en Clerk; si la fila local falla, se borra en
+    // Clerk para no dejar una cuenta huérfana.
+    const clerkUserId = await createClerkUser({
+        email: data.email,
+        name: data.name,
+        password: data.password,
+        role: data.role,
+    });
     const user = await prisma.user.create({
         data: {
             name: data.name,
             email: data.email,
-            passwordHash: hashPassword(data.password),
+            clerkUserId,
+            // Clave asignada por un admin: entra de inmediato y se le sugiere cambiarla.
+            mustChangePassword: true,
             role: data.role,
             companyId: data.companyId,
             storeId: data.storeId,
@@ -87,6 +96,9 @@ export async function createUser(data: CreateUserInput, actor: AuthenticatedActo
             isActive: true,
         },
         select: safeUserSelect,
+    }).catch(async (error) => {
+        await deleteClerkUser(clerkUserId).catch((cleanup) => console.error("[users] cuenta Clerk huérfana", clerkUserId, cleanup));
+        throw error;
     });
     return user;
 }
@@ -169,8 +181,25 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
     const { password, ...fields } = data;
     const updateData: Prisma.UserUncheckedUpdateInput = {
         ...fields,
-        ...(password ? { passwordHash: hashPassword(password) } : {}),
+        // Restablecida por un admin: se sugiere cambiarla (Clerk cierra sus sesiones).
+        ...(password ? { mustChangePassword: true } : {}),
     };
+
+    // Identidad en Clerk antes de la fila local: si Clerk rechaza (clave filtrada,
+    // correo en uso), no queda nada a medias.
+    const identityChanges = {
+        role: data.role,
+        name: data.name,
+        email: data.email && data.email !== target.email ? data.email : undefined,
+        isActive: data.isActive !== undefined && data.isActive !== target.isActive ? data.isActive : undefined,
+        password,
+    };
+    if (Object.values(identityChanges).some((value) => value !== undefined)) {
+        if (!target.clerkUserId) {
+            throw new AppError("Este usuario aún no está migrado a Clerk", 409, "NOT_MIGRATED");
+        }
+        await syncClerkUser(target.clerkUserId, identityChanges);
+    }
 
     // 3. Update. Si se restablece la contraseña, el cambio y su registro de
     // auditoría se guardan en la misma transacción. El hash nunca se incluye
@@ -234,5 +263,6 @@ export async function deleteUser(targetUserId: string, actor: AuthenticatedActor
     }
 
     await prisma.user.delete({ where: { id: targetUserId } });
+    if (target.clerkUserId) await deleteClerkUser(target.clerkUserId);
     return { success: true };
 }

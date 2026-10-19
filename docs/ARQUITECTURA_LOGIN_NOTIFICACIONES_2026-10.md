@@ -1,5 +1,7 @@
 # Arquitectura: acceso y notificaciones transaccionales (oct 2026)
 
+> **Actualización (19-oct-2026):** la §3 (identidad y acceso) quedó reemplazada por Clerk. Ver [`AUTH_CLERK_2026-10.md`](./AUTH_CLERK_2026-10.md). Las §4 y §5 (notificaciones) siguen vigentes.
+
 Diseño técnico del plan [`PLAN_LOGIN_NOTIFICACIONES_2026-10.md`](./PLAN_LOGIN_NOTIFICACIONES_2026-10.md). Define dominios, modelos, relaciones, contratos y dónde vive cada pieza en diem-sas (Next.js 16 + Prisma) y diem-ai (FastAPI + SQLAlchemy).
 
 ## 1. Principios

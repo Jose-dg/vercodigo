@@ -23,6 +23,7 @@ import type { UserRole } from "@prisma/client"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
+import { SettingsNavItem } from "@/components/settings/settings-nav-item"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
@@ -367,7 +368,9 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
         <TeamSwitcher teams={teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMainWithError} label={isPlatform ? "Plataforma" : "Navegación"} />
+        <NavMain items={navMainWithError} label={isPlatform ? "Plataforma" : "Navegación"}>
+          <SettingsNavItem />
+        </NavMain>
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>

@@ -10,6 +10,8 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    // Clases del tema shadcn de Clerk (equivale a @clerk/ui/themes/shadcn.css en Tailwind v4).
+    "./node_modules/@clerk/ui/dist/themes/shadcn.js",
   ],
   theme: {
     container: {

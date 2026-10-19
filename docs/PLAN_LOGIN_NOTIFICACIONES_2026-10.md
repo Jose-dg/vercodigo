@@ -1,5 +1,7 @@
 # Plan: acceso, notificaciones por correo y responsive (oct 2026)
 
+> **Actualización (19-oct-2026):** el acceso (contraseña, Google, Apple, recuperación) se resolvió con Clerk. Ver [`AUTH_CLERK_2026-10.md`](./AUTH_CLERK_2026-10.md). Las notificaciones de pedidos siguen como aquí.
+
 ## Contexto
 Los clientes **aún no tienen acceso** al portal: hoy el equipo Diem compra y entrega por ellos desde el programa. Este proyecto **es el lanzamiento a clientes**, así que se diseña el estado final, sin transición ni cuentas heredadas que cuidar. El primer ingreso y la primera compra no deben tener ninguna barrera.
 

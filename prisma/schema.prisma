@@ -9,8 +9,15 @@ datasource db {
 
 model User {
   id                      String               @id @default(cuid())
+  /// Siempre en minúsculas y sin espacios (CHECK en la base); se compara normalizado.
   email                   String               @unique
-  passwordHash            String
+  /// Identidad en Clerk (contraseña, Google, Apple, sesiones). La autorización
+  /// (rol, empresa, sede) sigue aquí.
+  clerkUserId             String?              @unique
+  /// Hash legado de NextAuth: solo para importar a Clerk; se elimina tras la importación.
+  passwordHash            String?
+  /// true cuando un admin asigna o restablece la clave; se apaga cuando el usuario la cambia.
+  mustChangePassword      Boolean              @default(false)
   name                    String
   role                    UserRole
   isActive                Boolean              @default(true)

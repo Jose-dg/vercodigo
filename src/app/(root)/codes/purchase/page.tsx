@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@clerk/nextjs';
 import { isPlatformRole } from '@/lib/auth/abilities';
 import { ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,7 +16,8 @@ import type { UserRole } from '@prisma/client';
 
 export default function PurchaseCodesPage() {
     const router = useRouter();
-    const { status: sessionStatus } = useSession();
+    const { isLoaded, isSignedIn } = useAuth();
+    const sessionStatus = !isLoaded ? 'loading' : isSignedIn ? 'authenticated' : 'unauthenticated';
     const [effectiveRole, setEffectiveRole] = useState<UserRole | null>(null);
     // Hasta conocer el rol no se cotiza: plataforma necesita una empresa elegida y una
     // cotización sin ella respondería 400.

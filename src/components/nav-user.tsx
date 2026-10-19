@@ -1,12 +1,9 @@
 "use client"
 
 import {
-  BadgeCheck,
-  Bell,
   ChevronsUpDown,
-  CreditCard,
+  Settings,
   LogOut,
-  Sparkles,
 } from "lucide-react"
 
 import {
@@ -29,7 +26,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { signOut } from "next-auth/react"
+import { useClerk } from "@clerk/nextjs"
+import { useSettingsDialog } from "@/components/settings/settings-dialog"
 
 export function NavUser({
   user,
@@ -40,6 +38,8 @@ export function NavUser({
     avatar: string
   }
 }) {
+  const { signOut } = useClerk()
+  const { openSettings } = useSettingsDialog()
   const { isMobile } = useSidebar()
 
   return (
@@ -82,34 +82,19 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles />
-                Upgrade to Pro
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell />
-                Notifications
+              <DropdownMenuItem onSelect={() => openSettings()}>
+                <Settings />
+                Configuración
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => {
-                void signOut({ callbackUrl: "/login" })
+                void signOut({ redirectUrl: "/login" })
               }}
             >
               <LogOut />
-              Log out
+              Cerrar sesión
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

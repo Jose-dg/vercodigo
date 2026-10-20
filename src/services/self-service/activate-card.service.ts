@@ -252,6 +252,10 @@ export async function processActivationJob(jobId: string) {
             await updateOpenActivationJob(prisma, job.id, {
                 status: remote.status === "awaiting_stock" ? "AWAITING_STOCK" : "PROCESSING",
                 fulfillmentStatus: remote.status,
+                // Replace any earlier wait reason (e.g. manual review already approved).
+                lastError: remote.status === "awaiting_stock"
+                    ? "Diem no tiene stock de este producto. La activación se completará sola cuando llegue el inventario; no se ha debitado la wallet."
+                    : null,
                 attempts: { increment: 1 },
                 nextRetryAt: new Date(Date.now() + delayMinutes * 60_000),
             });

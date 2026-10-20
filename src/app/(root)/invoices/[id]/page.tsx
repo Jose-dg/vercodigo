@@ -30,7 +30,7 @@ export default async function InvoiceDetailPage({
                 <div className="md:col-span-2 space-y-6">
                     <InvoiceInfoCard invoice={invoice} />
                     <InvoiceItemsDetail items={invoice.items} />
-                    <InvoiceActivationsList activations={invoice.CardActivation} />
+                    <InvoiceActivationsList activations={invoice.cardActivations} />
                 </div>
 
                 <div>

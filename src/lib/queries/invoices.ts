@@ -86,7 +86,7 @@ export async function getInvoiceById(id: string) {
             items: {
                 include: { store: true }
             },
-            CardActivation: {
+            cardActivations: {
                 include: {
                     store: true,
                     card: {

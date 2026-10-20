@@ -185,7 +185,7 @@ async function loadSnapshot(client: PrismaClient | Prisma.TransactionClient) {
         client.store.findUnique({
             where: { id: STORE_ID },
             include: {
-                _count: { select: { users: true, authorizedPhones: true, InvoiceItem: true, activations: true } },
+                _count: { select: { users: true, authorizedPhones: true, invoiceItems: true, activations: true } },
             },
         }),
         client.wallet.findUnique({ where: { id: WALLET_ID } }),
@@ -242,7 +242,7 @@ function validateSnapshot(snapshot: Awaited<ReturnType<typeof loadSnapshot>>, ma
         throw new Error("Falta empresa, actor, tienda o wallet de Blue Panther.");
     }
     if (![INITIAL_COMPANY_ID, COMPANY_ID].includes(snapshot.store.companyId)) throw new Error("La tienda pertenece a una empresa inesperada.");
-    if (snapshot.store._count.users || snapshot.store._count.authorizedPhones || snapshot.store._count.InvoiceItem) {
+    if (snapshot.store._count.users || snapshot.store._count.authorizedPhones || snapshot.store._count.invoiceItems) {
         throw new Error("La tienda tiene usuarios, teléfonos o facturas que impiden moverla con seguridad.");
     }
     if (snapshot.cards.length !== 20) throw new Error(`Se esperaban 20 tarjetas; hay ${snapshot.cards.length}.`);

@@ -132,29 +132,29 @@ const data = {
         },
       ],
     },
-    {
-      title: "Cards & QR",
-      url: "#",
-      icon: QrCode,
-      items: [
-        {
-          title: "QR Codes",
-          url: "/qr",
-        },
-        {
-          title: "Remisión de tarjetas",
-          url: "/cards/reassign",
-        },
-        {
-          title: "Manufacturing Batches",
-          url: "/batches",
-        },
-        {
-          title: "Digital Keys",
-          url: "/keys",
-        },
-      ],
-    },
+    // {
+    //   title: "Cards & QR",
+    //   url: "#",
+    //   icon: QrCode,
+    //   items: [
+    //     {
+    //       title: "QR Codes",
+    //       url: "/qr",
+    //     },
+    //     {
+    //       title: "Remisión de tarjetas",
+    //       url: "/cards/reassign",
+    //     },
+    //     {
+    //       title: "Manufacturing Batches",
+    //       url: "/batches",
+    //     },
+    //     {
+    //       title: "Digital Keys",
+    //       url: "/keys",
+    //     },
+    //   ],
+    // },
     {
       title: "Operations",
       url: "#",

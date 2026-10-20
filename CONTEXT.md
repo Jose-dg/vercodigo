@@ -10,7 +10,11 @@ _Avoid_: Factura, recibo, cuenta de cobro
 
 **Ledger de wallet**:
 Histórico cronológico que constituye la fuente de verdad del saldo de una empresa. Un saldo negativo representa una obligación pendiente y uno positivo, saldo a favor.
-_Avoid_: Estado de cuenta, factura
+_Avoid_: Estado de cuenta, factura, fondo de capital comercial
+
+**Wallet comercial (`Wallet`)**:
+Cuenta operativa de una empresa B2B para registrar saldo a favor o deuda por consumos dentro de Vercode. No representa capital aportado para financiar compras de Lab, inventario de Diem, consignaciones ni liquidaciones Addi.
+_Avoid_: `CapitalFund`, cuenta bancaria, Tesorería, fondo Lab
 
 **Factura fiscal**:
 Documento tributario emitido y validado mediante el proceso fiscal aplicable. Es independiente del estado de cuenta y del ledger de wallet.

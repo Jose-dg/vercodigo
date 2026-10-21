@@ -1,6 +1,8 @@
 import Link from "next/link"
 import { SignIn } from "@clerk/nextjs"
+import { auth } from "@clerk/nextjs/server"
 import { GalleryVerticalEnd } from "lucide-react"
+import { redirect } from "next/navigation"
 
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 
@@ -9,7 +11,10 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
  * contraseña". El registro está cerrado (cuentas creadas por un admin), por eso no
  * se muestra el enlace de registro. Ruta catch-all: Clerk usa subrutas para sus pasos.
  */
-export default function LoginPage() {
+export default async function LoginPage() {
+  const { userId } = await auth()
+  if (userId) redirect("/auth/continue")
+
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
       <ThemeToggle className="absolute right-4 top-4" />

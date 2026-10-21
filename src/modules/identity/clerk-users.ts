@@ -64,13 +64,18 @@ export async function syncClerkUser(
             });
         }
         if (changes.email) {
-            // El nuevo correo pasa a ser el principal; el anterior queda como secundario.
-            await clerk.emailAddresses.createEmailAddress({
+            // El nuevo correo pasa a ser el principal y los anteriores se borran: Clerk
+            // deja entrar con cualquier correo verificado de la cuenta.
+            const created = await clerk.emailAddresses.createEmailAddress({
                 userId: clerkUserId,
                 emailAddress: changes.email,
                 verified: true,
                 primary: true,
             });
+            const { emailAddresses } = await clerk.users.getUser(clerkUserId);
+            for (const address of emailAddresses) {
+                if (address.id !== created.id) await clerk.emailAddresses.deleteEmailAddress(address.id);
+            }
         }
         if (changes.isActive === false) {
             await clerk.users.banUser(clerkUserId);

@@ -5,6 +5,7 @@ import {
     generateReadablePassword,
     normalizeEmail,
     passwordIssues,
+    planProfileSync,
     safeCallbackPath,
 } from "../src/modules/identity/domain.ts";
 
@@ -36,4 +37,30 @@ test("la contraseña generada es legible y cumple la política", () => {
 test("la política rechaza claves cortas o que contienen el correo", () => {
     assert.deepEqual(passwordIssues("corta", null), ["too_short"]);
     assert.deepEqual(passwordIssues("mariana2026!!", "mariana@empresa.co"), ["contains_email"]);
+});
+
+const current = { email: "ana@empresa.com", name: "Ana Pérez", passwordAssignedAt: null };
+const clerk = { primaryEmail: "ana@empresa.com", firstName: "Ana", lastName: "Pérez", passwordLastUpdatedAt: null };
+
+test("perfil de Clerk sin cambios: nada que escribir", () => {
+    assert.equal(planProfileSync(current, clerk), null);
+});
+
+test("correo nuevo en Clerk se copia normalizado y el nombre se arma con nombre y apellido", () => {
+    assert.deepEqual(
+        planProfileSync(current, { ...clerk, primaryEmail: "  Ana.Nueva@Gmail.com ", firstName: "Ana María" }),
+        { email: "ana.nueva@gmail.com", name: "Ana María Pérez" },
+    );
+});
+
+test("sin correo principal ni nombre en Clerk se conservan los de la base", () => {
+    assert.equal(planProfileSync(current, { ...clerk, primaryEmail: null, firstName: null, lastName: " " }), null);
+});
+
+test("el aviso de contraseña se apaga solo si la cambió después de que el admin la asignara", () => {
+    const assigned = { ...current, passwordAssignedAt: new Date("2026-10-21T15:00:00Z") };
+    const at = (iso) => ({ ...clerk, passwordLastUpdatedAt: Date.parse(iso) });
+    assert.equal(planProfileSync(assigned, at("2026-10-21T14:59:59Z")), null);
+    assert.equal(planProfileSync(assigned, { ...clerk, passwordLastUpdatedAt: null }), null);
+    assert.deepEqual(planProfileSync(assigned, at("2026-10-21T15:00:01Z")), { clearPasswordAssigned: true });
 });

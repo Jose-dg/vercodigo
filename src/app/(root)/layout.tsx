@@ -5,7 +5,7 @@ import { AppTopBar } from "@/components/wallet/app-top-bar"
 import { TopUpProvider } from "@/components/wallet/top-up-provider"
 import { AuthProvider } from "@/components/auth/auth-provider"
 import { PasswordChangeNudge } from "@/components/auth/password-change-nudge"
-import { SettingsDialogProvider } from "@/components/settings/settings-dialog"
+import { OpenProfileFromUrl } from "@/components/settings/open-profile-from-url"
 import { getActorCompanyName, requireAuthenticatedActor } from "@/lib/auth/actor"
 
 export default async function DashboardLayout({
@@ -25,23 +25,15 @@ export default async function DashboardLayout({
   return (
     <AuthProvider user={authUser}>
       <SidebarProvider>
-        <SettingsDialogProvider>
-          <AppSidebar
-            companyName={companyName}
-            user={{
-              name: actor.name,
-              email: actor.email,
-              avatar: "",
-            }}
-          />
-          <SidebarInset>
-            <TopUpProvider>
-              <AppTopBar />
-              {actor.mustChangePassword ? <PasswordChangeNudge /> : null}
-              {children}
-            </TopUpProvider>
-          </SidebarInset>
-        </SettingsDialogProvider>
+        <OpenProfileFromUrl />
+        <AppSidebar companyName={companyName} />
+        <SidebarInset>
+          <TopUpProvider>
+            <AppTopBar />
+            {actor.mustChangePassword ? <PasswordChangeNudge /> : null}
+            {children}
+          </TopUpProvider>
+        </SidebarInset>
       </SidebarProvider>
     </AuthProvider>
   )

@@ -65,3 +65,38 @@ export const PASSWORD_ISSUE_LABELS: Record<PasswordIssue, string> = {
     too_short: `Al menos ${PASSWORD_MIN_LENGTH} caracteres`,
     contains_email: "No puede contener tu correo",
 };
+
+/** Lo que trae Clerk de una persona en el webhook `user.updated`. */
+export type ClerkProfile = {
+    primaryEmail: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    /** Milisegundos epoch; null si nunca tuvo contraseña. */
+    passwordLastUpdatedAt: number | null;
+};
+
+export type ProfileSync = { email?: string; name?: string; clearPasswordAssigned?: true };
+
+/**
+ * Qué copiar de Clerk a la base cuando la persona edita su perfil: correo principal
+ * (normalizado) y nombre. Si cambió su contraseña después de que un admin se la
+ * asignara, se apaga el aviso. null = nada que escribir (idempotente).
+ */
+export function planProfileSync(
+    current: { email: string; name: string; passwordAssignedAt: Date | null },
+    clerk: ClerkProfile,
+): ProfileSync | null {
+    const sync: ProfileSync = {};
+    const email = clerk.primaryEmail ? normalizeEmail(clerk.primaryEmail) : "";
+    if (email && email !== current.email) sync.email = email;
+    const name = [clerk.firstName, clerk.lastName].map((part) => part?.trim()).filter(Boolean).join(" ");
+    if (name && name !== current.name) sync.name = name;
+    if (
+        current.passwordAssignedAt
+        && clerk.passwordLastUpdatedAt !== null
+        && clerk.passwordLastUpdatedAt > current.passwordAssignedAt.getTime()
+    ) {
+        sync.clearPasswordAssigned = true;
+    }
+    return Object.keys(sync).length > 0 ? sync : null;
+}

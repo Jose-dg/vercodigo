@@ -88,7 +88,7 @@ export async function createUser(data: CreateUserInput, actor: AuthenticatedActo
             email: data.email,
             clerkUserId,
             // Clave asignada por un admin: entra de inmediato y se le sugiere cambiarla.
-            mustChangePassword: true,
+            passwordAssignedAt: new Date(),
             role: data.role,
             companyId: data.companyId,
             storeId: data.storeId,
@@ -182,7 +182,7 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
     const updateData: Prisma.UserUncheckedUpdateInput = {
         ...fields,
         // Restablecida por un admin: se sugiere cambiarla (Clerk cierra sus sesiones).
-        ...(password ? { mustChangePassword: true } : {}),
+        ...(password ? { passwordAssignedAt: new Date() } : {}),
     };
 
     // Identidad en Clerk antes de la fila local: si Clerk rechaza (clave filtrada,

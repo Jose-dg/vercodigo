@@ -1,17 +1,16 @@
 "use client";
 
+import { useClerk } from "@clerk/nextjs";
 import { Settings2 } from "lucide-react";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 
-import { useSettingsDialog } from "./settings-dialog";
-
-/** Entrada del menú lateral (al final, debajo de Operations) que abre el modal de Configuración. */
+/** Entrada del menú lateral (al final, debajo de Operations) que abre el perfil de Clerk. */
 export function SettingsNavItem() {
-    const { openSettings } = useSettingsDialog();
+    const { openUserProfile } = useClerk();
     return (
         <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Configuración" onClick={() => openSettings()}>
+            <SidebarMenuButton tooltip="Configuración" onClick={() => openUserProfile()}>
                 <Settings2 aria-hidden="true" />
                 <span>Configuración</span>
             </SidebarMenuButton>

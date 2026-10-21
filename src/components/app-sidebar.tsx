@@ -240,14 +240,9 @@ const data = {
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   companyName: string
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
 }
 
-export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
+export function AppSidebar({ companyName, ...props }: AppSidebarProps) {
   const ability = useAbility();
   const currentUser = useCurrentUser();
   const isPlatform = currentUser?.role != null && isPlatformRole(currentUser.role);
@@ -374,7 +369,7 @@ export function AppSidebar({ companyName, user, ...props }: AppSidebarProps) {
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={user} />
+        <NavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

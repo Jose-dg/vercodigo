@@ -16,8 +16,9 @@ model User {
   clerkUserId             String?              @unique
   /// Hash legado de NextAuth: solo para importar a Clerk; se elimina tras la importación.
   passwordHash            String?
-  /// true cuando un admin asigna o restablece la clave; se apaga cuando el usuario la cambia.
-  mustChangePassword      Boolean              @default(false)
+  /// Cuándo un admin asignó o restableció la clave; null cuando el usuario ya la cambió
+  /// en Clerk (lo apaga el webhook user.updated). Mientras exista, se sugiere cambiarla.
+  passwordAssignedAt      DateTime?
   name                    String
   role                    UserRole
   isActive                Boolean              @default(true)

@@ -21,17 +21,15 @@ Se puede empezar en Hobby y subir sin cambiar código.
 - **Login** (`/login`): `<SignIn />` en español, con correo y contraseña, Google, Apple y "Olvidé mi contraseña" (el correo lo envía Clerk). Sin enlace de registro.
 - **Destino tras entrar:** `/auth/continue` lleva al inicio de cada rol. Si la cuenta de Clerk no tiene acceso al portal, lo explica.
 - **Alta de usuarios** (`users.service` → `modules/identity/clerk-users.ts`):
-  - el admin crea el usuario con la clave asignada (o "Generar contraseña") → se crea en Clerk con `publicMetadata.role` → se crea la fila local con `clerkUserId` y `mustChangePassword`;
+  - el admin crea el usuario con la clave asignada (o "Generar contraseña") → se crea en Clerk con `publicMetadata.role` → se crea la fila local con `clerkUserId` y `passwordAssignedAt` (aviso de cambiar la clave);
   - si la fila falla, se borra la cuenta en Clerk.
 - **Cambios de usuario:**
-  - rol, nombre y correo se sincronizan con Clerk;
+  - rol, nombre y correo se sincronizan con Clerk; al cambiar el correo se borran los anteriores en Clerk (si no, el viejo sigue sirviendo para entrar);
   - desactivar → `banUser`;
-  - restablecer la clave → nueva clave en Clerk + se cierran sus sesiones + `mustChangePassword`;
+  - restablecer la clave → nueva clave en Clerk + se cierran sus sesiones + `passwordAssignedAt`;
   - Clerk rechaza claves filtradas en brechas conocidas.
-- **Configuración:** modal con menú lateral (patrón shadcn `sidebar-13`, en `components/settings/`). Se abre desde "Configuración" en el menú lateral, el menú del usuario o el aviso de cambiar la clave, sin salir de la página. `/settings` lleva al inicio del rol con el modal abierto (`?configuracion`, opcionalmente `=accounts`). Al volver de Google/Apple regresa a la misma página y se reabre en Cuentas vinculadas.
-  - **Contraseña:** verifica la actual en Clerk, aplica nuestra política, cierra las sesiones en otros dispositivos y apaga el aviso.
-  - **Cuentas vinculadas:** Google y Apple con Vincular / Desvincular (`user.createExternalAccount`, con `useReverification` si la sesión no es reciente). Es opcional y la contraseña nunca se quita.
-  - Es un componente propio y no `<UserProfile />`, porque ese deja cambiar correo y clave directo en Clerk sin pasar por nuestra base.
+- **Cuenta de la persona:** el `<UserButton />` de Clerk en el pie del menú lateral (`components/nav-user.tsx`) y su `<UserProfile />` en modal: foto, nombre, correo (Clerk verifica el nuevo con un código), contraseña, Google/Apple y dispositivos. "Configuración" del menú lateral y `/settings` (→ inicio del rol con `?configuracion`) abren el mismo perfil. El aviso de cambiar la clave lo abre en Seguridad.
+- **Clerk → base** (`/api/webhook/clerk`, evento `user.updated`, firma svix con `CLERK_WEBHOOK_SIGNING_SECRET`): copia el correo principal y el nombre (`planProfileSync` en `modules/identity/domain.ts`). Si el correo ya es de otro usuario del portal, no lo copia y lo deja en AuditLog. Si la persona cambió la clave después de `passwordAssignedAt`, apaga el aviso. Rol, empresa y sede nunca vienen de Clerk, así que editar el perfil no da permisos.
 
 ## Configuración en el dashboard de Clerk
 1. Crear la aplicación (instancia de desarrollo y de producción).
@@ -43,18 +41,21 @@ Se puede empezar en Hobby y subir sin cambiar código.
 5. **Rutas:** sign-in URL `/login` (además `signInUrl` en `clerkMiddleware`; sin eso las rutas protegidas mandan al portal hospedado de Clerk).
 6. **Contraseña:** largo mínimo 10, igual a nuestra política (la instancia nueva venía con 15).
 7. **Dominio de producción** `vercode.me`, con los registros DNS que pide Clerk.
+8. **Webhook** (*Webhooks → Add endpoint*): `https://www.vercode.me/api/webhook/clerk`, evento `user.updated`. El signing secret va a Vercel como `CLERK_WEBHOOK_SIGNING_SECRET`.
+9. **Borrar cuenta apagado** (*User & authentication → Allow users to delete their accounts: off*): una cuenta borrada en Clerk deja la fila del portal huérfana.
 
 ## Variables de entorno (Vercel)
 | Variable | Qué es |
 |---|---|
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Llave pública de la instancia |
 | `CLERK_SECRET_KEY` | Llave secreta (secreto) |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | Firma del webhook `user.updated` (secreto) |
 
 Las credenciales de Google y Apple viven en el dashboard de Clerk, no en el repo. `NEXTAUTH_URL` y `NEXTAUTH_SECRET` dejan de usarse.
 
 ## Despliegue (en este orden)
 1. **Migración** `20261019120000_clerk_identity` (`prisma migrate deploy`). Es aditiva:
-   - `clerkUserId`, `mustChangePassword`;
+   - `clerkUserId`, `mustChangePassword` (reemplazado por `passwordAssignedAt` en `20261021120000_password_assigned_at`);
    - `passwordHash` pasa a opcional;
    - el `CHECK` de correo normalizado.
 

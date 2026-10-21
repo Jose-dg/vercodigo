@@ -44,7 +44,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
             isActive: true,
             companyId: true,
             storeId: true,
-            mustChangePassword: true,
+            passwordAssignedAt: true,
             company: { select: { isActive: true } },
             store: { select: { isActive: true, companyId: true } },
         },
@@ -65,7 +65,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
         role: user.role,
         companyId: user.companyId,
         storeId: user.storeId,
-        mustChangePassword: user.mustChangePassword,
+        mustChangePassword: user.passwordAssignedAt !== null,
     };
 }
 

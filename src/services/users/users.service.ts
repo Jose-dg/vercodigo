@@ -1,7 +1,14 @@
 import prisma from "@/lib/prisma";
 import { Prisma, UserRole } from "@prisma/client";
 import type { AuthenticatedActor } from "@/lib/auth/actor";
-import { createClerkUser, deleteClerkUser, syncClerkUser } from "@/modules/identity/clerk-users";
+import {
+    assignPrimaryEmail,
+    createClerkUser,
+    deleteClerkUser,
+    removeEmailAddresses,
+    restorePrimaryEmail,
+    syncClerkUser,
+} from "@/modules/identity/clerk-users";
 import { AppError } from "@/lib/errors";
 import { getAssignableRoles } from "@/lib/auth/abilities";
 import { CreateUserInput, UpdateUserInput } from "./dto";
@@ -186,25 +193,33 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
     };
 
     // Identidad en Clerk antes de la fila local: si Clerk rechaza (clave filtrada,
-    // correo en uso), no queda nada a medias.
+    // correo en uso), no queda nada a medias. Solo se envía lo que cambió: cada
+    // llamada dispara un webhook user.updated.
+    const emailChange = data.email && data.email !== target.email ? data.email : undefined;
     const identityChanges = {
-        role: data.role,
-        name: data.name,
-        email: data.email && data.email !== target.email ? data.email : undefined,
+        role: data.role && data.role !== target.role ? data.role : undefined,
+        name: data.name && data.name !== target.name ? data.name : undefined,
         isActive: data.isActive !== undefined && data.isActive !== target.isActive ? data.isActive : undefined,
         password,
     };
-    if (Object.values(identityChanges).some((value) => value !== undefined)) {
-        if (!target.clerkUserId) {
-            throw new AppError("Este usuario aún no está migrado a Clerk", 409, "NOT_MIGRATED");
-        }
-        await syncClerkUser(target.clerkUserId, identityChanges);
+    const touchesClerk = emailChange !== undefined || Object.values(identityChanges).some((value) => value !== undefined);
+    if (touchesClerk && !target.clerkUserId) {
+        throw new AppError("Este usuario aún no está migrado a Clerk", 409, "NOT_MIGRATED");
     }
+    if (Object.values(identityChanges).some((value) => value !== undefined)) {
+        await syncClerkUser(target.clerkUserId!, identityChanges);
+    }
+    // Email: new address primary and confirmed in Clerk first; old ones are
+    // removed only after the database agrees, so no step can leave the person
+    // with an email that Clerk does not know.
+    const emailSwap = emailChange ? await assignPrimaryEmail(target.clerkUserId!, emailChange) : null;
 
     // 3. Update. Si se restablece la contraseña, el cambio y su registro de
     // auditoría se guardan en la misma transacción. El hash nunca se incluye
     // en el audit log.
-    const updated = await prisma.$transaction(async (tx) => {
+    let updated;
+    try {
+        updated = await prisma.$transaction(async (tx) => {
         const savedUser = await tx.user.update({
             where: { id: targetUserId },
             data: updateData,
@@ -227,8 +242,49 @@ export async function updateUser(targetUserId: string, data: UpdateUserInput, ac
             });
         }
 
+        if (emailChange) {
+            await tx.auditLog.create({
+                data: {
+                    action: "USER_EMAIL_CHANGED",
+                    userId: actor.id,
+                    companyId: target.companyId,
+                    storeId: target.storeId,
+                    entityType: "User",
+                    entityId: target.id,
+                    before: { email: target.email },
+                    after: { email: emailChange },
+                },
+            });
+        }
+
         return savedUser;
-    });
+        });
+    } catch (error) {
+        if (emailSwap) {
+            await restorePrimaryEmail(target.clerkUserId!, emailSwap.previousPrimaryId).catch((restore) =>
+                console.error("[users] no se pudo restaurar el correo principal en Clerk", target.id, restore));
+        }
+        throw error;
+    }
+
+    if (emailSwap) {
+        const failed = await removeEmailAddresses(target.clerkUserId!, emailSwap.staleAddressIds);
+        if (failed.length) {
+            // Both addresses still sign in; the database and Clerk agree on the primary.
+            await prisma.auditLog.create({
+                data: {
+                    action: "USER_EMAIL_OLD_ADDRESS_NOT_REMOVED",
+                    userId: actor.id,
+                    companyId: target.companyId,
+                    storeId: target.storeId,
+                    entityType: "User",
+                    entityId: target.id,
+                    details: { clerkAddressIds: failed },
+                    success: false,
+                },
+            });
+        }
+    }
 
     return updated;
 }

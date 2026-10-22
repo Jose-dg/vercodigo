@@ -3,6 +3,7 @@ import { verifyWebhook } from "@clerk/nextjs/webhooks";
 
 import prisma from "@/lib/prisma";
 import { planProfileSync } from "@/modules/identity/domain";
+import { getClerkProfile } from "@/modules/identity/clerk-users";
 import { writeAuditLog } from "@/services/self-service/audit.service";
 
 /**
@@ -11,6 +12,11 @@ import { writeAuditLog } from "@/services/self-service/audit.service";
  * asignó un admin, se apaga el aviso. Rol, empresa y sede nunca vienen de Clerk.
  * Firma svix con CLERK_WEBHOOK_SIGNING_SECRET. Responde 200 a lo que no aplica para
  * que Clerk no lo reintente.
+ *
+ * El evento es solo un aviso: correo y nombre se leen de Clerk en este momento.
+ * Los eventos llegan en cualquier orden; uno viejo (p. ej. el del cambio de nombre
+ * que precede a un cambio de correo hecho por un admin) traería el correo anterior
+ * y lo devolvería a la base.
  */
 export async function POST(request: NextRequest) {
     let event;
@@ -28,11 +34,20 @@ export async function POST(request: NextRequest) {
     });
     if (!user) return NextResponse.json({ success: true, ignored: true });
 
-    const primary = data.email_addresses.find((address) => address.id === data.primary_email_address_id);
+    let current;
+    try {
+        current = await getClerkProfile(data.id);
+    } catch (error) {
+        console.error("[webhook/clerk] no se pudo leer la cuenta en Clerk", { clerkUserId: data.id, error });
+        // 503: svix reintenta más tarde.
+        return NextResponse.json({ error: "clerk_unavailable" }, { status: 503 });
+    }
     const sync = planProfileSync(user, {
-        primaryEmail: primary?.email_address ?? null,
-        firstName: data.first_name,
-        lastName: data.last_name,
+        primaryEmail: current.primaryEmail,
+        firstName: current.firstName,
+        lastName: current.lastName,
+        // Only ever clears the notice when the password changed after the admin set it,
+        // so an old event cannot do harm here.
         passwordLastUpdatedAt: data.password_last_updated_at,
     });
     if (!sync) return NextResponse.json({ success: true, unchanged: true });

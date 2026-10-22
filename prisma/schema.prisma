@@ -31,6 +31,8 @@ model User {
   accountStatementsIssued AccountStatement[]   @relation("AccountStatementIssuer")
   purchaseOriginPhoneId   String?
   purchaseOriginPhone     PurchaseOriginPhone? @relation(fields: [purchaseOriginPhoneId], references: [id], onDelete: SetNull)
+  apiKeysCreated          CompanyApiKey[]      @relation("ApiKeyCreator")
+  apiKeysRevoked          CompanyApiKey[]      @relation("ApiKeyRevoker")
 
   @@index([companyId])
   @@index([storeId])
@@ -59,6 +61,42 @@ model Company {
   productRates         CompanyProductRate[]
   accountStatements    AccountStatement[]
   purchaseOriginPhones PurchaseOriginPhone[]
+  apiKeys              CompanyApiKey[]
+}
+
+/// API key de una empresa para la API v1. La key en claro solo existe en la
+/// respuesta de creación; aquí vive su HMAC-SHA256 con API_KEY_PEPPER. Actúa en
+/// nombre de quien la creó (su rol y su origen de compra).
+model CompanyApiKey {
+  id          String          @id @default(cuid())
+  companyId   String
+  name        String
+  /// Parte pública de la key (vck_live_<prefijo>_...): búsqueda y visualización.
+  keyPrefix   String          @unique
+  keyHash     String
+  scopes      String[]
+  createdById String
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  revokedById String?
+  createdAt   DateTime        @default(now())
+  company     Company         @relation(fields: [companyId], references: [id])
+  createdBy   User            @relation("ApiKeyCreator", fields: [createdById], references: [id])
+  revokedBy   User?           @relation("ApiKeyRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+  rateWindows ApiRateWindow[]
+
+  @@index([companyId, revokedAt])
+}
+
+/// Contador de peticiones por key y minuto: el límite vale entre instancias.
+model ApiRateWindow {
+  apiKeyId    String
+  windowStart DateTime
+  count       Int           @default(0)
+  apiKey      CompanyApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@id([apiKeyId, windowStart])
 }
 
 model Wallet {

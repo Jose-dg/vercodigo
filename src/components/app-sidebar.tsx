@@ -3,7 +3,7 @@
 import * as React from "react"
 import {
   Home,
-  BookOpen,
+  Braces,
   Building2,
   QrCode,
   Zap,
@@ -56,6 +56,11 @@ const data = {
       title: "Mi billetera",
       url: "/wallet",
       icon: Wallet,
+    },
+    {
+      title: "Desarrolladores",
+      url: "/developers",
+      icon: Braces,
     },
     {
       title: "Playground",
@@ -183,29 +188,6 @@ const data = {
       ],
     },
     {
-      title: "Documentation",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
       title: "Settings",
       url: "#",
       icon: Settings2,
@@ -301,6 +283,8 @@ export function AppSidebar({ companyName, ...props }: AppSidebarProps) {
       if (!role) return false;
       if (url === "#" || PLACEHOLDER_URLS.has(url)) return false;
       if (url === homePathForRole(role)) return true;
+      // API docs: every portal user may read them; the keys page checks its own permission.
+      if (url === "/developers") return true;
       if (PLATFORM_ONLY_URLS.has(url)) return isPlatformRole(role);
       // Analytics global solo plataforma; OWNER usa /overview (su compañía).
       if (url === "/analytics" && !isPlatformRole(role)) return false;

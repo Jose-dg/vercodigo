@@ -212,6 +212,9 @@ async function settleCodePurchase(purchaseId: string, productName: string, fulfi
     }
 }
 
+/** Where an order came from when it was not the portal: frozen into the Diem command. */
+export type PurchaseChannel = { kind: "api"; apiKeyPrefix: string };
+
 type PurchaseCommandSource = {
     id: string;
     userId: string;
@@ -236,6 +239,7 @@ async function buildPurchaseCommand(
     current: PurchaseCommandSource,
     remoteProductId: string,
     recipient?: DeliveryRecipient,
+    channel?: PurchaseChannel,
 ) {
     const [user, originCompany, originStore, originPhone] = await Promise.all([
         db.user.findUnique({
@@ -299,6 +303,7 @@ async function buildPurchaseCommand(
             }),
             commercial_occurred_at: current.occurredAt.toISOString(),
             commercial_sequence: current.occurredSequence,
+            ...(channel ? { channel: channel.kind, api_key_prefix: channel.apiKeyPrefix } : {}),
         },
     });
 }
@@ -503,6 +508,7 @@ async function placeCodePurchase(params: {
     quotedRate?: number | null;
     /** Diem emails the codes to this customer of the buyer's company. */
     recipient?: DeliveryRecipient;
+    channel?: PurchaseChannel;
 }) {
     const { userId, storeId, productId, denominationId, count, actorRole, targetCompanyId } = params;
     const recipient = params.recipient ?? null;
@@ -637,7 +643,7 @@ async function placeCodePurchase(params: {
             if (!recipient) return created;
             // Frozen with the row: no processor may ever build the buyer-only
             // command for a purchase whose codes belong to another person.
-            const command = await buildPurchaseCommand(tx, created, remoteProductId, recipient);
+            const command = await buildPurchaseCommand(tx, created, remoteProductId, recipient, params.channel);
             return tx.codePurchase.update({
                 where: { id: created.id },
                 data: { diemRequestSnapshot: command as unknown as Prisma.InputJsonValue },

@@ -252,6 +252,12 @@ export type CodeRequestParams = {
         email: string;
         phone?: string;
     };
+    /**
+     * partner_retrieval: the buyer reads the codes in the portal.
+     * managed_and_partner: Diem also emails them to `recipient` (the buyer's
+     * own customer) and the buyer still reads them in the portal.
+     */
+    deliveryMode?: 'partner_retrieval' | 'managed_and_partner';
     commercial: {
         accountCode: string;
         referenceNamespace: 'code_purchase' | 'card_activation';
@@ -312,7 +318,7 @@ export function buildCodeRequestCommand(params: CodeRequestParams): CodeRequestC
                 allocation_policy: 'all_or_nothing',
             }],
             preferred_channel: 'email',
-            delivery_mode: 'partner_retrieval',
+            delivery_mode: params.deliveryMode ?? 'partner_retrieval',
             commercial: commercialPayload,
             metadata: {
                 application: 'diem-sas',

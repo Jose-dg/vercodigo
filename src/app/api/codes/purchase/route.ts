@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AppError } from "@/lib/errors";
 import { purchaseCodes } from "@/services/self-service/purchase-codes.service";
+import {
+    InvalidDeliveryRecipientError,
+    normalizeDeliveryRecipient,
+} from "@/lib/codes/delivery-recipient";
 import { withAuth } from "@/lib/auth/guard";
 import type { AppAbility } from "@/lib/auth/abilities";
 import type { TokenPayload } from "@/lib/auth";
@@ -20,6 +24,12 @@ const PurchaseBody = z.object({
         z.object({ kind: z.literal("phone"), id: z.string().min(1) }),
         z.object({ kind: z.literal("store"), id: z.string().min(1) }),
     ]).optional(),
+    /** Diem envía los códigos al email de este cliente de la compañía. */
+    recipient: z.object({
+        firstName: z.string(),
+        lastName: z.string().optional(),
+        email: z.string(),
+    }).optional(),
 });
 
 async function handler(
@@ -54,6 +64,19 @@ async function handler(
             );
         }
 
+        let recipient;
+        try {
+            recipient = parsed.data.recipient
+                ? normalizeDeliveryRecipient(parsed.data.recipient)
+                : undefined;
+        } catch (error) {
+            if (!(error instanceof InvalidDeliveryRecipientError)) throw error;
+            return NextResponse.json(
+                { error: "BAD_REQUEST", message: error.message },
+                { status: 400 },
+            );
+        }
+
         // 3. Purchase Service
         const result = await purchaseCodes({
             userId: user.id,
@@ -68,6 +91,7 @@ async function handler(
             quotedCurrency: parsed.data.quotedCurrency,
             quotedRate: parsed.data.quotedRate,
             idempotencyKey,
+            recipient,
         });
 
         return NextResponse.json({ success: true, purchase: result }, { status: 201 });

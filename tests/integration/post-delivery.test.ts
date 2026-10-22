@@ -220,3 +220,54 @@ test("a replaced activation code repoints the card to the new key", async () => 
     assert.equal(card.key?.code, "CODE-NEW");
     assert.equal((await walletState()).consumptions.length, 1);
 });
+
+test("a purchase emailed to the buyer's customer mirrors Diem's email state without going backwards", async () => {
+    await prisma.codePurchase.update({
+        where: { id: ids.purchaseId },
+        data: {
+            diemRequestSnapshot: {
+                idempotencyKey: "idem",
+                correlationId: "code-purchase:x",
+                body: {
+                    delivery_mode: "managed_and_partner",
+                    recipient: { first_name: "Luis", last_name: "Gómez", email: "luis@cliente.co" },
+                },
+            },
+        },
+    });
+    remoteStatus = "delivery_pending";
+    const settled = await processCodePurchase(ids.purchaseId);
+    assert.equal(settled.status, "COMPLETED");
+    assert.equal(settled.recipientDelivery, "sending");
+    assert.equal((await walletState()).consumptions.length, 1);
+
+    remoteStatus = "delivered";
+    await handleWebhook(webhook("PURCHASE", ids.purchaseId, "remote-purchase", "delivered"));
+    // A late delivery_pending event must not undo the sent email.
+    await handleWebhook(webhook("PURCHASE", ids.purchaseId, "remote-purchase", "delivery_pending"));
+    let purchase = await prisma.codePurchase.findUniqueOrThrow({ where: { id: ids.purchaseId } });
+    assert.equal(purchase.fulfillmentStatus, "delivered");
+    assert.deepEqual(purchase.deliveredCodes, ["CODE-A"]);
+
+    remoteStatus = "action_required";
+    await handleWebhook(webhook("PURCHASE", ids.purchaseId, "remote-purchase", "action_required"));
+    await handleWebhook(webhook("PURCHASE", ids.purchaseId, "remote-purchase", "action_required"));
+    purchase = await prisma.codePurchase.findUniqueOrThrow({ where: { id: ids.purchaseId } });
+    assert.equal(purchase.status, "COMPLETED");
+    assert.equal(purchase.fulfillmentStatus, "action_required");
+    assert.equal(
+        await prisma.auditLog.count({ where: { action: "CODE_PURCHASE_RECIPIENT_EMAIL_FAILED" } }),
+        1,
+    );
+    assert.equal((await walletState()).consumptions.length, 1);
+});
+
+test("a buyer-only purchase keeps ignoring Diem events once settled", async () => {
+    await processCodePurchase(ids.purchaseId);
+    remoteStatus = "action_required";
+
+    await handleWebhook(webhook("PURCHASE", ids.purchaseId, "remote-purchase", "action_required"));
+
+    const purchase = await prisma.codePurchase.findUniqueOrThrow({ where: { id: ids.purchaseId } });
+    assert.equal(purchase.fulfillmentStatus, "delivered");
+});

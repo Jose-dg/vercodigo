@@ -28,6 +28,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { normalizeDeliveryRecipient } from '@/lib/codes/delivery-recipient';
+import { DeliveryRecipientFields, type DeliveryRecipientDraft } from '@/components/codes/DeliveryRecipientFields';
 import {
     BuyRegion,
     CatalogProduct,
@@ -159,6 +161,7 @@ export function CheckoutPanel({
         quotedUnitAmount: number;
         quotedCurrency: string;
         quotedRate?: number | null;
+        recipient?: { firstName: string; lastName: string; email: string };
     }) => void;
 }) {
     const rows = useMemo<CheckoutRow[]>(() => {
@@ -183,6 +186,17 @@ export function CheckoutPanel({
     // Texto del input mientras se escribe: borrar para teclear otra cantidad no debe saltar a 1.
     const [quantityDraft, setQuantityDraft] = useState<string | null>(null);
     const pricesLoading = pricesStatus === 'loading';
+    const [sendToCustomer, setSendToCustomer] = useState(false);
+    const [recipientDraft, setRecipientDraft] = useState<DeliveryRecipientDraft>({ firstName: '', lastName: '', email: '' });
+    const [recipientConsent, setRecipientConsent] = useState(false);
+    const recipientCheck = useMemo(() => {
+        if (!sendToCustomer) return { recipient: undefined, error: null };
+        try {
+            return { recipient: normalizeDeliveryRecipient(recipientDraft), error: null };
+        } catch (error) {
+            return { recipient: undefined, error: error instanceof Error ? error.message : 'Destinatario inválido' };
+        }
+    }, [sendToCustomer, recipientDraft]);
 
     const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
     const filtered = query.trim()
@@ -204,7 +218,8 @@ export function CheckoutPanel({
         && unitPrice != null
         && quantity >= 1
         && quantity <= maxQuantity
-        && (!isPlatform || (Boolean(targetCompanyId) && hasOrigin));
+        && (!isPlatform || (Boolean(targetCompanyId) && hasOrigin))
+        && (!sendToCustomer || (Boolean(recipientCheck.recipient) && recipientConsent));
     // Origin is exclusive: a store or a phone number, encoded as "kind:id".
     const originValue = targetOriginPhoneId
         ? `phone:${targetOriginPhoneId}`
@@ -481,6 +496,16 @@ export function CheckoutPanel({
                 </p>
             )}
 
+            <DeliveryRecipientFields
+                enabled={sendToCustomer}
+                onEnabledChange={setSendToCustomer}
+                draft={recipientDraft}
+                onDraftChange={setRecipientDraft}
+                consent={recipientConsent}
+                onConsentChange={setRecipientConsent}
+                error={recipientCheck.error}
+            />
+
             <div className="mt-auto pt-5">
                 <div className="flex items-end justify-between border-t border-dashed pt-5">
                     <span className="text-sm text-muted-foreground">A pagar</span>
@@ -504,6 +529,7 @@ export function CheckoutPanel({
                             quotedUnitAmount: unitPrice,
                             quotedCurrency: priceCurrency,
                             quotedRate: selected.price?.rateCopPerUsd,
+                            recipient: recipientCheck.recipient,
                         })
                     }
                 >

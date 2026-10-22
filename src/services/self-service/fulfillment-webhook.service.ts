@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 import { processActivationJob, updateOpenActivationJob } from "@/services/self-service/activate-card.service";
 import { notifyActivationJob } from "@/modules/notifications/order-notifications.service";
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
-import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
+import { processCodePurchase, recordRecipientDelivery } from "@/services/self-service/purchase-codes.service";
 import { updateOpenCodePurchase } from "@/services/self-service/code-purchase-state";
 import {
     refreshReplacedActivationCode,
@@ -144,9 +144,12 @@ export async function handleDiemFulfillmentWebhook(rawBody: string): Promise<{
         });
         if (purchaseFollowUp) {
             const result = await purchaseFollowUp();
+            await recordRecipientDelivery(purchase.id);
             return { ok: true, handled: true, kind: "purchase", id: purchase.id, status: result.status, reason: result.action };
         }
         if (isSettledFulfillmentStatus(purchase.status)) {
+            // A purchase emailed to the buyer's customer keeps reporting that email.
+            await recordRecipientDelivery(purchase.id);
             return {
                 ok: true,
                 handled: true,

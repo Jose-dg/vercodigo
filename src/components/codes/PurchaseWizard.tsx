@@ -84,6 +84,7 @@ export interface PurchaseWizardProps {
         quotedUnitAmount: number;
         quotedCurrency: string;
         quotedRate?: number | null;
+        recipient?: { firstName: string; lastName: string; email: string };
     }) => void;
 }
 

@@ -21,6 +21,13 @@ import { resolvePurchaseOrigin, type RequestedOrigin } from "@/services/purchase
 import { purchaseOriginSnapshot } from "@/lib/purchases/origin-snapshot";
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
 import { frozenCodeRequestCommand } from "@/services/self-service/diem-request-snapshot";
+import { writeAuditLog } from "@/services/self-service/audit.service";
+import {
+    deliveryRecipientOf,
+    recipientDeliveryState,
+    sameDeliveryRecipient,
+    type DeliveryRecipient,
+} from "@/lib/codes/delivery-recipient";
 import {
     OPEN_CODE_PURCHASE_STATUSES,
     isOpenCodePurchaseStatus,
@@ -53,6 +60,8 @@ export function buildPurchaseVisibilityFilter(
 
 function serializePurchase<T extends {
     deliveredCodes: Prisma.JsonValue | null;
+    diemRequestSnapshot?: Prisma.JsonValue | null;
+    fulfillmentStatus?: string | null;
     status: string;
     productId?: string;
     userId?: string;
@@ -65,6 +74,7 @@ function serializePurchase<T extends {
         billedCount: "count" in purchase && typeof purchase.count === "number" ? purchase.count : undefined,
         deliveredCodes: purchase.deliveredCodes,
     });
+    const deliveryRecipient = deliveryRecipientOf(purchase.diemRequestSnapshot);
     return {
         ...purchase,
         kind: "purchase" as const,
@@ -78,6 +88,10 @@ function serializePurchase<T extends {
         isPending: isOpenCodePurchaseStatus(purchase.status),
         isSuccessful: purchase.status === "COMPLETED",
         needsAction: purchase.status === "ACTION_REQUIRED",
+        deliveryRecipient,
+        recipientDelivery: deliveryRecipient
+            ? recipientDeliveryState(purchase.fulfillmentStatus ?? null)
+            : null,
     };
 }
 
@@ -146,12 +160,12 @@ function persistedCodesOf(purchase: { deliveredCodes: Prisma.JsonValue }) {
  * winner, writes its single wallet consumption. A concurrent processor either
  * blocks on the row lock and then sees COMPLETED, or loses the CAS.
  */
-async function settleCodePurchase(purchaseId: string, productName: string) {
+async function settleCodePurchase(purchaseId: string, productName: string, fulfillmentStatus: string) {
     try {
         return await prisma.$transaction(async (tx) => {
             const won = await updateOpenCodePurchase(tx, purchaseId, {
                 status: "COMPLETED",
-                fulfillmentStatus: "delivered",
+                fulfillmentStatus,
                 completedAt: new Date(),
                 nextRetryAt: null,
                 lastError: null,
@@ -198,6 +212,97 @@ async function settleCodePurchase(purchaseId: string, productName: string) {
     }
 }
 
+type PurchaseCommandSource = {
+    id: string;
+    userId: string;
+    companyId: string;
+    storeId: string | null;
+    purchaseOriginPhoneId: string | null;
+    originLabelSnapshot: string | null;
+    idempotencyKey: string;
+    count: number;
+    currency: string;
+    totalAmount: number;
+    occurredAt: Date;
+    occurredSequence: number;
+};
+
+/**
+ * The command Diem receives for a purchase. Without `recipient` the buyer reads
+ * the codes in the portal; with it Diem also emails them to that customer.
+ */
+async function buildPurchaseCommand(
+    db: Prisma.TransactionClient,
+    current: PurchaseCommandSource,
+    remoteProductId: string,
+    recipient?: DeliveryRecipient,
+) {
+    const [user, originCompany, originStore, originPhone] = await Promise.all([
+        db.user.findUnique({
+            where: { id: current.userId },
+            select: { email: true, name: true },
+        }),
+        db.company.findUnique({
+            where: { id: current.companyId },
+            select: { name: true },
+        }),
+        current.storeId
+            ? db.store.findFirst({
+                where: {
+                    id: current.storeId,
+                    companyId: current.companyId,
+                },
+                select: { name: true },
+            })
+            : Promise.resolve(null),
+        current.purchaseOriginPhoneId
+            ? db.purchaseOriginPhone.findFirst({
+                where: {
+                    id: current.purchaseOriginPhoneId,
+                    companyId: current.companyId,
+                },
+                select: { phone: true },
+            })
+            : Promise.resolve(null),
+    ]);
+    if (!user?.email) throw conflict("El usuario necesita un email para recibir el código");
+    const [firstName, ...lastName] = (user.name || user.email).trim().split(/\s+/);
+    return buildCodeRequestCommand({
+        idempotencyKey: current.idempotencyKey,
+        externalReference: `DIEM-SAS-PURCHASE-${current.id}`,
+        correlationId: `code-purchase:${current.id}`,
+        source: "partner_api",
+        productId: remoteProductId,
+        quantity: current.count,
+        recipient: recipient ?? {
+            firstName,
+            lastName: lastName.join(" "),
+            email: user.email,
+        },
+        deliveryMode: recipient ? "managed_and_partner" : "partner_retrieval",
+        commercial: {
+            accountCode: buildCommercialAccountCode(current.companyId),
+            referenceNamespace: "code_purchase",
+            currencyCode: current.currency,
+            unitPrice: current.totalAmount / current.count,
+            totalAmount: current.totalAmount,
+        },
+        metadata: {
+            code_purchase_id: current.id,
+            company_id: current.companyId,
+            company_name: originCompany?.name ?? null,
+            store_id: current.storeId,
+            store_name: originStore?.name ?? null,
+            purchase_origin: purchaseOriginSnapshot({
+                ...current,
+                purchaseOriginPhone: originPhone,
+            }),
+            commercial_occurred_at: current.occurredAt.toISOString(),
+            commercial_sequence: current.occurredSequence,
+        },
+    });
+}
+
 /**
  * Procesa una compra y avisa por correo según el estado en que queda (listo,
  * requiere atención). Lo usan el checkout, "Consultar Diem", la recuperación
@@ -240,71 +345,7 @@ async function processCodePurchaseState(purchaseId: string) {
     try {
         if (!purchase.diemRequestId) {
             const current = purchase;
-            const buildCommand = async () => {
-                const [user, originCompany, originStore, originPhone] = await Promise.all([
-                    prisma.user.findUnique({
-                        where: { id: current.userId },
-                        select: { email: true, name: true },
-                    }),
-                    prisma.company.findUnique({
-                        where: { id: current.companyId },
-                        select: { name: true },
-                    }),
-                    current.storeId
-                        ? prisma.store.findFirst({
-                            where: {
-                                id: current.storeId,
-                                companyId: current.companyId,
-                            },
-                            select: { name: true },
-                        })
-                        : Promise.resolve(null),
-                    current.purchaseOriginPhoneId
-                        ? prisma.purchaseOriginPhone.findFirst({
-                            where: {
-                                id: current.purchaseOriginPhoneId,
-                                companyId: current.companyId,
-                            },
-                            select: { phone: true },
-                        })
-                        : Promise.resolve(null),
-                ]);
-                if (!user?.email) throw conflict("El usuario necesita un email para recibir el código");
-                const [firstName, ...lastName] = (user.name || user.email).trim().split(/\s+/);
-                return buildCodeRequestCommand({
-                    idempotencyKey: current.idempotencyKey,
-                    externalReference: `DIEM-SAS-PURCHASE-${current.id}`,
-                    correlationId: `code-purchase:${current.id}`,
-                    source: "partner_api",
-                    productId: remoteProductId,
-                    quantity: current.count,
-                    recipient: {
-                        firstName,
-                        lastName: lastName.join(" "),
-                        email: user.email,
-                    },
-                    commercial: {
-                        accountCode: buildCommercialAccountCode(current.companyId),
-                        referenceNamespace: "code_purchase",
-                        currencyCode: current.currency,
-                        unitPrice: current.totalAmount / current.count,
-                        totalAmount: current.totalAmount,
-                    },
-                    metadata: {
-                        code_purchase_id: current.id,
-                        company_id: current.companyId,
-                        company_name: originCompany?.name ?? null,
-                        store_id: current.storeId,
-                        store_name: originStore?.name ?? null,
-                        purchase_origin: purchaseOriginSnapshot({
-                            ...current,
-                            purchaseOriginPhone: originPhone,
-                        }),
-                        commercial_occurred_at: current.occurredAt.toISOString(),
-                        commercial_sequence: current.occurredSequence,
-                    },
-                });
-            };
+            const buildCommand = () => buildPurchaseCommand(prisma, current, remoteProductId);
             // Idempotent in Diem: concurrent processors send the same frozen command.
             const command = await frozenCodeRequestCommand({
                 stored: current.diemRequestSnapshot,
@@ -370,6 +411,11 @@ async function processCodePurchaseState(purchaseId: string) {
             return serializePurchase(current);
         }
 
+        // Codes in hand means "delivered" to the buyer. When Diem also emails a
+        // customer, its own status is that email's state, so keep mirroring it.
+        const settledFulfillmentStatus = deliveryRecipientOf(purchase.diemRequestSnapshot)
+            ? request.status
+            : "delivered";
         const persistedCodes = persistedCodesOf(purchase);
         if (persistedCodes.length !== purchase.count) {
             // Idempotent in Diem: the same correlation id reveals the same codes.
@@ -379,14 +425,16 @@ async function processCodePurchaseState(purchaseId: string) {
             }
             const { applied, current } = await writeWhileOpen({
                 deliveredCodes: codes,
-                fulfillmentStatus: "delivered",
+                fulfillmentStatus: settledFulfillmentStatus,
                 nextRetryAt: null,
                 lastError: null,
             });
             if (!applied) return serializePurchase(current);
         }
 
-        return serializePurchase(await settleCodePurchase(purchase.id, product.name));
+        return serializePurchase(
+            await settleCodePurchase(purchase.id, product.name, settledFulfillmentStatus),
+        );
     } catch (error) {
         const message = error instanceof Error ? error.message : "Error desconocido";
         const permanent = isDiemContractError(error);
@@ -399,6 +447,38 @@ async function processCodePurchaseState(purchaseId: string) {
         }).catch(() => undefined);
         throw error;
     }
+}
+
+/**
+ * Mirrors the email Diem sends to the buyer's customer on a settled purchase.
+ * Reads Diem instead of trusting the webhook payload, so late or reordered
+ * events can never move the state backwards.
+ */
+export async function recordRecipientDelivery(purchaseId: string) {
+    const purchase = await prisma.codePurchase.findUnique({ where: { id: purchaseId } });
+    if (!purchase || purchase.status !== "COMPLETED" || !purchase.diemRequestId) return null;
+    const recipient = deliveryRecipientOf(purchase.diemRequestSnapshot);
+    if (!recipient) return null;
+    const remote = await getCodeRequest(purchase.diemRequestId);
+    if (remote.status === purchase.fulfillmentStatus) return recipientDeliveryState(remote.status);
+    const updated = await prisma.codePurchase.updateMany({
+        where: { id: purchase.id, status: "COMPLETED", fulfillmentStatus: purchase.fulfillmentStatus },
+        data: { fulfillmentStatus: remote.status },
+    });
+    const state = recipientDeliveryState(remote.status);
+    if (updated.count && state === "failed" && recipientDeliveryState(purchase.fulfillmentStatus) !== "failed") {
+        await writeAuditLog({
+            action: "CODE_PURCHASE_RECIPIENT_EMAIL_FAILED",
+            userId: purchase.userId,
+            companyId: purchase.companyId,
+            storeId: purchase.storeId,
+            entityType: "CodePurchase",
+            entityId: purchase.id,
+            details: { diemRequestId: purchase.diemRequestId, diemStatus: remote.status, recipient: recipient.email },
+            success: false,
+        });
+    }
+    return state;
 }
 
 /** Crea la compra y avisa al comprador, al dueño de la empresa y al equipo Diem. */
@@ -421,8 +501,11 @@ async function placeCodePurchase(params: {
     quotedUnitAmount?: number;
     quotedCurrency?: string;
     quotedRate?: number | null;
+    /** Diem emails the codes to this customer of the buyer's company. */
+    recipient?: DeliveryRecipient;
 }) {
     const { userId, storeId, productId, denominationId, count, actorRole, targetCompanyId } = params;
+    const recipient = params.recipient ?? null;
     if (count <= 0) throw badRequest("Cantidad debe ser mayor a 0");
     if (count > 100) throw badRequest("Máximo 100 códigos por compra");
 
@@ -485,6 +568,7 @@ async function placeCodePurchase(params: {
         storeId: string | null;
         companyId: string;
         purchaseOriginPhoneId: string | null;
+        diemRequestSnapshot: Prisma.JsonValue | null;
     }) => (
         existing.userId === userId
         && existing.productId === productId
@@ -493,6 +577,7 @@ async function placeCodePurchase(params: {
         && existing.storeId === resolvedStoreId
         && existing.companyId === companyId
         && existing.purchaseOriginPhoneId === resolvedOrigin.purchaseOriginPhoneId
+        && sameDeliveryRecipient(deliveryRecipientOf(existing.diemRequestSnapshot), recipient)
     );
     let purchase;
     try {
@@ -526,7 +611,7 @@ async function placeCodePurchase(params: {
             ) {
                 throw conflict("La tarifa cambió después de mostrar el total. Revisa el valor y confirma nuevamente.");
             }
-            return tx.codePurchase.create({
+            const created = await tx.codePurchase.create({
                 data: {
                     userId,
                     companyId,
@@ -547,6 +632,15 @@ async function placeCodePurchase(params: {
                     status: "PENDING",
                     idempotencyKey: durableIdempotencyKey,
                 },
+                include: { denomination: true },
+            });
+            if (!recipient) return created;
+            // Frozen with the row: no processor may ever build the buyer-only
+            // command for a purchase whose codes belong to another person.
+            const command = await buildPurchaseCommand(tx, created, remoteProductId, recipient);
+            return tx.codePurchase.update({
+                where: { id: created.id },
+                data: { diemRequestSnapshot: command as unknown as Prisma.InputJsonValue },
                 include: { denomination: true },
             });
         });

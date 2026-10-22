@@ -30,6 +30,7 @@ import {
 import { AlertCircle, Check, ChevronRight, Copy, Eye, Loader2, QrCode, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 export interface PurchaseHistoryItem {
     kind?: "purchase" | "activation";
@@ -54,7 +55,11 @@ export interface PurchaseHistoryItem {
     deliveredCodeCount: number;
     hasDeliveryCountMismatch: boolean;
     denomination?: { amount: number; currency: string } | null;
+    deliveryRecipient?: { firstName: string; lastName: string; email: string } | null;
+    recipientDelivery?: "sending" | "sent" | "failed" | null;
 }
+
+const RECIPIENT_DELIVERY_TEXT = { sending: "enviando", sent: "enviado", failed: "no se pudo enviar" } as const;
 
 interface PurchaseHistoryPanelProps {
     refreshToken?: number;
@@ -236,6 +241,17 @@ function PurchaseTable({
                             <div className="text-xs text-muted-foreground sm:hidden">
                                 {formatWhen(purchase.occurredAt ?? purchase.completedAt ?? purchase.createdAt)}
                             </div>
+                            {purchase.deliveryRecipient && (
+                                <div
+                                    className={cn(
+                                        "text-xs",
+                                        purchase.recipientDelivery === "failed" ? "text-destructive" : "text-muted-foreground",
+                                    )}
+                                >
+                                    Para {purchase.deliveryRecipient.email}
+                                    {purchase.recipientDelivery ? ` · ${RECIPIENT_DELIVERY_TEXT[purchase.recipientDelivery]}` : ""}
+                                </div>
+                            )}
                             {purchase.kind === "activation" && (
                                 <Badge variant="outline" className="mt-1 gap-1 font-normal">
                                     <QrCode className="h-3 w-3" />

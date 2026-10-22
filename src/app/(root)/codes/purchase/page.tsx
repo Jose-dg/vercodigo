@@ -268,6 +268,7 @@ export default function PurchaseCodesPage() {
         quotedUnitAmount: number;
         quotedCurrency: string;
         quotedRate?: number | null;
+        recipient?: { firstName: string; lastName: string; email: string };
     }) => {
         if (!payload.productId) {
             toast.error('Seleccione un producto');
@@ -308,6 +309,7 @@ export default function PurchaseCodesPage() {
                     quotedUnitAmount: payload.quotedUnitAmount,
                     quotedCurrency: payload.quotedCurrency,
                     quotedRate: payload.quotedRate,
+                    recipient: payload.recipient,
                     ...(isPlatform
                         ? {
                               companyId: targetCompanyId,
@@ -340,7 +342,11 @@ export default function PurchaseCodesPage() {
 
             setHistoryTick((tick) => tick + 1);
             if (data.purchase?.status === 'COMPLETED') {
-                toast.success('Compra exitosa');
+                toast.success(
+                    payload.recipient
+                        ? `Compra exitosa. Diem enviará los códigos a ${payload.recipient.email}`
+                        : 'Compra exitosa',
+                );
             } else if (data.purchase?.isPending) {
                 toast.success('Orden registrada. Te mostramos su estado en vivo.');
             } else {

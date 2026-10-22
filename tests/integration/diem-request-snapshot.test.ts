@@ -54,8 +54,9 @@ const server = createServer((req, res) => {
 
 let prisma: typeof import("@/lib/prisma").default;
 let processCodePurchase: typeof import("@/services/self-service/purchase-codes.service").processCodePurchase;
+let purchaseCodes: typeof import("@/services/self-service/purchase-codes.service").purchaseCodes;
 let processActivationJob: typeof import("@/services/self-service/activate-card.service").processActivationJob;
-let ids: { userId: string; purchaseId: string; jobId: string; cardId: string; storeId: string };
+let ids: { userId: string; purchaseId: string; jobId: string; cardId: string; storeId: string; productId: string; denominationId: string };
 
 before(async () => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -63,7 +64,7 @@ before(async () => {
     process.env.DIEM_SERVICE_API_KEY = "test-key";
     process.env.DIEM_STORE_ID = "00000000-0000-4000-8000-000000000000";
     prisma = (await import("@/lib/prisma")).default;
-    ({ processCodePurchase } = await import("@/services/self-service/purchase-codes.service"));
+    ({ processCodePurchase, purchaseCodes } = await import("@/services/self-service/purchase-codes.service"));
     ({ processActivationJob } = await import("@/services/self-service/activate-card.service"));
 });
 
@@ -82,6 +83,7 @@ beforeEach(async () => {
     await prisma.card.deleteMany();
     await prisma.key.deleteMany();
     await prisma.codePurchase.deleteMany();
+    await prisma.productDenomination.deleteMany();
     await prisma.product.deleteMany();
     await prisma.user.deleteMany();
     await prisma.store.deleteMany();
@@ -102,6 +104,9 @@ beforeEach(async () => {
     });
     const product = await prisma.product.create({
         data: { name: "Gift Card", sku: `SKU-${suffix}`, brand: "Test", devDiemProductId: "remote-product-1" },
+    });
+    const denomination = await prisma.productDenomination.create({
+        data: { productId: product.id, amount: 36000, currency: "COP", devDiemProductId: "remote-product-1" },
     });
     await prisma.wallet.create({ data: { companyId: company.id, currency: "COP" } });
     const purchase = await prisma.codePurchase.create({
@@ -124,7 +129,10 @@ beforeEach(async () => {
             commercialAmount: 37000, commercialCurrency: "COP",
         },
     });
-    ids = { userId: user.id, purchaseId: purchase.id, jobId: job.id, cardId: card.id, storeId: store.id };
+    ids = {
+        userId: user.id, purchaseId: purchase.id, jobId: job.id, cardId: card.id, storeId: store.id,
+        productId: product.id, denominationId: denomination.id,
+    };
 });
 
 test("a retry after a lost Diem response resends the identical command even if live data changed", async () => {
@@ -163,4 +171,37 @@ test("an idempotency 409 parks the activation for review and keeps the card lock
     assert.equal(job.status, "ACTION_REQUIRED");
     assert.match(job.lastError ?? "", /idempotencia/);
     assert.equal(card.activationLock, true);
+});
+
+test("a customer delivery freezes its recipient with the purchase and Diem is asked to email it", async () => {
+    createBehaviour = () => ({
+        status: 201,
+        body: { id: "remote-1", commercial_order_id: "order-1", status: "received", external_reference: "x" },
+    });
+    const recipient = { firstName: "Luis", lastName: "Gómez", email: "luis@cliente.co" };
+    const order = {
+        userId: ids.userId,
+        actorRole: "OPERATOR",
+        productId: ids.productId,
+        denominationId: ids.denominationId,
+        count: 1,
+        idempotencyKey: "gift-1",
+    };
+
+    const placed = await purchaseCodes({ ...order, recipient });
+
+    assert.equal(createCalls.length, 1);
+    const sent = JSON.parse(createCalls[0].body);
+    assert.equal(sent.delivery_mode, "managed_and_partner");
+    assert.equal(sent.recipient.email, "luis@cliente.co");
+    assert.deepEqual(placed.deliveryRecipient, recipient);
+
+    // The same Idempotency-Key can never be reused to send the codes elsewhere.
+    await assert.rejects(
+        () => purchaseCodes({ ...order, recipient: { ...recipient, email: "otro@cliente.co" } }),
+        /Idempotency-Key/,
+    );
+    await assert.rejects(() => purchaseCodes(order), /Idempotency-Key/);
+    const replay = await purchaseCodes({ ...order, recipient });
+    assert.equal(replay.id, placed.id);
 });

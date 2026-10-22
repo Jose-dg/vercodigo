@@ -14,6 +14,7 @@ import {
     KeyRound,
     Layers,
     Loader2,
+    Mail,
     RefreshCw,
     Tag,
     Wallet,
@@ -64,6 +65,30 @@ export interface PurchaseDetail {
     unitPrice: number;
     timeline: PurchaseTimeline;
     walletTransactions: PurchaseWalletTransaction[];
+    deliveryRecipient?: { firstName: string; lastName: string; email: string } | null;
+    recipientDelivery?: 'sending' | 'sent' | 'failed' | null;
+}
+
+const RECIPIENT_DELIVERY_LABEL: Record<'sending' | 'sent' | 'failed', { text: string; className: string }> = {
+    sending: { text: 'Enviando el email', className: 'text-muted-foreground' },
+    sent: { text: 'Email enviado', className: 'text-emerald-700 dark:text-emerald-400' },
+    failed: {
+        text: 'El email no se pudo enviar. Comparte los códigos con tu cliente o escribe a soporte Diem.',
+        className: 'text-destructive',
+    },
+};
+
+function RecipientDelivery({ purchase }: { purchase: PurchaseDetail }) {
+    const recipient = purchase.deliveryRecipient;
+    if (!recipient) return null;
+    const name = [recipient.firstName, recipient.lastName].filter(Boolean).join(' ');
+    const state = purchase.recipientDelivery ? RECIPIENT_DELIVERY_LABEL[purchase.recipientDelivery] : null;
+    return (
+        <Section icon={<Mail className="size-4" />} title="Entrega a tu cliente">
+            <DetailRow icon={<Mail className="size-4" />} label="Para" value={name ? `${name} · ${recipient.email}` : recipient.email} />
+            {state && <p className={cn('mt-2 text-sm', state.className)}>{state.text}</p>}
+        </Section>
+    );
 }
 
 function Section({ icon, title, children, className }: {
@@ -225,6 +250,8 @@ export function OrderDetail({
                             value={<span className="tabular-nums">{purchase.count}</span>}
                         />
                     </Section>
+
+                    <RecipientDelivery purchase={purchase} />
 
                     {purchase.isSuccessful && (
                         <Section icon={<KeyRound className="size-4" />} title="Códigos entregados">

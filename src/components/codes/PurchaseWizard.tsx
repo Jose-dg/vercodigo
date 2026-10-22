@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { BatchPurchasePayload } from '@/components/codes/recipients-batch';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Package } from 'lucide-react';
@@ -86,6 +87,7 @@ export interface PurchaseWizardProps {
         quotedRate?: number | null;
         recipient?: { firstName: string; lastName: string; email: string };
     }) => void;
+    onPurchaseBatch: (payload: BatchPurchasePayload) => void;
 }
 
 const PROGRESS_STEPS: { key: WizardStep; label: string }[] = [
@@ -187,6 +189,7 @@ export function PurchaseWizard({
     onTargetOriginPhoneChange,
     isPurchasing,
     onPurchase,
+    onPurchaseBatch,
 }: PurchaseWizardProps) {
     // El wizard solo se monta en el cliente, con el catálogo ya cargado: se puede leer el
     // historial al inicializar (recarga o regreso desde el detalle de una orden).
@@ -316,6 +319,7 @@ export function PurchaseWizard({
                     onTargetOriginPhoneChange={onTargetOriginPhoneChange}
                     isPurchasing={isPurchasing}
                     onPurchase={onPurchase}
+                    onPurchaseBatch={onPurchaseBatch}
                 />
             </div>
         );

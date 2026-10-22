@@ -11,6 +11,12 @@ import { PurchaseHistoryPanel } from '@/components/codes/PurchaseHistoryPanel';
 import { PurchaseWizard, type PriceRow, type PricesStatus, type WalletBalance } from '@/components/codes/PurchaseWizard';
 import { PurchaseWizardSkeleton } from '@/components/codes/PurchaseWizardSkeleton';
 import { startNavigationProgress } from '@/components/navigation-progress';
+import { RecipientsBatchDialog } from '@/components/codes/RecipientsBatchDialog';
+import {
+    runRecipientsBatch,
+    type BatchPurchasePayload,
+    type BatchRowState,
+} from '@/components/codes/recipients-batch';
 import type { CatalogProduct } from '@/lib/codes/catalog-regions';
 import type { UserRole } from '@prisma/client';
 
@@ -36,6 +42,9 @@ export default function PurchaseCodesPage() {
     const [activeTab, setActiveTab] = useState('order');
     const [historyTick, setHistoryTick] = useState(0);
     const purchaseInFlightKey = useRef<string | null>(null);
+    const [batchRows, setBatchRows] = useState<BatchRowState[] | null>(null);
+    const [batchRunning, setBatchRunning] = useState(false);
+    const lastBatch = useRef<BatchPurchasePayload | null>(null);
     const [targetCompanyId, setTargetCompanyId] = useState('');
     const [targetStoreId, setTargetStoreId] = useState('');
     const [targetOriginPhoneId, setTargetOriginPhoneId] = useState('');
@@ -368,6 +377,64 @@ export default function PurchaseCodesPage() {
         }
     };
 
+    const platformTargetBody = () => (isPlatform
+        ? {
+              companyId: targetCompanyId,
+              origin: targetOriginPhoneId
+                  ? { kind: 'phone', id: targetOriginPhoneId }
+                  : { kind: 'store', id: targetStoreId },
+          }
+        : {});
+
+    const runBatch = async (payload: BatchPurchasePayload) => {
+        setBatchRunning(true);
+        try {
+            await runRecipientsBatch({
+                payload,
+                buildBody: (row) => ({
+                    productId: payload.productId,
+                    denominationId: payload.denominationId || undefined,
+                    count: 1,
+                    quotedUnitAmount: payload.quotedUnitAmount,
+                    quotedCurrency: payload.quotedCurrency,
+                    quotedRate: payload.quotedRate,
+                    recipient: row.recipient,
+                    ...platformTargetBody(),
+                }),
+                onRow: (line, patch) =>
+                    setBatchRows((current) => current?.map((row) => (row.line === line ? { ...row, ...patch } : row)) ?? current),
+            });
+        } finally {
+            setBatchRunning(false);
+            setHistoryTick((tick) => tick + 1);
+        }
+    };
+
+    const handlePurchaseBatch = async (payload: BatchPurchasePayload) => {
+        if (isPlatform && (!targetCompanyId || (!targetStoreId && !targetOriginPhoneId))) {
+            toast.error('Selecciona la empresa y una sede o número de origen');
+            return;
+        }
+        lastBatch.current = payload;
+        setBatchRows(payload.rows.map((row) => ({
+            line: row.line,
+            recipient: row.recipient,
+            status: 'queued',
+            orderId: null,
+            message: '',
+        })));
+        await runBatch(payload);
+    };
+
+    const retryFailedBatchRows = async () => {
+        const payload = lastBatch.current;
+        if (!payload || !batchRows) return;
+        const failed = new Set(batchRows.filter((row) => row.status === 'error').map((row) => row.line));
+        setBatchRows((current) => current?.map((row) => (failed.has(row.line) ? { ...row, status: 'queued', message: '' } : row)) ?? current);
+        // Same file and rows: same Idempotency-Keys, so rows that did go through are not bought again.
+        await runBatch({ ...payload, rows: payload.rows.filter((row) => failed.has(row.line)) });
+    };
+
     return (
         <main className="min-h-full bg-muted/20">
             <div className="container max-w-6xl px-4 py-4 sm:px-6 sm:py-10">
@@ -383,6 +450,17 @@ export default function PurchaseCodesPage() {
                         </p>
                     </div>
                 </header>
+
+                <RecipientsBatchDialog
+                    rows={batchRows}
+                    running={batchRunning}
+                    onRetryFailed={() => void retryFailedBatchRows()}
+                    onShowHistory={() => {
+                        setBatchRows(null);
+                        setActiveTab('history');
+                    }}
+                    onClose={() => setBatchRows(null)}
+                />
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
                     <TabsList className="grid h-12 w-full max-w-sm grid-cols-2 p-1">
@@ -414,6 +492,7 @@ export default function PurchaseCodesPage() {
                                 onTargetOriginPhoneChange={setTargetOriginPhoneId}
                                 isPurchasing={isPurchasing}
                                 onPurchase={handlePurchase}
+                                onPurchaseBatch={handlePurchaseBatch}
                             />
                         )}
                     </TabsContent>

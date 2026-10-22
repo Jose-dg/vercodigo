@@ -29,7 +29,13 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { normalizeDeliveryRecipient } from '@/lib/codes/delivery-recipient';
-import { DeliveryRecipientFields, type DeliveryRecipientDraft } from '@/components/codes/DeliveryRecipientFields';
+import {
+    DeliveryRecipientFields,
+    type DeliveryRecipientDraft,
+    type RecipientMode,
+} from '@/components/codes/DeliveryRecipientFields';
+import type { RecipientsCsv } from '@/components/codes/RecipientsCsvInput';
+import type { BatchPurchasePayload } from '@/components/codes/recipients-batch';
 import {
     BuyRegion,
     CatalogProduct,
@@ -136,6 +142,7 @@ export function CheckoutPanel({
     onTargetOriginPhoneChange,
     isPurchasing,
     onPurchase,
+    onPurchaseBatch,
 }: {
     product: CatalogProduct;
     region: BuyRegion | null;
@@ -163,6 +170,8 @@ export function CheckoutPanel({
         quotedRate?: number | null;
         recipient?: { firstName: string; lastName: string; email: string };
     }) => void;
+    /** "Varios (CSV)": one purchase per row, each emailed to its person. */
+    onPurchaseBatch: (payload: BatchPurchasePayload) => void;
 }) {
     const rows = useMemo<CheckoutRow[]>(() => {
         const priceFor = (denominationId: string | null) =>
@@ -189,6 +198,11 @@ export function CheckoutPanel({
     const [sendToCustomer, setSendToCustomer] = useState(false);
     const [recipientDraft, setRecipientDraft] = useState<DeliveryRecipientDraft>({ firstName: '', lastName: '', email: '' });
     const [recipientConsent, setRecipientConsent] = useState(false);
+    const [recipientMode, setRecipientMode] = useState<RecipientMode>('single');
+    const [recipientsCsv, setRecipientsCsv] = useState<RecipientsCsv | null>(null);
+    const csvMode = sendToCustomer && recipientMode === 'csv';
+    // A file with errors buys nothing: the count stays 0 until it is fixed.
+    const csvCount = recipientsCsv && recipientsCsv.parsed.errors.length === 0 ? recipientsCsv.parsed.rows.length : 0;
     const recipientCheck = useMemo(() => {
         if (!sendToCustomer) return { recipient: undefined, error: null };
         try {
@@ -205,10 +219,12 @@ export function CheckoutPanel({
 
     const maxQuantity = Math.max(maxPurchasableQuantity(selected?.stock ?? null), 1);
     const outOfStock = selected?.stock != null && selected.stock <= 0;
-    const exceedsStock = selected?.stock != null && !outOfStock && quantity > selected.stock;
+    // With a CSV every row is one code for one person.
+    const count = csvMode ? csvCount : quantity;
+    const exceedsStock = selected?.stock != null && !outOfStock && count > selected.stock;
     const unitPrice = selected?.price?.salePrice ?? null;
     const priceCurrency = selected?.price?.currency ?? balance?.currency ?? 'USD';
-    const total = unitPrice != null ? unitPrice * quantity : null;
+    const total = unitPrice != null ? unitPrice * count : null;
     const animatedTotal = useAnimatedNumber(total ?? 0);
     const insufficientBalance =
         total != null && balance != null && balance.currency === priceCurrency && total > balance.amount;
@@ -216,10 +232,12 @@ export function CheckoutPanel({
     const canConfirm =
         Boolean(selected)
         && unitPrice != null
-        && quantity >= 1
-        && quantity <= maxQuantity
         && (!isPlatform || (Boolean(targetCompanyId) && hasOrigin))
-        && (!sendToCustomer || (Boolean(recipientCheck.recipient) && recipientConsent));
+        && (csvMode
+            ? csvCount > 0 && recipientConsent
+            : quantity >= 1
+                && quantity <= maxQuantity
+                && (!sendToCustomer || (Boolean(recipientCheck.recipient) && recipientConsent)));
     // Origin is exclusive: a store or a phone number, encoded as "kind:id".
     const originValue = targetOriginPhoneId
         ? `phone:${targetOriginPhoneId}`
@@ -374,7 +392,10 @@ export function CheckoutPanel({
                 </div>
             )}
 
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cantidad</p>
+            <fieldset disabled={csvMode} className={cn(csvMode && 'opacity-50')}>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Cantidad{csvMode ? ' · con CSV es un código por persona' : ''}
+            </p>
             <div className="mb-2 grid gap-3 sm:grid-cols-[1.1fr_1fr]">
                 <div className="flex h-14 items-stretch overflow-hidden rounded-xl border">
                     <button
@@ -425,6 +446,7 @@ export function CheckoutPanel({
                     </span>
                 </div>
             </div>
+            </fieldset>
             {outOfStock && (
                 <p className="mb-2 text-sm text-amber-800 dark:text-amber-300">
                     Sin stock ahora: el pedido queda en espera hasta que Diem reponga códigos y lo asigne.
@@ -504,6 +526,10 @@ export function CheckoutPanel({
                 consent={recipientConsent}
                 onConsentChange={setRecipientConsent}
                 error={recipientCheck.error}
+                mode={recipientMode}
+                onModeChange={setRecipientMode}
+                csv={recipientsCsv}
+                onCsvChange={setRecipientsCsv}
             />
 
             <div className="mt-auto pt-5">
@@ -521,17 +547,21 @@ export function CheckoutPanel({
                     className="mt-5 h-14 w-full rounded-xl text-base font-semibold transition-transform active:scale-[0.98]"
                     size="lg"
                     disabled={isPurchasing || !canConfirm}
-                    onClick={() =>
-                        selected && unitPrice != null && onPurchase({
+                    onClick={() => {
+                        if (!selected || unitPrice == null) return;
+                        const quote = {
                             productId: product.id,
                             denominationId: selected.id,
-                            count: quantity,
                             quotedUnitAmount: unitPrice,
                             quotedCurrency: priceCurrency,
                             quotedRate: selected.price?.rateCopPerUsd,
-                            recipient: recipientCheck.recipient,
-                        })
-                    }
+                        };
+                        if (csvMode && recipientsCsv) {
+                            onPurchaseBatch({ ...quote, fileText: recipientsCsv.text, rows: recipientsCsv.parsed.rows });
+                            return;
+                        }
+                        onPurchase({ ...quote, count: quantity, recipient: recipientCheck.recipient });
+                    }}
                 >
                     {isPurchasing ? (
                         <>
@@ -542,7 +572,9 @@ export function CheckoutPanel({
                         <>
                             {pricesLoading
                                 ? 'Cargando precio…'
-                                : outOfStock
+                                : csvMode
+                                    ? `Enviar a ${csvCount} destinatario(s)`
+                                    : outOfStock
                                     ? 'Pedir (queda en espera de stock)'
                                     : 'Realizar la orden'}
                             <ArrowRight className="ml-2 size-5" />

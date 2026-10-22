@@ -205,3 +205,36 @@ test("a customer delivery freezes its recipient with the purchase and Diem is as
     const replay = await purchaseCodes({ ...order, recipient });
     assert.equal(replay.id, placed.id);
 });
+
+test("a recipients CSV sent twice buys once per row", async () => {
+    createBehaviour = (call) => ({
+        status: 201,
+        body: { id: `remote-csv-${call}`, commercial_order_id: `order-${call}`, status: "received", external_reference: "x" },
+    });
+    const { parseRecipientsCsv, csvRowIdempotencyKey } = await import("@/lib/codes/recipients-csv");
+    const fileText = "nombre,apellido,email\nLuis,Gómez,luis@cliente.co\nAna,Ruiz,ana@cliente.co\nEva,Paz,eva@cliente.co\n";
+    const { rows, errors } = parseRecipientsCsv(fileText);
+    assert.deepEqual(errors, []);
+
+    const sendFile = async () => {
+        for (const row of rows) {
+            const idempotencyKey = await csvRowIdempotencyKey({
+                fileText, productId: ids.productId, denominationId: ids.denominationId, line: row.line,
+            });
+            await purchaseCodes({
+                userId: ids.userId, actorRole: "OPERATOR", productId: ids.productId,
+                denominationId: ids.denominationId, count: 1, idempotencyKey, recipient: row.recipient,
+            });
+        }
+    };
+    await sendFile();
+    await sendFile();
+
+    const purchases = await prisma.codePurchase.findMany({ where: { idempotencyKey: { contains: "csv-" } } });
+    assert.equal(purchases.length, 3);
+    assert.equal(createCalls.length, 3);
+    assert.deepEqual(
+        createCalls.map((call) => JSON.parse(call.body).recipient.email).sort(),
+        ["ana@cliente.co", "eva@cliente.co", "luis@cliente.co"],
+    );
+});

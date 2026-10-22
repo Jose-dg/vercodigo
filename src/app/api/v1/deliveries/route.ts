@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import prisma from "@/lib/prisma";
 import { apiError, withApiKey } from "@/lib/auth/api-key-guard";
 import {
     InvalidDeliveryRecipientError,
     normalizeDeliveryRecipient,
 } from "@/lib/codes/delivery-recipient";
 import { purchaseCodes } from "@/services/self-service/purchase-codes.service";
-import { serializeDelivery } from "@/modules/api-v1/serializers";
+import { createSandboxDelivery } from "@/modules/api-v1/sandbox";
+import { serializeDelivery, serializeSandboxDelivery } from "@/modules/api-v1/serializers";
 
 const DeliveryBody = z.object({
     product_id: z.string().min(1),
@@ -53,6 +55,22 @@ export const POST = withApiKey("deliveries:create", async (req, _ctx, principal)
     } catch (error) {
         if (error instanceof InvalidDeliveryRecipientError) return apiError(400, "BAD_REQUEST", error.message);
         throw error;
+    }
+
+    if (principal.environment === "SANDBOX") {
+        // Simulated end to end: never reaches the wallet, Diem or an inbox.
+        const row = await createSandboxDelivery({
+            companyId: principal.companyId,
+            apiKeyId: principal.apiKeyId,
+            idempotencyKey,
+            productId: parsed.data.product_id,
+            denominationId: parsed.data.denomination_id,
+            quantity: parsed.data.quantity,
+            recipient,
+            expectedUnitPrice: parsed.data.expected_unit_price,
+        });
+        const product = await prisma.product.findUnique({ where: { id: row.productId }, select: { name: true } });
+        return NextResponse.json(serializeSandboxDelivery(row, product?.name), { status: 201 });
     }
 
     const purchase = await purchaseCodes({

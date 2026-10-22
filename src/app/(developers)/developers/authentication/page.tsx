@@ -13,11 +13,17 @@ export default function AuthenticationPage() {
     >
       <CodeBlock samples={requestSamples({ baseUrl: apiBaseUrl(), method: "GET", path: "/api/v1/catalog" })} />
 
-      <h2>Formato</h2>
-      <p>
-        Una key se ve así: <InlineCode>vck_live_3f9a1c2b7d4e_…</InlineCode>. La primera parte es pública y te sirve
-        para identificarla en el portal. El resto es secreto.
-      </p>
+      <h2>Formato y ambientes</h2>
+      <ul className="list-disc space-y-2 pl-5">
+        <li>
+          <InlineCode>vck_test_…</InlineCode> — <strong>sandbox</strong>: simula todo, no cobra (ver{" "}
+          <Link className="underline" href="/developers/sandbox">Sandbox</Link>).
+        </li>
+        <li>
+          <InlineCode>vck_live_…</InlineCode> — <strong>producción</strong>: cada entrega se cobra de tu billetera.
+        </li>
+      </ul>
+      <p>Lo que sigue al ambiente (12 caracteres) es público y sirve para identificar la key en el portal. El resto es secreto.</p>
 
       <h2>Quién la crea y quién la guarda</h2>
       <ul className="list-disc space-y-2 pl-5">
@@ -33,7 +39,8 @@ export default function AuthenticationPage() {
           La key actúa en nombre de quien la creó: compra con su sede de origen y deja de funcionar si esa persona se
           desactiva o deja de ser administradora.
         </li>
-        <li>Puedes tener hasta 5 keys activas, por ejemplo una por sistema o por ambiente.</li>
+        <li>Puedes tener hasta 5 keys activas de cada ambiente, por ejemplo una por sistema.</li>
+        <li>Las keys son de tu empresa: solo su dueño y sus administradores generales las ven y las gestionan.</li>
       </ul>
 
       <h2>Permisos</h2>

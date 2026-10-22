@@ -16,14 +16,13 @@ function errorResponse(error: unknown, scope: string) {
 }
 
 export const GET = withAuth("read", "ApiKey", async (
-    req: NextRequest,
+    _req: NextRequest,
     _ctx: unknown,
     _ability: AppAbility,
     user: AuthenticatedActor,
 ) => {
     try {
-        const companyId = req.nextUrl.searchParams.get("companyId");
-        return NextResponse.json({ apiKeys: await listApiKeys(user, companyId) });
+        return NextResponse.json({ apiKeys: await listApiKeys(user) });
     } catch (error) {
         return errorResponse(error, "list");
     }
@@ -32,6 +31,7 @@ export const GET = withAuth("read", "ApiKey", async (
 const CreateBody = z.object({
     name: z.string(),
     scopes: z.array(z.string()),
+    environment: z.enum(["LIVE", "SANDBOX"]),
     expiresAt: z.string().datetime().nullable().optional(),
 });
 
@@ -49,6 +49,7 @@ export const POST = withAuth("create", "ApiKey", async (
         const created = await createApiKey(user, {
             name: parsed.data.name,
             scopes: parsed.data.scopes,
+            environment: parsed.data.environment,
             expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
         });
         // The only response that ever contains the key in clear.

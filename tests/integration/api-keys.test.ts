@@ -96,6 +96,7 @@ before(async () => {
 after(async () => {
     // Other suites delete companies and do not know about API keys.
     await prisma.apiRateWindow.deleteMany();
+    await prisma.sandboxDelivery.deleteMany();
     await prisma.companyApiKey.deleteMany();
     await prisma.$disconnect();
     await new Promise((resolve) => server.close(resolve));
@@ -104,6 +105,7 @@ after(async () => {
 beforeEach(async () => {
     createCalls = [];
     await prisma.apiRateWindow.deleteMany();
+    await prisma.sandboxDelivery.deleteMany();
     await prisma.companyApiKey.deleteMany();
     await prisma.auditLog.deleteMany();
     await prisma.walletTransaction.deleteMany();
@@ -150,7 +152,7 @@ beforeEach(async () => {
 });
 
 test("a key works until it is revoked, and the database never holds it in clear", async () => {
-    const { key, apiKey } = await keys.createApiKey(ctx.owner, { name: "ERP", scopes: ["wallet:read"] });
+    const { key, apiKey } = await keys.createApiKey(ctx.owner, { name: "ERP", scopes: ["wallet:read"], environment: "LIVE" });
 
     const ok = await call(routes.wallet, key);
     assert.equal(ok.status, 200);
@@ -178,13 +180,15 @@ test("missing scope is 403, a bad key is 401 and the limit is five active keys",
     }
     await assert.rejects(
         () => keys.createApiKey(ctx.owner, { name: "sexta", scopes: ["wallet:read"] }),
-        /5 API keys activas/,
+        /5 API keys sandbox activas/,
     );
+    // The limit is per environment: sandbox keys do not block production ones.
+    await keys.createApiKey(ctx.owner, { name: "prod", scopes: ["wallet:read"], environment: "LIVE" });
 });
 
 test("an API delivery is idempotent, emails the recipient and stays inside its company", async () => {
     const { key } = await keys.createApiKey(ctx.owner, {
-        name: "ERP", scopes: ["deliveries:create", "deliveries:read"],
+        name: "ERP", scopes: ["deliveries:create", "deliveries:read"], environment: "LIVE",
     });
     const first = await call(routes.createDelivery, key, { method: "POST", body: delivery(), idem: "order-77" });
     assert.equal(first.status, 201, await first.clone().text());
@@ -207,7 +211,7 @@ test("an API delivery is idempotent, emails the recipient and stays inside its c
 
     const own = await call(routes.getDelivery, key, { id: created.id });
     assert.equal(own.status, 200);
-    const { key: otherKey } = await keys.createApiKey(ctx.otherOwner, { name: "Beta", scopes: ["deliveries:read"] });
+    const { key: otherKey } = await keys.createApiKey(ctx.otherOwner, { name: "Beta", scopes: ["deliveries:read"], environment: "LIVE" });
     assert.equal((await call(routes.getDelivery, otherKey, { id: created.id })).status, 404);
 });
 
@@ -217,11 +221,50 @@ test("a key stops working when its creator is deactivated", async () => {
     assert.equal((await call(routes.wallet, key)).status, 401);
 });
 
-test("the platform cannot mint keys for a company, and requests over the limit are throttled", async () => {
-    await assert.rejects(
-        () => keys.createApiKey({ id: ctx.owner.id, role: "SUPER_ADMIN", companyId: null }, { name: "x", scopes: ["wallet:read"] }),
-        /Solo el dueño/,
-    );
+test("keys belong to their company: the platform and other companies cannot see or touch them", async () => {
+    const platform = { id: ctx.owner.id, role: "SUPER_ADMIN" as const, companyId: null };
+    const { apiKey } = await keys.createApiKey(ctx.owner, { name: "ERP", scopes: ["wallet:read"] });
+    await assert.rejects(() => keys.createApiKey(platform, { name: "x", scopes: ["wallet:read"] }), /Solo el dueño/);
+    await assert.rejects(() => keys.listApiKeys(platform), /Solo el dueño/);
+    await assert.rejects(() => keys.revokeApiKey(platform, apiKey.id), /Solo el dueño/);
+    await assert.rejects(() => keys.revokeApiKey(ctx.otherOwner, apiKey.id), /no encontrada/);
+    assert.deepEqual((await keys.listApiKeys(ctx.otherOwner)).map((row) => row.id), []);
+    assert.deepEqual((await keys.listApiKeys(ctx.owner)).map((row) => row.id), [apiKey.id]);
+});
+
+test("a sandbox key simulates deliveries without touching money, Diem or the portal", async () => {
+    const { key: sandbox } = await keys.createApiKey(ctx.owner, {
+        name: "Pruebas", scopes: ["deliveries:create", "deliveries:read", "wallet:read"],
+    });
+    assert.match(sandbox, /^vck_test_/);
+
+    const first = await call(routes.createDelivery, sandbox, { method: "POST", body: delivery("luis+fail@ejemplo.com"), idem: "prueba-1" });
+    assert.equal(first.status, 201, await first.clone().text());
+    const created = await first.json();
+    assert.equal(created.livemode, false);
+    assert.equal(created.status, "completed");
+    assert.equal(created.email_delivery, "failed");
+    assert.deepEqual(created.total, { amount: 85000, currency: "COP" });
+
+    const replay = await (await call(routes.createDelivery, sandbox, { method: "POST", body: delivery("luis+fail@ejemplo.com"), idem: "prueba-1" })).json();
+    assert.equal(replay.id, created.id);
+    assert.equal((await call(routes.createDelivery, sandbox, { method: "POST", body: delivery("otro@ejemplo.com"), idem: "prueba-1" })).status, 409);
+
+    // Nothing real happened.
+    assert.equal(createCalls.length, 0);
+    assert.equal(await prisma.codePurchase.count(), 0);
+    assert.equal(await prisma.walletTransaction.count(), 0);
+    const wallet = await (await call(routes.wallet, sandbox)).json();
+    assert.equal(wallet.livemode, false);
+    assert.equal((await prisma.wallet.findUniqueOrThrow({ where: { companyId: ctx.owner.companyId } })).balance, 0);
+
+    // Each environment only sees its own deliveries.
+    assert.equal((await call(routes.getDelivery, sandbox, { id: created.id })).status, 200);
+    const { key: live } = await keys.createApiKey(ctx.owner, { name: "Prod", scopes: ["deliveries:read"], environment: "LIVE" });
+    assert.equal((await call(routes.getDelivery, live, { id: created.id })).status, 404);
+});
+
+test("requests over the limit are throttled", async () => {
     const { apiKey } = await keys.createApiKey(ctx.owner, { name: "ERP", scopes: ["wallet:read"] });
     const now = new Date("2026-10-22T10:00:30Z");
     assert.equal(await keys.consumeApiRateLimit(apiKey.id, now, 2), null);

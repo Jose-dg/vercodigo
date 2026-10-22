@@ -41,9 +41,6 @@ export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'comp
 
     else if (user.role === 'SYSTEM_ADMIN') {
         can('manage', ['Company', 'Store', 'User', 'Product', 'Key']);
-        // Soporte: ver y revocar keys de una compañía. Crearlas es de la compañía,
-        // porque la key actúa en nombre de quien la crea.
-        can(['read', 'delete'], 'ApiKey');
         can('manage', ['Wallet', 'WalletTransaction']); // recargas manuales y tasas FX
         can('manage', 'AccountStatement');
         can('manage', 'CompanyProductPrice');
@@ -96,7 +93,8 @@ export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'comp
         // Precios de venta: OWNER y GENERAL_ADMIN los configuran para su compañía.
         can(['read', 'create', 'update', 'delete'], 'CompanyProductPrice', { companyId } as any);
 
-        // API keys de la compañía (API v1): crear, listar y revocar.
+        // API keys de la compañía (API v1): crear, listar y revocar. Son credenciales
+        // de la compañía: ni la plataforma las ve (ver canManageApiKeys).
         can('manage', 'ApiKey', { companyId } as any);
     }
 

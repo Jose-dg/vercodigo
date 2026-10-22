@@ -19,6 +19,7 @@ export default function IdempotencyPage() {
           Si reusas una key con otro producto, otra cantidad u otro destinatario, la respuesta es <strong>409</strong>.
         </li>
         <li>Las keys valen para toda tu empresa, sin importar qué API key haga la petición.</li>
+        <li>Sandbox y producción no comparten keys: probar con una no bloquea la otra.</li>
       </ul>
       <Callout>
         Si se corta la conexión o recibes un 5xx, reintenta con el mismo <InlineCode>Idempotency-Key</InlineCode>. Es

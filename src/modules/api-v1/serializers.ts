@@ -40,6 +40,7 @@ export function serializeDelivery(purchase: DeliverySource) {
     return {
         id: purchase.id,
         object: "delivery" as const,
+        livemode: true,
         status: publicDeliveryStatus(purchase.status),
         product: { id: purchase.productId, name: purchase.productName ?? null },
         denomination_id: purchase.denominationId,
@@ -51,6 +52,40 @@ export function serializeDelivery(purchase: DeliverySource) {
         email_delivery: recipient ? recipientDeliveryState(purchase.fulfillmentStatus ?? null) : null,
         created_at: iso(purchase.createdAt),
         completed_at: iso(purchase.completedAt),
+    };
+}
+
+export type SandboxDeliverySource = {
+    id: string;
+    status: string;
+    productId: string;
+    denominationId: string | null;
+    quantity: number;
+    unitAmount: number;
+    currency: string;
+    recipientFirstName: string;
+    recipientLastName: string;
+    recipientEmail: string;
+    emailDelivery: string | null;
+    createdAt: Date | string;
+    completedAt: Date | string | null;
+};
+
+/** Same public shape as a real delivery, flagged livemode=false. */
+export function serializeSandboxDelivery(row: SandboxDeliverySource, productName?: string | null) {
+    return {
+        id: row.id,
+        object: "delivery" as const,
+        livemode: false,
+        status: row.status,
+        product: { id: row.productId, name: productName ?? null },
+        denomination_id: row.denominationId,
+        quantity: row.quantity,
+        total: { amount: row.unitAmount * row.quantity, currency: row.currency },
+        recipient: { first_name: row.recipientFirstName, last_name: row.recipientLastName, email: row.recipientEmail },
+        email_delivery: row.emailDelivery,
+        created_at: iso(row.createdAt),
+        completed_at: iso(row.completedAt),
     };
 }
 

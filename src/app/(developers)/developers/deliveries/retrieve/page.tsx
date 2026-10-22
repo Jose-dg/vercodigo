@@ -13,7 +13,7 @@ export default function RetrieveDeliveryPage() {
       <CodeBlock samples={json(DELIVERY_EXAMPLE)} />
       <p>
         Consulta cada pocos minutos mientras <code>status</code> sea <code>processing</code> o{" "}
-        <code>awaiting_stock</code>. Los webhooks para no tener que consultar llegan pronto.
+        <code>awaiting_stock</code>.
       </p>
     </DocPage>
   )

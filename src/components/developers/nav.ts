@@ -8,6 +8,7 @@ export const DOCS_NAV: DocsNavSection[] = [
         items: [
             { title: "Introducción", url: "/developers" },
             { title: "Autenticación", url: "/developers/authentication" },
+            { title: "Sandbox (pruebas)", url: "/developers/sandbox" },
             { title: "Idempotencia", url: "/developers/idempotency" },
             { title: "Errores y límites", url: "/developers/errors" },
         ],
@@ -24,10 +25,6 @@ export const DOCS_NAV: DocsNavSection[] = [
     {
         title: "Cuenta",
         items: [{ title: "API keys", url: "/developers/api-keys", requiresKeyAccess: true }],
-    },
-    {
-        title: "Próximamente",
-        items: [{ title: "Webhooks", url: "/developers/webhooks" }],
     },
 ];
 

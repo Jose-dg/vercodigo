@@ -3,21 +3,43 @@ import test from "node:test";
 
 import {
     apiKeyMatches,
-    apiKeyPrefixOf,
     bearerToken,
     generateApiKey,
     hashApiKey,
     normalizeScopes,
+    parseApiKey,
 } from "../src/modules/api-keys/domain.ts";
-import { serializeCatalog, serializeDelivery } from "../src/modules/api-v1/serializers.ts";
+import { serializeCatalog, serializeDelivery, serializeSandboxDelivery } from "../src/modules/api-v1/serializers.ts";
+import { sandboxScenario } from "../src/modules/api-v1/sandbox-scenarios.ts";
 
 const PEPPER = "p".repeat(32);
 
-test("a generated key has the public prefix and a 32-byte secret", () => {
-    const { key, prefix } = generateApiKey();
-    assert.match(key, /^vck_live_[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/);
-    assert.equal(apiKeyPrefixOf(key), prefix);
-    assert.notEqual(generateApiKey().key, key);
+test("a generated key carries its environment, public prefix and a 32-byte secret", () => {
+    const live = generateApiKey("LIVE");
+    assert.match(live.key, /^vck_live_[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/);
+    assert.deepEqual(parseApiKey(live.key), { prefix: live.prefix, environment: "LIVE" });
+    const sandbox = generateApiKey("SANDBOX");
+    assert.match(sandbox.key, /^vck_test_/);
+    assert.deepEqual(parseApiKey(sandbox.key), { prefix: sandbox.prefix, environment: "SANDBOX" });
+    assert.notEqual(generateApiKey().key, live.key);
+});
+
+test("sandbox outcomes are picked by the recipient email tag", () => {
+    assert.deepEqual(sandboxScenario("luis@ejemplo.com"), { status: "completed", emailDelivery: "sent" });
+    assert.deepEqual(sandboxScenario("luis+fail@ejemplo.com"), { status: "completed", emailDelivery: "failed" });
+    assert.deepEqual(sandboxScenario("luis+stock@ejemplo.com"), { status: "awaiting_stock", emailDelivery: null });
+    assert.deepEqual(sandboxScenario("luis+review@ejemplo.com"), { status: "action_required", emailDelivery: null });
+});
+
+test("a sandbox delivery has the live shape but says livemode=false", () => {
+    const row = serializeSandboxDelivery({
+        id: "s1", status: "completed", productId: "prod", denominationId: null, quantity: 2,
+        unitAmount: 85000, currency: "COP", recipientFirstName: "Luis", recipientLastName: "",
+        recipientEmail: "luis@ejemplo.com", emailDelivery: "sent",
+        createdAt: new Date("2026-10-22T10:00:00Z"), completedAt: null,
+    }, "Netflix");
+    assert.equal(row.livemode, false);
+    assert.deepEqual(row.total, { amount: 170000, currency: "COP" });
 });
 
 test("only the exact key matches its peppered hash", () => {
@@ -31,8 +53,9 @@ test("only the exact key matches its peppered hash", () => {
 });
 
 test("malformed keys and headers are rejected before any lookup", () => {
-    assert.equal(apiKeyPrefixOf("ddk_live_abc_def"), null);
-    assert.equal(apiKeyPrefixOf("vck_live_ABCDEF123456_x"), null);
+    assert.equal(parseApiKey("ddk_live_abc_def"), null);
+    assert.equal(parseApiKey("vck_live_ABCDEF123456_x"), null);
+    assert.equal(parseApiKey(`vck_prod_${"a".repeat(12)}_${"b".repeat(43)}`), null);
     assert.equal(bearerToken("Bearer vck_live_x"), "vck_live_x");
     assert.equal(bearerToken("Basic abc"), null);
     assert.equal(bearerToken(null), null);
@@ -67,6 +90,7 @@ test("a delivery never exposes its codes", () => {
     });
     assert.doesNotMatch(JSON.stringify(delivery), /SECRET-PIN/);
     assert.equal(delivery.status, "completed");
+    assert.equal(delivery.livemode, true);
     assert.equal(delivery.email_delivery, "sent");
     assert.deepEqual(delivery.recipient, { first_name: "Luis", last_name: "Gómez", email: "luis@cliente.co" });
 });

@@ -4,15 +4,15 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { DevelopersSidebar } from "@/components/developers/developers-sidebar"
 import { DocsBreadcrumb } from "@/components/developers/docs-breadcrumb"
-import { defineAbilitiesFor } from "@/lib/auth/abilities"
 import { requireAuthenticatedActor } from "@/lib/auth/actor"
+import { canManageApiKeys } from "@/modules/api-keys/service"
 
 export const metadata = { title: "API para empresas · Desarrolladores" }
 
 /** Docs are behind a session for now; they become public later. */
 export default async function DevelopersLayout({ children }: { children: ReactNode }) {
   const actor = await requireAuthenticatedActor()
-  const canManageKeys = defineAbilitiesFor(actor).can("read", "ApiKey")
+  const canManageKeys = canManageApiKeys(actor)
 
   return (
     <SidebarProvider>

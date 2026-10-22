@@ -18,5 +18,10 @@ export const GET = withApiKey("catalog:read", async (_req, _ctx, principal) => {
         },
         orderBy: [{ brand: "asc" }, { name: "asc" }],
     });
-    return NextResponse.json({ object: "list", data: serializeCatalog(products, quotes) });
+    return NextResponse.json({
+        object: "list",
+        livemode: principal.environment === "LIVE",
+        // Real products and prices in both environments: reading never charges.
+        data: serializeCatalog(products, quotes),
+    });
 });

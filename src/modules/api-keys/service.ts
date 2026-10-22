@@ -8,20 +8,28 @@ import {
     InvalidApiKeyError,
     MAX_ACTIVE_API_KEYS,
     apiKeyMatches,
-    apiKeyPrefixOf,
     displayApiKey,
     generateApiKey,
     hashApiKey,
     normalizeScopes,
+    parseApiKey,
+    type ApiKeyEnvironment,
     type ApiKeyScope,
 } from "./domain";
 
-/** Roles that may hold a key: the key acts as its creator, so the creator must still be one. */
+/**
+ * Who manages a company's keys: only its OWNER or GENERAL_ADMIN, and only its
+ * own keys. The platform has no access: keys are the company's credentials.
+ * The key acts as its creator, so the creator must still hold one of these roles.
+ */
 const KEY_OWNER_ROLES = new Set<UserRole>(["OWNER", "GENERAL_ADMIN"]);
-const PLATFORM_ROLES = new Set<UserRole>(["SUPER_ADMIN", "SYSTEM_ADMIN"]);
 const LAST_USED_RESOLUTION_MS = 60_000;
 
 export type ApiKeyActor = { id: string; role: UserRole; companyId: string | null };
+
+export function canManageApiKeys(actor: Pick<ApiKeyActor, "role" | "companyId">): boolean {
+    return KEY_OWNER_ROLES.has(actor.role) && Boolean(actor.companyId);
+}
 
 function pepper(): string {
     const value = process.env.API_KEY_PEPPER?.trim();
@@ -29,19 +37,17 @@ function pepper(): string {
     return value;
 }
 
-function companyScope(actor: ApiKeyActor, companyId?: string | null): string {
-    if (PLATFORM_ROLES.has(actor.role)) {
-        if (!companyId) throw badRequest("Indica la compañía");
-        return companyId;
+function ownCompany(actor: ApiKeyActor): string {
+    if (!canManageApiKeys(actor)) {
+        throw forbidden("Solo el dueño o un administrador general de la compañía gestiona sus API keys");
     }
-    if (!actor.companyId) throw forbidden("Tu usuario no pertenece a una compañía");
-    if (companyId && companyId !== actor.companyId) throw forbidden("No puedes gestionar keys de otra compañía");
-    return actor.companyId;
+    return actor.companyId!;
 }
 
 const publicSelect = {
     id: true,
     companyId: true,
+    environment: true,
     name: true,
     keyPrefix: true,
     scopes: true,
@@ -60,7 +66,8 @@ function serializeApiKey(row: PublicRow, now = new Date()) {
     return {
         id: row.id,
         name: row.name,
-        displayKey: displayApiKey(row.keyPrefix),
+        environment: row.environment,
+        displayKey: displayApiKey(row.keyPrefix, row.environment),
         scopes: row.scopes,
         createdAt: row.createdAt,
         createdBy: row.createdBy.name?.trim() || row.createdBy.email,
@@ -74,18 +81,18 @@ function serializeApiKey(row: PublicRow, now = new Date()) {
 
 export type PublicApiKey = ReturnType<typeof serializeApiKey>;
 
-function activeWhere(companyId: string, now: Date): Prisma.CompanyApiKeyWhereInput {
+function activeWhere(companyId: string, environment: ApiKeyEnvironment, now: Date): Prisma.CompanyApiKeyWhereInput {
     return {
         companyId,
+        environment,
         revokedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     };
 }
 
-export async function listApiKeys(actor: ApiKeyActor, companyId?: string | null) {
-    const scope = companyScope(actor, companyId);
+export async function listApiKeys(actor: ApiKeyActor) {
     const rows = await prisma.companyApiKey.findMany({
-        where: { companyId: scope },
+        where: { companyId: ownCompany(actor) },
         select: publicSelect,
         orderBy: [{ revokedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
     });
@@ -94,18 +101,19 @@ export async function listApiKeys(actor: ApiKeyActor, companyId?: string | null)
 }
 
 /**
- * Creates a key and returns it in clear exactly once. Only a company OWNER or
- * GENERAL_ADMIN creates keys: the key acts as that person (role and purchase
- * origin), so the platform cannot mint one on a company's behalf.
+ * Creates a key and returns it in clear exactly once. The key acts as its
+ * creator (role and purchase origin). LIVE keys spend real wallet balance;
+ * SANDBOX keys only simulate.
  */
 export async function createApiKey(
     actor: ApiKeyActor,
-    input: { name: unknown; scopes: unknown; expiresAt?: Date | null },
+    input: { name: unknown; scopes: unknown; environment?: unknown; expiresAt?: Date | null },
 ): Promise<{ key: string; apiKey: PublicApiKey }> {
-    if (!KEY_OWNER_ROLES.has(actor.role) || !actor.companyId) {
-        throw forbidden("Solo el dueño o un administrador general de la compañía puede crear API keys");
+    const companyId = ownCompany(actor);
+    const environment: ApiKeyEnvironment = input.environment === "LIVE" ? "LIVE" : "SANDBOX";
+    if (input.environment !== undefined && input.environment !== "LIVE" && input.environment !== "SANDBOX") {
+        throw badRequest("El ambiente debe ser LIVE o SANDBOX");
     }
-    const companyId = actor.companyId;
     const name = typeof input.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
     if (!name || name.length > 80) throw badRequest("El nombre es obligatorio (máximo 80 caracteres)");
     const scopes = normalizeScopes(input.scopes);
@@ -114,18 +122,20 @@ export async function createApiKey(
     if (input.expiresAt && input.expiresAt <= now) throw badRequest("La fecha de vencimiento ya pasó");
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-        const generated = generateApiKey();
+        const generated = generateApiKey(environment);
         try {
             const row = await prisma.$transaction(async (tx) => {
                 // Serializes concurrent creations of one company so the limit holds.
                 await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`;
-                const active = await tx.companyApiKey.count({ where: activeWhere(companyId, now) });
+                const active = await tx.companyApiKey.count({ where: activeWhere(companyId, environment, now) });
                 if (active >= MAX_ACTIVE_API_KEYS) {
-                    throw conflict(`La compañía ya tiene ${MAX_ACTIVE_API_KEYS} API keys activas. Revoca una antes de crear otra.`);
+                    const kind = environment === "LIVE" ? "de producción" : "sandbox";
+                    throw conflict(`La compañía ya tiene ${MAX_ACTIVE_API_KEYS} API keys ${kind} activas. Revoca una antes de crear otra.`);
                 }
                 return tx.companyApiKey.create({
                     data: {
                         companyId,
+                        environment,
                         name,
                         keyPrefix: generated.prefix,
                         keyHash: hashApiKey(generated.key, pepper()),
@@ -142,7 +152,7 @@ export async function createApiKey(
                 companyId,
                 entityType: "CompanyApiKey",
                 entityId: row.id,
-                after: { name, keyPrefix: row.keyPrefix, scopes, expiresAt: row.expiresAt },
+                after: { name, environment, keyPrefix: row.keyPrefix, scopes, expiresAt: row.expiresAt },
             });
             return { key: generated.key, apiKey: serializeApiKey(row, now) };
         } catch (error) {
@@ -155,11 +165,9 @@ export async function createApiKey(
 
 /** Idempotent: revoking an already revoked key returns it unchanged. */
 export async function revokeApiKey(actor: ApiKeyActor, apiKeyId: string) {
+    const companyId = ownCompany(actor);
     const key = await prisma.companyApiKey.findUnique({ where: { id: apiKeyId }, select: { companyId: true } });
-    if (!key) throw notFound("API key no encontrada");
-    if (!PLATFORM_ROLES.has(actor.role) && key.companyId !== actor.companyId) {
-        throw notFound("API key no encontrada");
-    }
+    if (!key || key.companyId !== companyId) throw notFound("API key no encontrada");
     const revoked = await prisma.companyApiKey.updateMany({
         where: { id: apiKeyId, revokedAt: null },
         data: { revokedAt: new Date(), revokedById: actor.id },
@@ -181,6 +189,8 @@ export async function revokeApiKey(actor: ApiKeyActor, apiKeyId: string) {
 export type ApiKeyPrincipal = {
     apiKeyId: string;
     keyPrefix: string;
+    /** SANDBOX requests are simulated end to end: no wallet, no Diem, no email. */
+    environment: ApiKeyEnvironment;
     scopes: ApiKeyScope[];
     companyId: string;
     /** The person the key acts as: its creator, still active and still a company admin. */
@@ -196,12 +206,13 @@ export type ApiKeyPrincipal = {
 
 /** Every failure raises the same InvalidApiKeyError. */
 export async function authenticateApiKey(rawKey: string, now = new Date()): Promise<ApiKeyPrincipal> {
-    const prefix = apiKeyPrefixOf(rawKey);
-    if (!prefix) throw new InvalidApiKeyError();
+    const parsed = parseApiKey(rawKey);
+    if (!parsed) throw new InvalidApiKeyError();
     const key = await prisma.companyApiKey.findUnique({
-        where: { keyPrefix: prefix },
+        where: { keyPrefix: parsed.prefix },
         select: {
             id: true,
+            environment: true,
             keyPrefix: true,
             keyHash: true,
             scopes: true,
@@ -226,7 +237,8 @@ export async function authenticateApiKey(rawKey: string, now = new Date()): Prom
     });
     if (!key || !apiKeyMatches(rawKey, key.keyHash, pepper())) throw new InvalidApiKeyError();
     const creator = key.createdBy;
-    const usable = key.revokedAt === null
+    const usable = key.environment === parsed.environment
+        && key.revokedAt === null
         && (key.expiresAt === null || key.expiresAt > now)
         && key.company.isActive
         && creator.isActive
@@ -241,6 +253,7 @@ export async function authenticateApiKey(rawKey: string, now = new Date()): Prom
     return {
         apiKeyId: key.id,
         keyPrefix: key.keyPrefix,
+        environment: key.environment,
         scopes: normalizeScopes(key.scopes),
         companyId: key.companyId,
         actor: {

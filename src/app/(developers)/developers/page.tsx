@@ -14,8 +14,9 @@ export default function DevelopersIntroPage() {
       <h2>Cómo funciona</h2>
       <ol className="list-decimal space-y-2 pl-5">
         <li>
-          Crea una API key en <Link className="underline" href="/developers/api-keys">API keys</Link>. Solo el
-          dueño o un administrador general de la empresa puede crearla.
+          Crea una API key <strong>sandbox</strong> en <Link className="underline" href="/developers/api-keys">API keys</Link>{" "}
+          e integra sin gastar dinero (ver <Link className="underline" href="/developers/sandbox">Sandbox</Link>). Solo
+          el dueño o un administrador general de la empresa puede crear keys.
         </li>
         <li>
           Consulta el <Link className="underline" href="/developers/catalog">catálogo</Link> para conocer los productos y
@@ -29,6 +30,7 @@ export default function DevelopersIntroPage() {
           <Link className="underline" href="/developers/deliveries/retrieve">Consulta la entrega</Link> para saber si el
           email ya salió.
         </li>
+        <li>Cuando todo funcione, cambia a una key de <strong>producción</strong>: desde ahí cada entrega es dinero real.</li>
       </ol>
 
       <h2>URL base</h2>

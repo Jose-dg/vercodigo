@@ -62,31 +62,68 @@ model Company {
   accountStatements    AccountStatement[]
   purchaseOriginPhones PurchaseOriginPhone[]
   apiKeys              CompanyApiKey[]
+  sandboxDeliveries    SandboxDelivery[]
 }
 
 /// API key de una empresa para la API v1. La key en claro solo existe en la
 /// respuesta de creación; aquí vive su HMAC-SHA256 con API_KEY_PEPPER. Actúa en
 /// nombre de quien la creó (su rol y su origen de compra).
 model CompanyApiKey {
-  id          String          @id @default(cuid())
-  companyId   String
-  name        String
+  id                String            @id @default(cuid())
+  companyId         String
+  /// SANDBOX (vck_test_) simula entregas: no cobra, no pide códigos a Diem, no envía emails.
+  environment       ApiKeyEnvironment @default(LIVE)
+  name              String
   /// Parte pública de la key (vck_live_<prefijo>_...): búsqueda y visualización.
-  keyPrefix   String          @unique
-  keyHash     String
-  scopes      String[]
-  createdById String
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  revokedAt   DateTime?
-  revokedById String?
-  createdAt   DateTime        @default(now())
-  company     Company         @relation(fields: [companyId], references: [id])
-  createdBy   User            @relation("ApiKeyCreator", fields: [createdById], references: [id])
-  revokedBy   User?           @relation("ApiKeyRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
-  rateWindows ApiRateWindow[]
+  keyPrefix         String            @unique
+  keyHash           String
+  scopes            String[]
+  createdById       String
+  lastUsedAt        DateTime?
+  expiresAt         DateTime?
+  revokedAt         DateTime?
+  revokedById       String?
+  createdAt         DateTime          @default(now())
+  company           Company           @relation(fields: [companyId], references: [id])
+  createdBy         User              @relation("ApiKeyCreator", fields: [createdById], references: [id])
+  revokedBy         User?             @relation("ApiKeyRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+  rateWindows       ApiRateWindow[]
+  sandboxDeliveries SandboxDelivery[]
 
-  @@index([companyId, revokedAt])
+  @@index([companyId, environment, revokedAt])
+}
+
+enum ApiKeyEnvironment {
+  LIVE
+  SANDBOX
+}
+
+/// Entrega simulada de una key sandbox. Vive aparte de CodePurchase a propósito:
+/// nunca toca la billetera, Diem ni "Mis solicitudes".
+model SandboxDelivery {
+  id                 String        @id @default(cuid())
+  companyId          String
+  apiKeyId           String
+  idempotencyKey     String
+  productId          String
+  denominationId     String?
+  quantity           Int
+  unitAmount         Float
+  currency           String
+  recipientFirstName String
+  recipientLastName  String
+  recipientEmail     String
+  /// Estado público simulado (processing, awaiting_stock, completed...).
+  status             String
+  /// sending | sent | failed | null
+  emailDelivery      String?
+  createdAt          DateTime      @default(now())
+  completedAt        DateTime?
+  company            Company       @relation(fields: [companyId], references: [id])
+  apiKey             CompanyApiKey @relation(fields: [apiKeyId], references: [id])
+
+  @@unique([companyId, idempotencyKey])
+  @@index([apiKeyId])
 }
 
 /// Contador de peticiones por key y minuto: el límite vale entre instancias.
@@ -126,7 +163,7 @@ model WalletTransaction {
   exchangeRate         Float? // tasa aplicada; null si PENDING sin tasa configurada
   description          String?
   externalReference    String? // # de transferencia bancaria en recargas manuales
-  gatewayTransactionId String?                @unique // id de la recarga en DevDiem: una recarga = un RECHARGE
+  gatewayTransactionId String?                 @unique // id de la recarga en DevDiem: una recarga = un RECHARGE
   createdById          String? // userId que originó el movimiento
   cardActivationId     String?                 @unique
   codePurchaseId       String?                 @unique

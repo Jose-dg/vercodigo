@@ -2,7 +2,8 @@
  * API keys de empresa para la API v1. Mismo esquema que los service accounts de
  * DevDiem (apps/tenancy/service_accounts.py):
  *
- *   vck_live_<prefijo: 12 hex>_<secreto: 32 bytes base64url>
+ *   vck_live_<prefijo: 12 hex>_<secreto: 32 bytes base64url>   producción (cobra)
+ *   vck_test_<prefijo: 12 hex>_<secreto: 32 bytes base64url>   sandbox (simula)
  *
  * El prefijo es público (búsqueda y UI). Solo se guarda HMAC-SHA256(pepper, key):
  * sin API_KEY_PEPPER una copia de la base no permite validar ni fabricar keys.
@@ -25,10 +26,14 @@ export const API_KEY_SCOPE_LABELS: Record<ApiKeyScope, string> = {
     "wallet:read": "Consultar saldo",
 };
 
+export type ApiKeyEnvironment = "LIVE" | "SANDBOX";
+
+/** Per environment: up to 5 production keys and 5 sandbox keys. */
 export const MAX_ACTIVE_API_KEYS = 5;
 export const API_RATE_LIMIT_PER_MINUTE = 60;
 
-const KEY_PATTERN = /^vck_live_([0-9a-f]{12})_([A-Za-z0-9_-]{43})$/;
+const KEY_PATTERN = /^vck_(live|test)_([0-9a-f]{12})_([A-Za-z0-9_-]{43})$/;
+const MODE_BY_ENVIRONMENT: Record<ApiKeyEnvironment, "live" | "test"> = { LIVE: "live", SANDBOX: "test" };
 
 export class InvalidApiKeyError extends Error {
     constructor() {
@@ -39,15 +44,17 @@ export class InvalidApiKeyError extends Error {
 
 export type GeneratedApiKey = { key: string; prefix: string };
 
-export function generateApiKey(): GeneratedApiKey {
+export function generateApiKey(environment: ApiKeyEnvironment = "LIVE"): GeneratedApiKey {
     const prefix = randomBytes(6).toString("hex");
     const secret = randomBytes(32).toString("base64url");
-    return { key: `vck_live_${prefix}_${secret}`, prefix };
+    return { key: `vck_${MODE_BY_ENVIRONMENT[environment]}_${prefix}_${secret}`, prefix };
 }
 
-/** The public prefix of a well-formed key, or null. */
-export function apiKeyPrefixOf(key: string): string | null {
-    return KEY_PATTERN.exec(key.trim())?.[1] ?? null;
+/** The public parts of a well-formed key, or null. */
+export function parseApiKey(key: string): { prefix: string; environment: ApiKeyEnvironment } | null {
+    const match = KEY_PATTERN.exec(key.trim());
+    if (!match) return null;
+    return { prefix: match[2], environment: match[1] === "test" ? "SANDBOX" : "LIVE" };
 }
 
 export function hashApiKey(key: string, pepper: string): string {
@@ -73,6 +80,6 @@ export function normalizeScopes(input: unknown): ApiKeyScope[] {
 }
 
 /** What the UI may show of a key: never the hash. */
-export function displayApiKey(prefix: string): string {
-    return `vck_live_${prefix}_••••`;
+export function displayApiKey(prefix: string, environment: ApiKeyEnvironment = "LIVE"): string {
+    return `vck_${MODE_BY_ENVIRONMENT[environment]}_${prefix}_••••`;
 }

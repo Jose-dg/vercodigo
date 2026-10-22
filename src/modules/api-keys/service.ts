@@ -1,7 +1,7 @@
 import { Prisma, type UserRole } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
-import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
+import { badRequest, conflict, forbidden, notFound, serviceUnavailable } from "@/lib/errors";
 import { writeAuditLog } from "@/services/self-service/audit.service";
 import {
     API_RATE_LIMIT_PER_MINUTE,
@@ -31,10 +31,16 @@ export function canManageApiKeys(actor: Pick<ApiKeyActor, "role" | "companyId">)
     return KEY_OWNER_ROLES.has(actor.role) && Boolean(actor.companyId);
 }
 
+export function apiKeysConfigured(): boolean {
+    return (process.env.API_KEY_PEPPER?.trim().length ?? 0) >= 32;
+}
+
 function pepper(): string {
-    const value = process.env.API_KEY_PEPPER?.trim();
-    if (!value) throw new Error("API_KEY_PEPPER no está configurada");
-    return value;
+    // A clear 503 instead of an opaque 500 when the server secret is missing.
+    if (!apiKeysConfigured()) {
+        throw serviceUnavailable("Las API keys no están configuradas en el servidor (falta API_KEY_PEPPER)", "API_KEYS_NOT_CONFIGURED");
+    }
+    return process.env.API_KEY_PEPPER!.trim();
 }
 
 function ownCompany(actor: ApiKeyActor): string {

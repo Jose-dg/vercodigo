@@ -24,8 +24,9 @@ import { DOCS_NAV } from './nav';
 /** Documentation navigation, ported from the shadcn sidebar-03 block. */
 export function DevelopersSidebar({
     canManageKeys,
+    homeHref,
     ...props
-}: React.ComponentProps<typeof Sidebar> & { canManageKeys: boolean }) {
+}: React.ComponentProps<typeof Sidebar> & { canManageKeys: boolean; homeHref: string }) {
     const pathname = usePathname();
     const sections = DOCS_NAV
         .map((section) => ({
@@ -81,7 +82,7 @@ export function DevelopersSidebar({
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild>
-                            <Link href="/">
+                            <Link href={homeHref}>
                                 <ArrowLeft className="size-4" />
                                 Volver al portal
                             </Link>

@@ -1,11 +1,8 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { SETTINGS_PARAM } from "@/components/settings/params";
-import { requireAuthenticatedActor } from "@/lib/auth/actor";
-import { homePathForRole } from "@/lib/auth/navigation";
+import { UserProfile } from "@clerk/nextjs";
 
-// Configuración es un modal; esta dirección lleva al inicio de cada rol con el modal abierto.
-export default async function SettingsPage() {
-    const actor = await requireAuthenticatedActor();
-    redirect(`${homePathForRole(actor.role)}?${SETTINGS_PARAM}`);
+/** Personal profile (name, email, password, linked accounts, sessions), owned by Clerk. */
+export default function SettingsProfilePage() {
+    return <UserProfile routing="hash" />;
 }

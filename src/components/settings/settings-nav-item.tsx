@@ -1,18 +1,21 @@
 "use client";
 
-import { useClerk } from "@clerk/nextjs";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Settings2 } from "lucide-react";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 
-/** Entrada del menú lateral (al final, debajo de Operations) que abre el perfil de Clerk. */
+/** Entrada del menú lateral hacia Configuración: perfil, sedes, usuarios y precios. */
 export function SettingsNavItem() {
-    const { openUserProfile } = useClerk();
+    const pathname = usePathname();
     return (
         <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Configuración" onClick={() => openUserProfile()}>
-                <Settings2 aria-hidden="true" />
-                <span>Configuración</span>
+            <SidebarMenuButton asChild tooltip="Configuración" isActive={pathname.startsWith("/settings")}>
+                <Link href="/settings">
+                    <Settings2 aria-hidden="true" />
+                    <span>Configuración</span>
+                </Link>
             </SidebarMenuButton>
         </SidebarMenuItem>
     );

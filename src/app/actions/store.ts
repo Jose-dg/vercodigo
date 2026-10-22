@@ -39,6 +39,7 @@ export async function createStore(
     await createStoreForActor(actor, validatedFields.data);
 
     revalidatePath("/store");
+    revalidatePath("/settings/stores");
     return { message: "Store created successfully." };
   } catch (e) {
     console.error("[store/create]", e);

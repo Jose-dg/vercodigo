@@ -10,7 +10,7 @@ const STORE_ADMIN_ROLES = new Set(["ADMIN"]);
 
 const PLATFORM_PREFIXES = ["/admin", "/products", "/wallets", "/qr", "/cards", "/batches", "/keys", "/analytics"];
 const COMPANY_ADMIN_PREFIXES = ["/companies"];
-const STORE_ADMIN_PREFIXES = ["/store", "/users", "/prices", "/costs"];
+const STORE_ADMIN_PREFIXES = ["/store", "/users", "/prices", "/costs", "/settings/stores", "/settings/users", "/settings/prices"];
 const RESTRICTED_PREFIXES = [...PLATFORM_PREFIXES, ...COMPANY_ADMIN_PREFIXES, ...STORE_ADMIN_PREFIXES];
 
 function startsWithAny(path: string, prefixes: string[]) {

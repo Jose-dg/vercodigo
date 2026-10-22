@@ -13,7 +13,6 @@ import {
   Bot,
   ShoppingCart,
   CreditCard,
-  Wallet,
 } from "lucide-react"
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
@@ -51,11 +50,6 @@ const data = {
       title: "Activar tarjeta",
       url: "/activate",
       icon: CreditCard,
-    },
-    {
-      title: "Mi billetera",
-      url: "/wallet",
-      icon: Wallet,
     },
     {
       title: "Desarrolladores",
@@ -315,6 +309,9 @@ export function AppSidebar({ companyName, ...props }: AppSidebarProps) {
         // Para empresas, Operations repite lo que ya está arriba: Comprar códigos y
         // Activar tarjeta (con su escáner); sus solicitudes viven en Mis solicitudes.
         if (newGroup.title === "Operations" && !(currentUser?.role && isPlatformRole(currentUser.role))) return null;
+        // Management is for system users only; companies manage stores, users and
+        // resale prices under Configuración.
+        if (newGroup.title === "Management" && !(currentUser?.role && isPlatformRole(currentUser.role))) return null;
 
         if (newGroup.items) {
           if (newGroup.title === "Management" && currentUser?.role) {

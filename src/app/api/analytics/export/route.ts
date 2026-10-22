@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { getInitialMetrics } from '@/lib/analytics/queries';
+import { withAuth } from "@/lib/auth/guard";
 
-export async function POST(request: NextRequest) {
+async function handler(request: NextRequest) {
     try {
         const body = await request.json();
         const data = await getInitialMetrics(body.filters || {});
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
 
         const buffer = await workbook.xlsx.writeBuffer();
 
-        return new Response(buffer, {
+        return new NextResponse(buffer, {
             headers: {
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'Content-Disposition': `attachment; filename=analytics-export-${new Date().getTime()}.xlsx`,
@@ -54,3 +55,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Internal error during export' }, { status: 500 });
     }
 }
+
+// Platform analytics: global data across companies, platform roles only.
+export const POST = withAuth("read", "AuditLog", handler);

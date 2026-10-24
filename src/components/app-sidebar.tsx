@@ -5,7 +5,6 @@ import {
   Home,
   Braces,
   Building2,
-  QrCode,
   Zap,
   Settings2,
   GalleryVerticalEnd,
@@ -13,6 +12,9 @@ import {
   Bot,
   ShoppingCart,
   CreditCard,
+  Frame,
+  Map,
+  PieChart,
 } from "lucide-react"
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
@@ -21,6 +23,7 @@ import { homePathForRole, managementDestinationsForRole, type ManagementDestinat
 import type { UserRole } from "@prisma/client"
 
 import { NavMain } from "@/components/nav-main"
+import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { SettingsNavItem } from "@/components/settings/settings-nav-item"
 import { TeamSwitcher } from "@/components/team-switcher"
@@ -207,9 +210,22 @@ const data = {
   ],
   projects: [
     {
-      name: "Administration",
-      url: "/admin",
-      icon: GalleryVerticalEnd,
+      name: "Design Engineering",
+      url: "https://369ws.vercel.app/dashboard#",
+      icon: Frame,
+      isExternal: true,
+    },
+    {
+      name: "Sales & Marketing",
+      url: "https://369ws.vercel.app/dashboard#",
+      icon: PieChart,
+      isExternal: true,
+    },
+    {
+      name: "Thinking",
+      url: "https://369ws.vercel.app/dashboard#",
+      icon: Map,
+      isExternal: true,
     },
   ],
 }
@@ -347,7 +363,7 @@ export function AppSidebar({ companyName, ...props }: AppSidebarProps) {
         <NavMain items={navMainWithError} label={isPlatform ? "Plataforma" : "Navegación"}>
           <SettingsNavItem />
         </NavMain>
-        {/* <NavProjects projects={data.projects} /> */}
+        <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

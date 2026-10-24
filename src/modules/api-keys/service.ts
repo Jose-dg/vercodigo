@@ -60,6 +60,7 @@ const publicSelect = {
     lastUsedAt: true,
     expiresAt: true,
     revokedAt: true,
+    deletedAt: true,
     createdAt: true,
     createdBy: { select: { name: true, email: true } },
     revokedBy: { select: { name: true, email: true } },
@@ -92,13 +93,14 @@ function activeWhere(companyId: string, environment: ApiKeyEnvironment, now: Dat
         companyId,
         environment,
         revokedAt: null,
+        deletedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     };
 }
 
 export async function listApiKeys(actor: ApiKeyActor) {
     const rows = await prisma.companyApiKey.findMany({
-        where: { companyId: ownCompany(actor) },
+        where: { companyId: ownCompany(actor), deletedAt: null },
         select: publicSelect,
         orderBy: [{ revokedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
     });
@@ -172,8 +174,11 @@ export async function createApiKey(
 /** Idempotent: revoking an already revoked key returns it unchanged. */
 export async function revokeApiKey(actor: ApiKeyActor, apiKeyId: string) {
     const companyId = ownCompany(actor);
-    const key = await prisma.companyApiKey.findUnique({ where: { id: apiKeyId }, select: { companyId: true } });
-    if (!key || key.companyId !== companyId) throw notFound("API key no encontrada");
+    const key = await prisma.companyApiKey.findFirst({
+        where: { id: apiKeyId, companyId, deletedAt: null },
+        select: { companyId: true },
+    });
+    if (!key) throw notFound("API key no encontrada");
     const revoked = await prisma.companyApiKey.updateMany({
         where: { id: apiKeyId, revokedAt: null },
         data: { revokedAt: new Date(), revokedById: actor.id },
@@ -190,6 +195,41 @@ export async function revokeApiKey(actor: ApiKeyActor, apiKeyId: string) {
         });
     }
     return serializeApiKey(row);
+}
+
+/** Removes a key from the portal without destroying its historical relations. */
+export async function deleteApiKey(actor: ApiKeyActor, apiKeyId: string) {
+    const companyId = ownCompany(actor);
+    const now = new Date();
+    const key = await prisma.companyApiKey.findFirst({
+        where: { id: apiKeyId, companyId, deletedAt: null },
+        select: { id: true, name: true, keyPrefix: true, environment: true, revokedAt: true },
+    });
+    if (!key) throw notFound("API key no encontrada");
+
+    const deleted = await prisma.companyApiKey.updateMany({
+        where: { id: key.id, deletedAt: null },
+        data: {
+            deletedAt: now,
+            deletedById: actor.id,
+            ...(key.revokedAt ? {} : { revokedAt: now, revokedById: actor.id }),
+        },
+    });
+    if (!deleted.count) throw notFound("API key no encontrada");
+    await writeAuditLog({
+        action: "API_KEY_DELETED",
+        userId: actor.id,
+        companyId,
+        entityType: "CompanyApiKey",
+        entityId: key.id,
+        before: {
+            name: key.name,
+            keyPrefix: key.keyPrefix,
+            environment: key.environment,
+            revokedAt: key.revokedAt,
+        },
+        after: { deletedAt: now },
+    });
 }
 
 export type ApiKeyPrincipal = {
@@ -224,6 +264,7 @@ export async function authenticateApiKey(rawKey: string, now = new Date()): Prom
             scopes: true,
             companyId: true,
             revokedAt: true,
+            deletedAt: true,
             expiresAt: true,
             lastUsedAt: true,
             company: { select: { isActive: true } },
@@ -245,6 +286,7 @@ export async function authenticateApiKey(rawKey: string, now = new Date()): Prom
     const creator = key.createdBy;
     const usable = key.environment === parsed.environment
         && key.revokedAt === null
+        && key.deletedAt === null
         && (key.expiresAt === null || key.expiresAt > now)
         && key.company.isActive
         && creator.isActive

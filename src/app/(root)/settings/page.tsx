@@ -1,8 +1,11 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { UserProfile } from "@clerk/nextjs";
+import { requireAuthenticatedActor } from "@/lib/auth/actor";
+import { homePathForRole } from "@/lib/auth/navigation";
+import { SETTINGS_PARAM } from "@/components/settings/params";
 
-/** Personal profile (name, email, password, linked accounts, sessions), owned by Clerk. */
-export default function SettingsProfilePage() {
-    return <UserProfile routing="hash" />;
+/** Compatibility deep-link: account security is managed in Clerk's modal. */
+export default async function SettingsProfilePage() {
+    const actor = await requireAuthenticatedActor();
+    redirect(`${homePathForRole(actor.role)}?${SETTINGS_PARAM}`);
 }

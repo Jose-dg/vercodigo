@@ -8,7 +8,7 @@ export default function DevelopersIntroPage() {
   const baseUrl = apiBaseUrl()
   return (
     <DocPage
-      title="API para empresas"
+      title="Documentación"
       lead="Compra códigos digitales con cargo a tu billetera y haz que lleguen directo al email de tus clientes o empleados, desde tu propio sistema."
     >
       <h2>Cómo funciona</h2>
@@ -23,11 +23,11 @@ export default function DevelopersIntroPage() {
           tu precio.
         </li>
         <li>
-          <Link className="underline" href="/developers/deliveries/create">Crea una entrega</Link> con el producto y el
+          <Link className="underline" href="/developers/orders/create">Crea una orden</Link> con el producto y el
           destinatario. Se cobra de tu billetera y enviamos el código por email.
         </li>
         <li>
-          <Link className="underline" href="/developers/deliveries/retrieve">Consulta la entrega</Link> para saber si el
+          <Link className="underline" href="/developers/orders/retrieve">Consulta la orden</Link> para saber si el
           email ya salió.
         </li>
         <li>Cuando todo funcione, cambia a una key de <strong>producción</strong>: desde ahí cada entrega es dinero real.</li>

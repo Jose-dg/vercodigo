@@ -8,7 +8,7 @@ import { requireAuthenticatedActor } from "@/lib/auth/actor"
 import { homePathForRole } from "@/lib/auth/navigation"
 import { canManageApiKeys } from "@/modules/api-keys/service"
 
-export const metadata = { title: "API para empresas · Desarrolladores" }
+export const metadata = { title: "Documentación · Desarrolladores" }
 
 /** Docs are behind a session for now; they become public later. */
 export default async function DevelopersLayout({ children }: { children: ReactNode }) {

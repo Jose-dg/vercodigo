@@ -18,7 +18,7 @@ export function OpenProfileFromUrl() {
         if (!url.searchParams.has(SETTINGS_PARAM)) return;
         url.searchParams.delete(SETTINGS_PARAM);
         window.history.replaceState(null, "", url.pathname + url.search + url.hash);
-        openUserProfile();
+        openUserProfile({ __experimental_startPath: "/security" });
     }, [loaded, openUserProfile]);
 
     return null;

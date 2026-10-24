@@ -32,6 +32,7 @@ export function NavProjects({
     name: string
     url: string
     icon: LucideIcon
+    isExternal?: boolean
   }[]
 }) {
   const { isMobile } = useSidebar()
@@ -43,7 +44,11 @@ export function NavProjects({
         {projects.map((item) => (
           <SidebarMenuItem key={item.name}>
             <SidebarMenuButton asChild>
-              <a href={item.url}>
+              <a
+                href={item.url}
+                target={item.isExternal ? "_blank" : undefined}
+                rel={item.isExternal ? "noreferrer" : undefined}
+              >
                 <item.icon />
                 <span>{item.name}</span>
               </a>

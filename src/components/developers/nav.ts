@@ -7,24 +7,43 @@ export const DOCS_NAV: DocsNavSection[] = [
         title: "Empezar",
         items: [
             { title: "Introducción", url: "/developers" },
+            { title: "Base URL", url: "/developers/base-url" },
             { title: "Autenticación", url: "/developers/authentication" },
+            { title: "Paginación", url: "/developers/pagination" },
             { title: "Sandbox (pruebas)", url: "/developers/sandbox" },
             { title: "Idempotencia", url: "/developers/idempotency" },
             { title: "Errores y límites", url: "/developers/errors" },
         ],
     },
     {
-        title: "API",
+        title: "Catálogo y precios",
         items: [
             { title: "Catálogo", url: "/developers/catalog" },
-            { title: "Crear entrega", url: "/developers/deliveries/create" },
-            { title: "Consultar entrega", url: "/developers/deliveries/retrieve" },
-            { title: "Saldo", url: "/developers/wallet" },
+            { title: "Rates", url: "/developers/rates" },
+        ],
+    },
+    {
+        title: "Transacciones",
+        items: [
+            { title: "Listar transacciones", url: "/developers/transactions/list" },
+            { title: "Obtener una transacción", url: "/developers/transactions/retrieve" },
+        ],
+    },
+    {
+        title: "Órdenes",
+        items: [
+            { title: "Crear una orden", url: "/developers/orders/create" },
+            { title: "Listar órdenes", url: "/developers/orders/list" },
+            { title: "Obtener una orden", url: "/developers/orders/retrieve" },
+            { title: "Estados de orden", url: "/developers/orders/statuses" },
         ],
     },
     {
         title: "Cuenta",
-        items: [{ title: "API keys", url: "/developers/api-keys", requiresKeyAccess: true }],
+        items: [
+            { title: "Saldo", url: "/developers/wallet" },
+            { title: "API keys", url: "/developers/api-keys", requiresKeyAccess: true },
+        ],
     },
 ];
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, FlaskConical, KeyRound, Loader2, Plus, TriangleAlert } from 'lucide-react';
+import { Check, Copy, FlaskConical, KeyRound, Loader2, MoreHorizontal, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -70,6 +76,7 @@ export function ApiKeysManager({ scopes }: { scopes: ScopeOption[] }) {
     // A new key per opening remounts the form, so it always starts empty.
     const [createSession, setCreateSession] = useState(0);
     const [revoking, setRevoking] = useState<ApiKeyRow | null>(null);
+    const [deleting, setDeleting] = useState<ApiKeyRow | null>(null);
     const [busy, setBusy] = useState(false);
     const [created, setCreated] = useState<{ key: string; environment: Environment } | null>(null);
 
@@ -92,13 +99,30 @@ export function ApiKeysManager({ scopes }: { scopes: ScopeOption[] }) {
         if (!revoking) return;
         setBusy(true);
         try {
-            const response = await fetch(`/api/api-keys/${revoking.id}`, { method: 'DELETE' });
+            const response = await fetch(`/api/api-keys/${revoking.id}`, { method: 'PATCH' });
             if (!response.ok) {
                 toast.error(await readError(response, 'No se pudo revocar la key'));
                 return;
             }
             toast.success('API key revocada. Las peticiones con ella fallarán desde ahora.');
             setRevoking(null);
+            await load();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const remove = async () => {
+        if (!deleting) return;
+        setBusy(true);
+        try {
+            const response = await fetch(`/api/api-keys/${deleting.id}`, { method: 'DELETE' });
+            if (!response.ok) {
+                toast.error(await readError(response, 'No se pudo eliminar la API key'));
+                return;
+            }
+            toast.success('API key eliminada.');
+            setDeleting(null);
             await load();
         } finally {
             setBusy(false);
@@ -180,11 +204,27 @@ export function ApiKeysManager({ scopes }: { scopes: ScopeOption[] }) {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        {row.status === 'active' && (
-                                            <Button variant="ghost" size="sm" onClick={() => setRevoking(row)}>
-                                                Revocar
-                                            </Button>
-                                        )}
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" aria-label={`Acciones para ${row.name}`}>
+                                                    <MoreHorizontal className="size-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                {row.status === 'active' && (
+                                                    <DropdownMenuItem onClick={() => setRevoking(row)}>
+                                                        Revocar
+                                                    </DropdownMenuItem>
+                                                )}
+                                                <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive"
+                                                    onClick={() => setDeleting(row)}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                    Eliminar
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -221,6 +261,29 @@ export function ApiKeysManager({ scopes }: { scopes: ScopeOption[] }) {
                         <Button variant="destructive" onClick={revoke} disabled={busy}>
                             {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
                             Revocar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>¿Eliminar “{deleting?.name}”?</DialogTitle>
+                        <DialogDescription>
+                            {deleting?.status === 'active'
+                                ? 'La key se desactivará de inmediato y desaparecerá del listado.'
+                                : 'La key desaparecerá del listado. Su historial de uso se conservará.'}
+                            {' '}Esta acción no se puede deshacer desde el portal.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleting(null)} disabled={busy}>
+                            Cancelar
+                        </Button>
+                        <Button variant="destructive" onClick={remove} disabled={busy}>
+                            {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            Eliminar
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -408,7 +471,7 @@ function RevealKeyDialog({
                 </div>
                 <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
                     <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                    No la volveremos a mostrar. Nadie en Diem puede recuperarla: si la pierdes, revócala y crea otra.
+                    No la volveremos a mostrar. Si la pierdes, revócala y crea otra.
                 </p>
                 <label className="flex cursor-pointer items-center gap-2 text-sm">
                     <Checkbox checked={saved} onCheckedChange={(checked) => setSaved(checked === true)} />

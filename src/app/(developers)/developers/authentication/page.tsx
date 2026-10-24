@@ -32,8 +32,8 @@ export default function AuthenticationPage() {
           <Link className="underline" href="/developers/api-keys">API keys</Link>.
         </li>
         <li>
-          <strong>La mostramos una sola vez.</strong> Nosotros guardamos solo una huella cifrada: nadie en Diem puede
-          verla ni recuperarla. Si la pierdes, revócala y crea otra.
+          <strong>La mostramos una sola vez.</strong> Guardamos únicamente una huella cifrada y no es posible recuperar
+          la key original. Si la pierdes, revócala y crea otra.
         </li>
         <li>
           La key actúa en nombre de quien la creó: compra con su sede de origen y deja de funcionar si esa persona se

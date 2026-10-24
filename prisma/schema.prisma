@@ -33,6 +33,7 @@ model User {
   purchaseOriginPhone     PurchaseOriginPhone? @relation(fields: [purchaseOriginPhoneId], references: [id], onDelete: SetNull)
   apiKeysCreated          CompanyApiKey[]      @relation("ApiKeyCreator")
   apiKeysRevoked          CompanyApiKey[]      @relation("ApiKeyRevoker")
+  apiKeysDeleted          CompanyApiKey[]      @relation("ApiKeyDeleter")
 
   @@index([companyId])
   @@index([storeId])
@@ -83,10 +84,13 @@ model CompanyApiKey {
   expiresAt         DateTime?
   revokedAt         DateTime?
   revokedById       String?
+  deletedAt         DateTime?
+  deletedById       String?
   createdAt         DateTime          @default(now())
   company           Company           @relation(fields: [companyId], references: [id])
   createdBy         User              @relation("ApiKeyCreator", fields: [createdById], references: [id])
   revokedBy         User?             @relation("ApiKeyRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+  deletedBy         User?             @relation("ApiKeyDeleter", fields: [deletedById], references: [id], onDelete: Restrict)
   rateWindows       ApiRateWindow[]
   sandboxDeliveries SandboxDelivery[]
 
@@ -124,6 +128,7 @@ model SandboxDelivery {
 
   @@unique([companyId, idempotencyKey])
   @@index([apiKeyId])
+  @@index([companyId, createdAt, id])
 }
 
 /// Contador de peticiones por key y minuto: el límite vale entre instancias.
@@ -509,6 +514,7 @@ model CodePurchase {
   keys Key[]
 
   @@index([companyId])
+  @@index([companyId, occurredAt, occurredSequence, id])
   @@index([storeId])
   @@index([userId])
   @@index([createdAt])

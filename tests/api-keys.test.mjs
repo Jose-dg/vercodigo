@@ -11,6 +11,7 @@ import {
 } from "../src/modules/api-keys/domain.ts";
 import { serializeCatalog, serializeDelivery, serializeSandboxDelivery } from "../src/modules/api-v1/serializers.ts";
 import { sandboxScenario } from "../src/modules/api-v1/sandbox-scenarios.ts";
+import { listEnvelope, parseCursorPagination } from "../src/modules/api-v1/pagination.ts";
 
 const PEPPER = "p".repeat(32);
 
@@ -112,4 +113,18 @@ test("the catalog lists each priced denomination with its face value", () => {
     assert.equal(rows.length, 1);
     assert.deepEqual(rows[0].face_value, { amount: 20, currency: "USD" });
     assert.deepEqual(rows[0].unit_price, { amount: 85000, currency: "COP" });
+});
+
+test("public list pagination validates limits and emits an opaque next cursor", () => {
+    assert.deepEqual(parseCursorPagination(new URLSearchParams()), { limit: 20, startingAfter: null });
+    assert.deepEqual(parseCursorPagination(new URLSearchParams("limit=2&starting_after=row-1")), {
+        limit: 2,
+        startingAfter: "row-1",
+    });
+    assert.throws(() => parseCursorPagination(new URLSearchParams("limit=101")), /limit debe ser/);
+    assert.deepEqual(listEnvelope([{ id: "a" }, { id: "b" }, { id: "c" }], 2), {
+        object: "list",
+        data: [{ id: "a" }, { id: "b" }],
+        pagination: { has_more: true, next_cursor: "b" },
+    });
 });

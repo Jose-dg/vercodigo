@@ -50,7 +50,16 @@ type Handler = (req: import("next/server").NextRequest, ctx: unknown) => Promise
 let prisma: typeof import("@/lib/prisma").default;
 let NextRequestCtor: typeof import("next/server").NextRequest;
 let keys: typeof import("@/modules/api-keys/service");
-let routes: { wallet: Handler; createDelivery: Handler; getDelivery: Handler; catalog: Handler };
+let routes: {
+    wallet: Handler;
+    createDelivery: Handler;
+    getDelivery: Handler;
+    catalog: Handler;
+    listOrders: Handler;
+    listTransactions: Handler;
+    getTransaction: Handler;
+    rates: Handler;
+};
 let ctx: {
     owner: { id: string; role: "OWNER"; companyId: string };
     otherOwner: { id: string; role: "OWNER"; companyId: string };
@@ -90,6 +99,10 @@ before(async () => {
         createDelivery: (await import("@/app/api/v1/deliveries/route")).POST as Handler,
         getDelivery: (await import("@/app/api/v1/deliveries/[id]/route")).GET as Handler,
         catalog: (await import("@/app/api/v1/catalog/route")).GET as Handler,
+        listOrders: (await import("@/app/api/v1/orders/route")).GET as Handler,
+        listTransactions: (await import("@/app/api/v1/transactions/route")).GET as Handler,
+        getTransaction: (await import("@/app/api/v1/transactions/[id]/route")).GET as Handler,
+        rates: (await import("@/app/api/v1/rates/route")).GET as Handler,
     };
 });
 
@@ -232,6 +245,39 @@ test("keys belong to their company: the platform and other companies cannot see 
     assert.deepEqual((await keys.listApiKeys(ctx.owner)).map((row) => row.id), [apiKey.id]);
 });
 
+test("deleting a key hides and invalidates it while preserving its record and audit trail", async () => {
+    const { key, apiKey } = await keys.createApiKey(ctx.owner, { name: "Temporal", scopes: ["wallet:read"] });
+    const historicalDelivery = await prisma.sandboxDelivery.create({
+        data: {
+            companyId: ctx.owner.companyId,
+            apiKeyId: apiKey.id,
+            idempotencyKey: `delete-history-${Math.random()}`,
+            productId: ctx.productId,
+            denominationId: ctx.denominationId,
+            quantity: 1,
+            unitAmount: 85000,
+            currency: "COP",
+            recipientFirstName: "Luis",
+            recipientLastName: "Gómez",
+            recipientEmail: "luis@cliente.co",
+            status: "completed",
+            emailDelivery: "sent",
+        },
+    });
+    await assert.rejects(() => keys.deleteApiKey(ctx.otherOwner, apiKey.id), /no encontrada/);
+
+    await keys.deleteApiKey(ctx.owner, apiKey.id);
+    assert.deepEqual(await keys.listApiKeys(ctx.owner), []);
+    assert.equal((await call(routes.wallet, key)).status, 401);
+
+    const stored = await prisma.companyApiKey.findUniqueOrThrow({ where: { id: apiKey.id } });
+    assert.ok(stored.deletedAt);
+    assert.equal(stored.deletedById, ctx.owner.id);
+    assert.ok(stored.revokedAt);
+    assert.equal(await prisma.sandboxDelivery.count({ where: { id: historicalDelivery.id } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { action: "API_KEY_DELETED", entityId: apiKey.id } }), 1);
+});
+
 test("a sandbox key simulates deliveries without touching money, Diem or the portal", async () => {
     const { key: sandbox } = await keys.createApiKey(ctx.owner, {
         name: "Pruebas", scopes: ["deliveries:create", "deliveries:read", "wallet:read"],
@@ -262,6 +308,71 @@ test("a sandbox key simulates deliveries without touching money, Diem or the por
     assert.equal((await call(routes.getDelivery, sandbox, { id: created.id })).status, 200);
     const { key: live } = await keys.createApiKey(ctx.owner, { name: "Prod", scopes: ["deliveries:read"], environment: "LIVE" });
     assert.equal((await call(routes.getDelivery, live, { id: created.id })).status, 404);
+
+    const orders = await (await call(routes.listOrders, sandbox, { path: "/api/v1/orders?limit=1" })).json();
+    assert.equal(orders.livemode, false);
+    assert.equal(orders.data.length, 1);
+    assert.equal("keys" in orders.data[0], false);
+    const transactions = await (await call(routes.listTransactions, sandbox)).json();
+    assert.deepEqual(transactions.data, []);
+});
+
+test("public order, rate and transaction reads stay scoped to the key company", async () => {
+    const { key } = await keys.createApiKey(ctx.owner, {
+        name: "Lecturas",
+        scopes: ["catalog:read", "deliveries:read", "wallet:read"],
+        environment: "LIVE",
+    });
+    const otherPurchase = await prisma.codePurchase.create({
+        data: {
+            companyId: ctx.otherOwner.companyId,
+            userId: ctx.otherOwner.id,
+            productId: ctx.productId,
+            denominationId: ctx.denominationId,
+            count: 1,
+            totalAmount: 85000,
+            currency: "COP",
+            status: "COMPLETED",
+            idempotencyKey: `other-${Math.random()}`,
+        },
+    });
+    const ownPurchase = await prisma.codePurchase.create({
+        data: {
+            companyId: ctx.owner.companyId,
+            userId: ctx.owner.id,
+            productId: ctx.productId,
+            denominationId: ctx.denominationId,
+            count: 1,
+            totalAmount: 85000,
+            currency: "COP",
+            status: "COMPLETED",
+            idempotencyKey: `own-${Math.random()}`,
+        },
+    });
+    const orders = await (await call(routes.listOrders, key, { path: "/api/v1/orders?limit=1" })).json();
+    assert.equal(orders.data[0].id, ownPurchase.id);
+    assert.ok(!JSON.stringify(orders).includes(otherPurchase.id));
+    assert.equal("keys" in orders.data[0], false);
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { companyId: ctx.owner.companyId } });
+    const transaction = await prisma.walletTransaction.create({
+        data: {
+            walletId: wallet.id,
+            type: "ADJUSTMENT",
+            status: "CONFIRMED",
+            amount: 1000,
+            balanceAfter: 1000,
+            description: "Ajuste de prueba",
+            occurredAtSource: "LEDGER_EVENT",
+        },
+    });
+    const transactions = await (await call(routes.listTransactions, key, { path: "/api/v1/transactions?limit=10" })).json();
+    assert.equal(transactions.data[0].id, transaction.id);
+    assert.equal((await call(routes.getTransaction, key, { id: transaction.id })).status, 200);
+
+    const rates = await call(routes.rates, key);
+    assert.equal(rates.status, 200);
+    assert.equal((await rates.json()).object, "list");
 });
 
 test("requests over the limit are throttled", async () => {

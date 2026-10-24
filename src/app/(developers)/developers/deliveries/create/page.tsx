@@ -5,7 +5,7 @@ import { DELIVERY_EXAMPLE, json, requestSamples } from "@/components/developers/
 export default function CreateDeliveryPage() {
   return (
     <DocPage
-      title="Crear entrega"
+      title="Crear una orden"
       lead="Compra uno o más códigos con cargo a tu billetera y envíalos por email a una persona."
     >
       <Endpoint method="POST" path="/api/v1/deliveries" scope="deliveries:create" />
@@ -82,8 +82,8 @@ export default function CreateDeliveryPage() {
         ]}
       />
       <Callout>
-        La billetera se debita solo cuando la entrega queda <InlineCode>completed</InlineCode>. Si no hay inventario, la
-        entrega espera sin cobro.
+        La billetera se debita solo cuando la orden queda <InlineCode>completed</InlineCode>. Si no hay inventario, la
+        orden espera sin cobro.
       </Callout>
     </DocPage>
   )

@@ -49,6 +49,7 @@ export function SettingsNavItem() {
                             <SidebarMenuSubButton asChild>
                                 <button
                                     type="button"
+                                    data-sidebar-close="true"
                                     onClick={() => openUserProfile({ __experimental_startPath: "/security" })}
                                 >
                                     <KeyRound aria-hidden="true" />

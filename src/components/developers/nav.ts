@@ -7,6 +7,7 @@ export const DOCS_NAV: DocsNavSection[] = [
         title: "Empezar",
         items: [
             { title: "Introducción", url: "/developers" },
+            { title: "Integrar con IA", url: "/developers/ai-integration" },
             { title: "Base URL", url: "/developers/base-url" },
             { title: "Autenticación", url: "/developers/authentication" },
             { title: "Paginación", url: "/developers/pagination" },

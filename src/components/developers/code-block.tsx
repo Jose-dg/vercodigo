@@ -9,7 +9,15 @@ import { cn } from '@/lib/utils';
 export type CodeSample = { label: string; code: string };
 
 /** Code samples with language tabs and copy. No highlighter: plain, readable mono. */
-export function CodeBlock({ samples, className }: { samples: CodeSample[]; className?: string }) {
+export function CodeBlock({
+    samples,
+    className,
+    copyLabel = 'Copiar',
+}: {
+    samples: CodeSample[];
+    className?: string;
+    copyLabel?: string;
+}) {
     const [active, setActive] = useState(0);
     const [copied, setCopied] = useState(false);
     const current = samples[Math.min(active, samples.length - 1)];
@@ -48,10 +56,11 @@ export function CodeBlock({ samples, className }: { samples: CodeSample[]; class
                     type="button"
                     onClick={copy}
                     className="flex min-h-11 shrink-0 items-center gap-1.5 px-3 py-1 text-xs text-zinc-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400"
-                    aria-label="Copiar código"
+                    aria-label={copied ? 'Copiado' : copyLabel}
                 >
                     {copied ? <Check aria-hidden="true" className="size-3.5" /> : <Copy aria-hidden="true" className="size-3.5" />}
-                    <span className="hidden sm:inline">{copied ? 'Copiado' : 'Copiar'}</span>
+                    <span className="hidden sm:inline">{copied ? 'Copiado' : copyLabel}</span>
+                    <span className="sr-only" aria-live="polite">{copied ? 'Copiado al portapapeles' : ''}</span>
                 </button>
             </div>
             <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed">

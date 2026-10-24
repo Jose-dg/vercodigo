@@ -183,6 +183,21 @@ const Sidebar = React.forwardRef<
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
+    const closeMobileSidebarAfterNavigation = React.useCallback(
+      (event: React.MouseEvent<HTMLDivElement>) => {
+        if (event.defaultPrevented) return
+        const target = event.target
+        if (!(target instanceof Element)) return
+
+        // Links are destinations; collapsible triggers are buttons and remain open.
+        // Non-link actions (for example the account modal) opt in explicitly.
+        if (target.closest('a[href], [data-sidebar-close="true"]')) {
+          setOpenMobile(false)
+        }
+      },
+      [setOpenMobile]
+    )
+
     if (collapsible === "none") {
       return (
         <div
@@ -216,7 +231,9 @@ const Sidebar = React.forwardRef<
               <SheetTitle>Sidebar</SheetTitle>
               <SheetDescription>Displays the mobile sidebar.</SheetDescription>
             </SheetHeader>
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full w-full flex-col" onClick={closeMobileSidebarAfterNavigation}>
+              {children}
+            </div>
           </SheetContent>
         </Sheet>
       )
@@ -660,10 +677,8 @@ const SidebarMenuSkeleton = React.forwardRef<
     showIcon?: boolean
   }
 >(({ className, showIcon = false, ...props }, ref) => {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  // Stable across server and client renders to avoid hydration drift.
+  const width = "70%"
 
   return (
     <div

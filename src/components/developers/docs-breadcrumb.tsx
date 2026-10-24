@@ -16,8 +16,8 @@ import { docsLocation } from './nav';
 export function DocsBreadcrumb() {
     const location = docsLocation(usePathname());
     return (
-        <Breadcrumb>
-            <BreadcrumbList>
+        <Breadcrumb className="min-w-0">
+            <BreadcrumbList className="min-w-0 flex-nowrap">
                 <BreadcrumbItem className="hidden md:block">
                     <BreadcrumbLink asChild>
                         <Link href="/developers">{location?.section ?? 'Desarrolladores'}</Link>
@@ -26,8 +26,8 @@ export function DocsBreadcrumb() {
                 {location && (
                     <>
                         <BreadcrumbSeparator className="hidden md:block" />
-                        <BreadcrumbItem>
-                            <BreadcrumbPage>{location.title}</BreadcrumbPage>
+                        <BreadcrumbItem className="min-w-0">
+                            <BreadcrumbPage className="block truncate">{location.title}</BreadcrumbPage>
                         </BreadcrumbItem>
                     </>
                 )}

@@ -27,7 +27,7 @@ export default async function DashboardLayout({
       <SidebarProvider>
         <OpenProfileFromUrl />
         <AppSidebar companyName={companyName} />
-        <SidebarInset>
+        <SidebarInset className="min-w-0 overflow-x-hidden">
           <TopUpProvider>
             <AppTopBar />
             {actor.mustChangePassword ? <PasswordChangeNudge /> : null}

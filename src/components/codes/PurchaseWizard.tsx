@@ -133,7 +133,7 @@ function SelectionTile({
             onClick={onClick}
             aria-pressed={selected}
             className={cn(
-                'flex min-h-16 w-full items-center gap-3 rounded-2xl border-2 px-4 py-4 text-left transition-all',
+                'flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border-2 px-4 py-4 text-left transition-[color,background-color,border-color,transform,box-shadow]',
                 'active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                 selected
@@ -274,11 +274,11 @@ export function PurchaseWizard({
     if (step === 'order' && selectedProduct) {
         const accent = brandAccent(brand ?? selectedProduct.brand);
         return (
-            <div className="mx-auto max-w-xl space-y-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
+            <div className="mx-auto min-w-0 max-w-xl space-y-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-300">
                 <button
                     type="button"
                     onClick={goBack}
-                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                     <ChevronLeft className="size-4" />
                     {regionProducts.length > 1 ? `Productos de ${brand}` : 'Todas las marcas'}
@@ -331,8 +331,8 @@ export function PurchaseWizard({
     ].filter(Boolean) as string[];
 
     return (
-        <Card className="mx-auto max-w-xl overflow-hidden shadow-sm">
-            <CardHeader className="space-y-4 border-b bg-card pb-5">
+        <Card className="mx-auto min-w-0 max-w-xl overflow-hidden shadow-sm">
+            <CardHeader className="space-y-4 border-b bg-card p-4 pb-5 sm:p-6 sm:pb-5">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <CardTitle className="text-xl sm:text-2xl">
@@ -379,7 +379,7 @@ export function PurchaseWizard({
                 <StepBar step={step} />
             </CardHeader>
 
-            <CardContent key={step} className="space-y-6 pt-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
+            <CardContent key={step} className="space-y-6 p-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-300 sm:p-6">
                 {step === 'region' && (
                     <div className="grid gap-3">
                         {availableRegions.length === 0 && (

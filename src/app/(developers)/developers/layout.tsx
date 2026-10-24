@@ -19,15 +19,15 @@ export default async function DevelopersLayout({ children }: { children: ReactNo
     <SidebarProvider>
       {/* Back to the role's portal home (/overview for company admins), never the public landing. */}
       <DevelopersSidebar canManageKeys={canManageKeys} homeHref={homePathForRole(actor.role)} />
-      <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur">
-          <div className="flex items-center gap-2 px-3">
-            <SidebarTrigger />
+      <SidebarInset className="min-w-0 overflow-x-hidden">
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur sm:h-16">
+          <div className="flex min-w-0 items-center gap-2 px-3 sm:px-4">
+            <SidebarTrigger className="size-10 shrink-0" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <DocsBreadcrumb />
           </div>
         </header>
-        <div className="flex flex-1 flex-col px-4 py-8 sm:px-8">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-col px-4 py-6 sm:px-8 sm:py-8">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )

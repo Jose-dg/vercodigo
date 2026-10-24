@@ -267,7 +267,7 @@ export function CheckoutPanel({
     const hasChoices = rows.length > 1;
 
     return (
-        <section className="mx-auto flex w-full max-w-xl flex-col rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+        <section className="mx-auto flex w-full min-w-0 max-w-xl flex-col rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
             {hasChoices && (
                 <div className="mb-5">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Valor</p>
@@ -275,10 +275,12 @@ export function CheckoutPanel({
                         <div className="relative mb-3">
                             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
+                                name="denomination-search"
                                 value={query}
                                 onChange={(event) => setQuery(event.target.value)}
-                                placeholder="Buscar valor"
+                                placeholder="Buscar valor…"
                                 className="h-11 pl-9"
+                                autoComplete="off"
                             />
                         </div>
                     )}
@@ -341,7 +343,7 @@ export function CheckoutPanel({
                             }}
                         >
                             <SelectTrigger id="target-company" className="h-11 bg-background">
-                                <SelectValue placeholder="Seleccionar empresa..." />
+                                <SelectValue placeholder="Seleccionar empresa…" />
                             </SelectTrigger>
                             <SelectContent position="popper" className="z-[100]">
                                 {companies.map((company) => (
@@ -358,7 +360,7 @@ export function CheckoutPanel({
                         </Label>
                         <Select value={originValue} onValueChange={selectOrigin} disabled={!targetCompanyId}>
                             <SelectTrigger id="target-origin" className="h-11 bg-background">
-                                <SelectValue placeholder="Seleccionar origen..." />
+                                <SelectValue placeholder="Seleccionar origen…" />
                             </SelectTrigger>
                             <SelectContent position="popper" className="z-[100]">
                                 {storesForSelectedCompany.length > 0 && (
@@ -397,7 +399,7 @@ export function CheckoutPanel({
                 Cantidad{csvMode ? ' · con CSV es un código por persona' : ''}
             </p>
             <div className="mb-2 grid gap-3 sm:grid-cols-[1.1fr_1fr]">
-                <div className="flex h-14 items-stretch overflow-hidden rounded-xl border">
+                <div className="flex h-14 items-stretch overflow-hidden rounded-xl border focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                     <button
                         type="button"
                         className="flex w-14 items-center justify-center border-r text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
@@ -412,6 +414,8 @@ export function CheckoutPanel({
                         inputMode="numeric"
                         min={1}
                         max={maxQuantity}
+                        name="quantity"
+                        autoComplete="off"
                         value={quantityDraft ?? quantity}
                         onChange={(event) => {
                             const raw = event.target.value;
@@ -532,7 +536,7 @@ export function CheckoutPanel({
                 onCsvChange={setRecipientsCsv}
             />
 
-            <div className="mt-auto pt-5">
+            <div className="sticky bottom-0 z-10 -mx-4 mt-auto bg-card/95 px-4 pb-[calc(0.25rem+env(safe-area-inset-bottom))] pt-4 backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-5 sm:backdrop-blur-none">
                 <div className="flex items-end justify-between border-t border-dashed pt-5">
                     <span className="text-sm text-muted-foreground">A pagar</span>
                     <span className="font-mono text-3xl font-semibold tabular-nums text-primary sm:text-4xl">

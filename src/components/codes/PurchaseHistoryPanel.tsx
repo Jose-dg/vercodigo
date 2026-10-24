@@ -159,7 +159,7 @@ function ViewCodesDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6">
                 <DialogHeader>
                     <DialogTitle>Códigos entregados</DialogTitle>
                     <DialogDescription>
@@ -469,8 +469,8 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                     if (!open) setViewingPurchase(null);
                 }}
             />
-            <div className="flex items-center justify-between gap-3">
-                <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                     <h2 className="text-xl font-semibold">Mis solicitudes</h2>
                     <p className="text-sm text-muted-foreground">
                         Compras de códigos y activaciones de tarjetas QR. Las solicitudes quedan registradas aunque cierres esta pantalla. Si Diem ya resolvió stock o aprobación, consulta nuevamente su estado.
@@ -479,6 +479,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                 <Button
                     variant="outline"
                     size="sm"
+                    className="h-11 w-full shrink-0 sm:w-auto"
                     onClick={() => loadHistory("refresh")}
                     disabled={refreshing}
                 >
@@ -492,7 +493,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
             </div>
 
             {loadError && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                <div className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
                     <span className="flex items-center gap-2">
                         <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
                         {hasLoaded

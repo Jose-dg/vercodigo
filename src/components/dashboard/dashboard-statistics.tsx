@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { bucketLabel, compactMoney, money, type DashboardData } from './dashboard-format';
 
 export type RangeSelection =
@@ -71,6 +72,7 @@ export function DashboardStatistics({
     exporting: boolean;
 }) {
     const [periodOpen, setPeriodOpen] = useState(false);
+    const isMobile = useIsMobile();
     const [draft, setDraft] = useState<DateRange | undefined>();
     const { stats, currency } = data;
     const chart = stats.series.map((point) => ({ ...point, label: bucketLabel(point.key, stats.bucket) }));
@@ -78,9 +80,9 @@ export function DashboardStatistics({
     const topMax = Math.max(0, ...stats.topProducts.map((row) => row.amount));
 
     return (
-        <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
+        <section className="min-w-0 rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <div className="min-w-0">
                     <h2 className="flex items-center gap-2 text-lg font-semibold">
                         Estadísticas
                         {loading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
@@ -90,13 +92,13 @@ export function DashboardStatistics({
                         Gastado <strong className="text-violet-600 dark:text-violet-400">{money(stats.spent, currency)}</strong>
                     </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="-mx-1 flex max-w-full gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {RANGES.map((range) => (
                         <Button
                             key={range.value}
                             size="sm"
                             variant={selection.range === range.value ? 'default' : 'outline'}
-                            className={cn(selection.range === range.value && 'bg-violet-600 text-white hover:bg-violet-600/90')}
+                            className={cn('h-10 shrink-0', selection.range === range.value && 'bg-violet-600 text-white hover:bg-violet-600/90')}
                             onClick={() => onSelectionChange({ range: range.value })}
                         >
                             {range.label}
@@ -107,14 +109,14 @@ export function DashboardStatistics({
                             <Button
                                 size="sm"
                                 variant={selection.range === 'period' ? 'default' : 'outline'}
-                                className={cn(selection.range === 'period' && 'bg-violet-600 text-white hover:bg-violet-600/90')}
+                                className={cn('h-10 shrink-0', selection.range === 'period' && 'bg-violet-600 text-white hover:bg-violet-600/90')}
                             >
                                 <CalendarDays className="mr-1.5 size-4" />
                                 {selection.range === 'period' ? `${selection.from} → ${selection.to}` : 'Período'}
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar mode="range" numberOfMonths={2} locale={es} selected={draft} onSelect={setDraft} />
+                        <PopoverContent className="max-w-[calc(100vw-2rem)] overflow-x-auto p-0" align={isMobile ? 'start' : 'end'}>
+                            <Calendar mode="range" numberOfMonths={isMobile ? 1 : 2} locale={es} selected={draft} onSelect={setDraft} />
                             <div className="flex justify-end gap-2 border-t p-3">
                                 <Button size="sm" variant="ghost" onClick={() => setPeriodOpen(false)}>
                                     Cancelar
@@ -133,14 +135,14 @@ export function DashboardStatistics({
                             </div>
                         </PopoverContent>
                     </Popover>
-                    <Button size="sm" variant="outline" onClick={onExport} disabled={exporting}>
+                    <Button className="h-10 shrink-0" size="sm" variant="outline" onClick={onExport} disabled={exporting}>
                         {exporting ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Download className="mr-1.5 size-4" />}
                         Excel
                     </Button>
                 </div>
             </div>
 
-            <div className="mt-6 h-72">
+            <div className="mt-5 h-56 sm:mt-6 sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chart} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                         <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
@@ -157,7 +159,7 @@ export function DashboardStatistics({
                             tickLine={false}
                             axisLine={false}
                             fontSize={12}
-                            width={64}
+                            width={isMobile ? 48 : 64}
                             stroke="hsl(var(--muted-foreground))"
                             tickFormatter={(value: number) => compactMoney(value, currency)}
                         />

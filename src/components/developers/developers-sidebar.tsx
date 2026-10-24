@@ -43,7 +43,7 @@ export function DevelopersSidebar({
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/developers">
                                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                                    <Braces className="size-4" />
+                                    <Braces aria-hidden="true" className="size-4" />
                                 </div>
                                 <div className="flex flex-col gap-0.5 leading-none">
                                     <span className="font-medium">Documentación</span>
@@ -83,7 +83,7 @@ export function DevelopersSidebar({
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild>
                             <Link href={homeHref}>
-                                <ArrowLeft className="size-4" />
+                                <ArrowLeft aria-hidden="true" className="size-4" />
                                 Volver al portal
                             </Link>
                         </SidebarMenuButton>

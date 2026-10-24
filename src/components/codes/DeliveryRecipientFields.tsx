@@ -70,7 +70,7 @@ export function DeliveryRecipientFields({
                                 aria-selected={mode === value}
                                 onClick={() => onModeChange(value)}
                                 className={cn(
-                                    'rounded-md px-3 py-1.5 font-medium transition-colors',
+                                    'min-h-10 rounded-md px-3 py-1.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                     mode === value ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground',
                                 )}
                             >
@@ -87,6 +87,7 @@ export function DeliveryRecipientFields({
                             <Label htmlFor="recipient-first-name">Nombre</Label>
                             <Input
                                 id="recipient-first-name"
+                                name="recipient-first-name"
                                 autoComplete="off"
                                 value={draft.firstName}
                                 onChange={(event) => onDraftChange({ ...draft, firstName: event.target.value })}
@@ -96,6 +97,7 @@ export function DeliveryRecipientFields({
                             <Label htmlFor="recipient-last-name">Apellido</Label>
                             <Input
                                 id="recipient-last-name"
+                                name="recipient-last-name"
                                 autoComplete="off"
                                 value={draft.lastName}
                                 onChange={(event) => onDraftChange({ ...draft, lastName: event.target.value })}
@@ -106,9 +108,11 @@ export function DeliveryRecipientFields({
                         <Label htmlFor="recipient-email">Email del cliente</Label>
                         <Input
                             id="recipient-email"
+                            name="recipient-email"
                             type="email"
                             inputMode="email"
                             autoComplete="off"
+                            spellCheck={false}
                             value={draft.email}
                             onChange={(event) => onDraftChange({ ...draft, email: event.target.value })}
                         />

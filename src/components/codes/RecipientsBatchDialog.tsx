@@ -42,7 +42,7 @@ export function RecipientsBatchDialog({
 
     return (
         <Dialog open={rows !== null} onOpenChange={(open) => !open && !running && onClose()}>
-            <DialogContent className="max-w-lg" onInteractOutside={(event) => running && event.preventDefault()}>
+            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6" onInteractOutside={(event) => running && event.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>{running ? 'Enviando a tus destinatarios…' : 'Envío terminado'}</DialogTitle>
                     <DialogDescription>
@@ -54,7 +54,7 @@ export function RecipientsBatchDialog({
                 </DialogHeader>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
-                        className="h-full bg-primary transition-all"
+                        className="h-full bg-primary transition-[width]"
                         style={{ width: `${total ? ((done + failed) / total) * 100 : 0}%` }}
                     />
                 </div>
@@ -83,7 +83,7 @@ export function RecipientsBatchDialog({
                         <Download className="mr-2 size-4" />
                         Descargar resultado
                     </Button>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                         {failed > 0 && !running && (
                             <Button variant="outline" onClick={onRetryFailed}>
                                 <RotateCw className="mr-2 size-4" />

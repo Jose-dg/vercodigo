@@ -137,7 +137,8 @@ export default function ActivatePage() {
     // En celular el resultado queda bajo las tarjetas: llevarlo a la vista al aparecer.
     useEffect(() => {
         if (!result) return;
-        resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        resultRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'nearest' });
     }, [result]);
 
     const handleManualSubmit = async () => {
@@ -242,10 +243,10 @@ export default function ActivatePage() {
 
     return (
         <>
-            <div className="flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-5 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:gap-6 sm:p-6 lg:p-8">
                 <div>
-                    <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
-                        <Zap className="h-8 w-8 text-amber-500" aria-hidden="true" />
+                    <h1 className="flex items-center gap-2.5 text-pretty text-2xl font-bold tracking-tight text-foreground sm:gap-3 sm:text-3xl">
+                        <Zap className="size-7 shrink-0 text-amber-500 sm:size-8" aria-hidden="true" />
                         Activar tarjeta
                     </h1>
                     <p className="mt-2 text-muted-foreground">
@@ -265,22 +266,16 @@ export default function ActivatePage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                     {/* Toda la tarjeta abre la cámara: es el objetivo de toque más grande en el celular. */}
-                    <Card
-                        role="button"
-                        tabIndex={busy ? -1 : 0}
-                        aria-disabled={busy}
+                    <button
+                        type="button"
+                        disabled={busy}
                         aria-label="Escanear QR con la cámara"
                         className={cn(
-                            'cursor-pointer border-2 border-dashed transition-colors hover:border-blue-300',
-                            busy && 'pointer-events-none opacity-60',
+                            'rounded-xl border-2 border-dashed bg-card text-card-foreground shadow-sm transition-colors hover:border-blue-300',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                            busy && 'opacity-60',
                         )}
                         onClick={openScanner}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                openScanner();
-                            }
-                        }}
                     >
                         <CardHeader className="pb-2 text-center">
                             <div className="mx-auto mb-2 w-fit rounded-full bg-blue-50 p-4 dark:bg-blue-500/15">
@@ -290,12 +285,12 @@ export default function ActivatePage() {
                             <CardDescription>Usa la cámara del dispositivo</CardDescription>
                         </CardHeader>
                         <CardContent className="text-center">
-                            <Button variant="outline" className="w-full" tabIndex={-1} aria-hidden="true">
-                                <QrCode className="mr-2 h-4 w-4" />
+                            <span className="flex h-11 w-full items-center justify-center rounded-md border bg-background px-4 text-sm font-medium">
+                                <QrCode aria-hidden="true" className="mr-2 h-4 w-4" />
                                 Abrir cámara
-                            </Button>
+                            </span>
                         </CardContent>
-                    </Card>
+                    </button>
 
                     <Card className="border-2">
                         <CardHeader className="pb-2 text-center">
@@ -313,10 +308,13 @@ export default function ActivatePage() {
                                     </Label>
                                     <Input
                                         id="card-uuid"
+                                        name="card-uuid"
                                         value={uuid}
                                         onChange={(e) => setUuid(e.target.value)}
-                                        placeholder="ej: abc123 o https://..."
-                                        className="font-mono text-sm"
+                                        placeholder="Ej.: abc123 o https://…"
+                                        className="h-11 font-mono text-sm"
+                                        inputMode="url"
+                                        autoComplete="off"
                                         autoCapitalize="off"
                                         autoCorrect="off"
                                         spellCheck={false}
@@ -329,7 +327,7 @@ export default function ActivatePage() {
                                 <Button
                                     onClick={() => void handleManualSubmit()}
                                     disabled={!uuid.trim() || busy}
-                                    className="w-full"
+                                    className="h-11 w-full"
                                 >
                                     {busy ? (
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -362,7 +360,7 @@ export default function ActivatePage() {
                         ref={resultRef}
                         aria-live="polite"
                         className={cn(
-                            'scroll-mt-20 border-2 duration-300 animate-in fade-in-0 slide-in-from-bottom-2',
+                            'scroll-mt-20 border-2 duration-300 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2',
                             tone === 'processing' && 'border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/40',
                             tone === 'success' && 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40',
                             tone === 'error' && 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40',
@@ -377,7 +375,7 @@ export default function ActivatePage() {
                                 ) : (
                                     <XCircle className="h-6 w-6 shrink-0 text-red-600" aria-hidden="true" />
                                 )}
-                                <div className="flex-1 space-y-2">
+                                <div className="min-w-0 flex-1 space-y-2">
                                     <p
                                         className={cn(
                                             'font-semibold',
@@ -411,7 +409,7 @@ export default function ActivatePage() {
                                             </p>
                                             <p>
                                                 <span className="font-medium">UUID:</span>{' '}
-                                                <span className="font-mono">{result.card.uuid}</span>
+                                                <span className="break-all font-mono">{result.card.uuid}</span>
                                             </p>
                                             {result.activation && (
                                                 <Badge variant="secondary" className="mt-1">
@@ -430,7 +428,7 @@ export default function ActivatePage() {
                                         size="sm"
                                         onClick={result.processing ? retryActivation : reset}
                                         disabled={loading}
-                                        className="mt-3"
+                                        className="mt-3 min-h-11 w-full sm:w-auto"
                                     >
                                         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                                         {loading

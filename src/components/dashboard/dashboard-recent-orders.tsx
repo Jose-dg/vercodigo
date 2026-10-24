@@ -28,7 +28,41 @@ export function DashboardRecentOrders({ orders }: { orders: DashboardData['recen
                     Ver todas
                 </Link>
             </div>
-            <div className="overflow-x-auto rounded-2xl border bg-card shadow-sm">
+            {orders.length === 0 ? (
+                <div className="rounded-2xl border bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-sm">
+                    Todavía no hay órdenes.
+                </div>
+            ) : (
+                <ul className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm md:hidden">
+                    {orders.map((order) => {
+                        const accent = brandAccent(order.brand ?? order.productName);
+                        const status = STATUS[order.status] ?? STATUS.processing;
+                        const href = order.kind === 'purchase' ? `/codes/purchases/${order.id}` : null;
+                        const title = order.denomination
+                            ? `${order.productName} · ${formatDenomAmount(order.denomination.amount, order.denomination.currency)}`
+                            : order.productName;
+                        const content = (
+                            <div className="flex min-w-0 items-start gap-3 px-4 py-4">
+                                <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold', accent.bg, accent.fg)}>
+                                    {(order.brand ?? order.productName).slice(0, 2).toUpperCase()}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate font-medium">{title}</p>
+                                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                        {order.recipientEmail ? `Para ${order.recipientEmail} · ` : ''}{shortDateTime(order.date)}
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                        <Badge variant="outline" className={cn('font-normal', status.className)}>{status.label}</Badge>
+                                        <span className="font-semibold tabular-nums">{money(order.amount, order.currency)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                        return <li key={`${order.kind}-${order.id}`}>{href ? <Link href={href}>{content}</Link> : content}</li>;
+                    })}
+                </ul>
+            )}
+            <div className="hidden overflow-x-auto rounded-2xl border bg-card shadow-sm md:block">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -41,14 +75,7 @@ export function DashboardRecentOrders({ orders }: { orders: DashboardData['recen
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {orders.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                                    Todavía no hay órdenes.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            orders.map((order) => {
+                        {orders.map((order) => {
                                 const accent = brandAccent(order.brand ?? order.productName);
                                 const status = STATUS[order.status] ?? STATUS.processing;
                                 const href = order.kind === 'purchase' ? `/codes/purchases/${order.id}` : null;
@@ -92,8 +119,7 @@ export function DashboardRecentOrders({ orders }: { orders: DashboardData['recen
                                         </TableCell>
                                     </TableRow>
                                 );
-                            })
-                        )}
+                            })}
                     </TableBody>
                 </Table>
             </div>

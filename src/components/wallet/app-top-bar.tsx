@@ -25,7 +25,7 @@ export function AppTopBar() {
     const topUpReady = canTopUp && summary?.topUpsAvailable === true;
 
     return (
-        <div className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/80 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <SidebarTrigger className="-ml-1 size-9" />
             <div className="flex-1" />
             {canSeeWallet ? (

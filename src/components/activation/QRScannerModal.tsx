@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import type { Html5Qrcode } from 'html5-qrcode';
 import {
     Dialog,
     DialogContent,
@@ -9,7 +10,7 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, CameraOff, AlertCircle } from 'lucide-react';
+import { Camera, CameraOff } from 'lucide-react';
 
 interface QRScannerModalProps {
     open: boolean;
@@ -19,7 +20,7 @@ interface QRScannerModalProps {
 
 export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
     const scannerRef = useRef<HTMLDivElement>(null);
-    const html5QrCodeRef = useRef<any>(null);
+    const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
     // html5-qrcode decodifica a 10 fps y stop() es asíncrono: sin esta marca, el mismo QR
     // dispara onScan varias veces (validaciones y toasts duplicados).
     const handledRef = useRef(false);
@@ -76,7 +77,7 @@ export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
                     { facingMode: 'environment' },
                     {
                         fps: 10,
-                        qrbox: { width: 250, height: 250 },
+                        qrbox: { width: 220, height: 220 },
                         aspectRatio: 1,
                     },
                     (decodedText: string) => {
@@ -122,10 +123,10 @@ export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-md sm:p-6">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Camera className="h-5 w-5" />
+                        <Camera aria-hidden="true" className="h-5 w-5" />
                         Escanear QR
                     </DialogTitle>
                     <DialogDescription>
@@ -135,15 +136,15 @@ export function QRScannerModal({ open, onClose, onScan }: QRScannerModalProps) {
 
                 <div className="relative w-full">
                     {isStarting && (
-                        <div className="flex flex-col items-center justify-center h-64 bg-muted rounded-lg">
-                            <Camera className="h-10 w-10 text-muted-foreground animate-pulse mb-2" />
-                            <p className="text-sm text-muted-foreground">Iniciando cámara...</p>
+                        <div className="flex h-56 flex-col items-center justify-center rounded-lg bg-muted sm:h-64">
+                            <Camera aria-hidden="true" className="mb-2 h-10 w-10 animate-pulse text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">Iniciando cámara…</p>
                         </div>
                     )}
 
                     {error && (
-                        <div className="flex flex-col items-center justify-center h-64 bg-red-50 rounded-lg p-4 text-center">
-                            <CameraOff className="h-10 w-10 text-red-400 mb-2" />
+                        <div className="flex h-56 flex-col items-center justify-center rounded-lg bg-red-50 p-4 text-center sm:h-64">
+                            <CameraOff aria-hidden="true" className="mb-2 h-10 w-10 text-red-400" />
                             <p className="text-sm text-red-600">{error}</p>
                         </div>
                     )}

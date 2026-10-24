@@ -65,10 +65,10 @@ export function ConfirmActivationModal({
 
     return (
         <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-md sm:p-6">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-amber-600">
-                        <AlertTriangle className="h-5 w-5" />
+                        <AlertTriangle aria-hidden="true" className="h-5 w-5 shrink-0" />
                         Confirmar Activación
                     </DialogTitle>
                     <DialogDescription>
@@ -78,30 +78,30 @@ export function ConfirmActivationModal({
 
                 {cardInfo && (
                     <div className="bg-muted/40 rounded-lg p-4 space-y-2 border">
-                        <div className="flex justify-between text-sm">
+                        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 text-sm">
                             <span className="text-muted-foreground">UUID:</span>
-                            <span className="font-mono font-medium">{cardInfo.uuid}</span>
+                            <span className="break-all text-right font-mono font-medium">{cardInfo.uuid}</span>
                         </div>
                         {cardInfo.product && (
-                            <div className="flex justify-between text-sm">
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 text-sm">
                                 <span className="text-muted-foreground">Producto:</span>
-                                <span className="font-medium">{cardInfo.product}</span>
+                                <span className="break-words text-right font-medium">{cardInfo.product}</span>
                             </div>
                         )}
                         {cardInfo.store && (
-                            <div className="flex justify-between text-sm">
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 text-sm">
                                 <span className="text-muted-foreground">Tienda:</span>
-                                <span className="font-medium">{cardInfo.store}</span>
+                                <span className="break-words text-right font-medium">{cardInfo.store}</span>
                             </div>
                         )}
                         {cardInfo.company && (
-                            <div className="flex justify-between text-sm">
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 text-sm">
                                 <span className="text-muted-foreground">Compañía:</span>
-                                <span className="font-medium">{cardInfo.company}</span>
+                                <span className="break-words text-right font-medium">{cardInfo.company}</span>
                             </div>
                         )}
                         {cardInfo.amount != null && (
-                            <div className="flex justify-between text-sm">
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 text-sm">
                                 <span className="text-muted-foreground">Denominación:</span>
                                 <span className="font-medium">
                                     {cardInfo.amount} {cardInfo.currency ?? ''}
@@ -109,17 +109,17 @@ export function ConfirmActivationModal({
                             </div>
                         )}
                         {cardInfo.appliedExchangeRate != null && (
-                            <div className="flex justify-between text-sm">
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 text-sm">
                                 <span className="text-muted-foreground">Tasa aplicada:</span>
-                                <span className="font-mono font-medium">
+                                <span className="text-right font-mono font-medium">
                                     {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(cardInfo.appliedExchangeRate)} / USD
                                 </span>
                             </div>
                         )}
                         {cardInfo.billingAmount != null && (
-                            <div className="flex justify-between border-t pt-2 text-sm">
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t pt-2 text-sm">
                                 <span className="font-medium">Total a debitar:</span>
-                                <span className="font-mono font-semibold">
+                                <span className="text-right font-mono font-semibold">
                                     {new Intl.NumberFormat('es-CO', {
                                         style: 'currency',
                                         currency: cardInfo.billingCurrency ?? 'COP',
@@ -150,6 +150,7 @@ export function ConfirmActivationModal({
                     </Label>
                     <Input
                         id="confirm-text"
+                        name="activation-confirmation"
                         value={confirmText}
                         onChange={(e) => setConfirmText(e.target.value)}
                         placeholder="Escribe ACTIVAR"
@@ -180,11 +181,11 @@ export function ConfirmActivationModal({
                     >
                         {loading ? (
                             <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Activando...
+                                <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
+                                Activando…
                             </>
                         ) : (
-                            'Confirmar Activación'
+                            'Confirmar activación'
                         )}
                     </Button>
                 </DialogFooter>

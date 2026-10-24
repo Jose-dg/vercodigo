@@ -116,17 +116,17 @@ export function CompanyHome({ name, email, isPlatform }: { name: string; email: 
     const canActivate = ability.can('activate', 'Card');
 
     return (
-        <div className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6 lg:p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-semibold tracking-tight">Bienvenido, {name.split(' ')[0] || name}</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">{email}</p>
+        <div className="mx-auto w-full min-w-0 max-w-[1440px] space-y-5 overflow-x-hidden p-4 sm:space-y-6 sm:p-6 lg:p-8">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <div className="min-w-0">
+                    <h1 className="text-pretty text-2xl font-semibold tracking-tight sm:text-3xl">Bienvenido, {name.split(' ')[0] || name}</h1>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">{email}</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center lg:justify-end">
                     {isPlatform && (
                         <Select value={companyId} onValueChange={(value) => { setData(null); setCompanyId(value); }}>
-                            <SelectTrigger className="w-full sm:w-64">
-                                <SelectValue placeholder="Seleccionar compañía..." />
+                            <SelectTrigger className="col-span-2 h-11 w-full sm:w-64">
+                                <SelectValue placeholder="Seleccionar compañía…" />
                             </SelectTrigger>
                             <SelectContent>
                                 {companies.map((company) => (
@@ -136,19 +136,19 @@ export function CompanyHome({ name, email, isPlatform }: { name: string; email: 
                         </Select>
                     )}
                     {topUpReady && (
-                        <Button variant="outline" onClick={() => openTopUp()}>
-                            <Plus className="mr-1.5 size-4" />
+                        <Button className="h-11 min-w-0" variant="outline" onClick={() => openTopUp()}>
+                            <Plus aria-hidden="true" className="mr-1.5 size-4" />
                             Recargar saldo
                         </Button>
                     )}
                     {canActivate && (
-                        <Button asChild variant="outline">
-                            <Link href="/activate"><CreditCard className="mr-1.5 size-4" />Activar tarjeta</Link>
+                        <Button asChild className="h-11 min-w-0" variant="outline">
+                            <Link href="/activate"><CreditCard aria-hidden="true" className="mr-1.5 size-4" />Activar tarjeta</Link>
                         </Button>
                     )}
                     {canBuy && (
-                        <Button asChild>
-                            <Link href="/codes/purchase"><ShoppingCart className="mr-1.5 size-4" />Comprar códigos</Link>
+                        <Button asChild className="col-span-2 h-11 sm:col-span-1">
+                            <Link href="/codes/purchase"><ShoppingCart aria-hidden="true" className="mr-1.5 size-4" />Comprar códigos</Link>
                         </Button>
                     )}
                 </div>

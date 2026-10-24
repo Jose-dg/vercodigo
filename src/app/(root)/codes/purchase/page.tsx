@@ -63,6 +63,14 @@ export default function PurchaseCodesPage() {
         }
     }, []);
 
+    const changeTab = (value: string) => {
+        setActiveTab(value);
+        const url = new URL(window.location.href);
+        if (value === 'history') url.searchParams.set('tab', 'history');
+        else url.searchParams.delete('tab');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    };
+
     useEffect(() => {
         if (sessionStatus !== 'authenticated') {
             return;
@@ -436,14 +444,14 @@ export default function PurchaseCodesPage() {
     };
 
     return (
-        <main className="min-h-full bg-muted/20">
-            <div className="container max-w-6xl px-4 py-4 sm:px-6 sm:py-10">
+        <main className="min-h-full min-w-0 overflow-x-hidden bg-muted/20">
+            <div className="container max-w-6xl px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-10">
                 <header className="mb-4 flex items-start gap-4 sm:mb-8">
                     <div className="hidden size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm sm:flex">
                         <ShoppingCart className="size-5" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">Comprar códigos</h1>
+                        <h1 className="text-pretty text-2xl font-bold tracking-tight sm:text-4xl">Comprar códigos</h1>
                         {/* En celular la frase se omite: cada píxel cuenta para no hacer scroll en el pedido. */}
                         <p className="mt-1 hidden max-w-2xl text-sm leading-relaxed text-muted-foreground sm:block sm:text-base">
                             Elige región, marca y producto paso a paso. Pensado para comprar fácil desde el celular.
@@ -462,8 +470,8 @@ export default function PurchaseCodesPage() {
                     onClose={() => setBatchRows(null)}
                 />
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-                    <TabsList className="grid h-12 w-full max-w-sm grid-cols-2 p-1">
+                <Tabs value={activeTab} onValueChange={changeTab} className="min-w-0 space-y-4 sm:space-y-6">
+                    <TabsList className="sticky top-14 z-20 grid h-12 w-full grid-cols-2 p-1 shadow-sm sm:static sm:max-w-sm sm:shadow-none">
                         <TabsTrigger value="order" className="text-sm">Nueva orden</TabsTrigger>
                         <TabsTrigger value="history" className="text-sm">Mis solicitudes</TabsTrigger>
                     </TabsList>

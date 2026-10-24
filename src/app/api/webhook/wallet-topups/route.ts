@@ -9,7 +9,7 @@ import { verifyDiemFulfillmentSignature } from "@/services/self-service/fulfillm
 /**
  * POST /api/webhook/wallet-topups — DevDiem announces that a company top-up
  * was credited or failed (signed with the partner secret). The wallet is
- * updated right away; the sync job stays as the safety net.
+ * updated right away; statement-closing synchronization stays as the safety net.
  */
 export async function POST(request: NextRequest) {
     const rawBody = await request.text();
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 404 });
         return NextResponse.json({ success: true, state: result.state }, { status: 200 });
     } catch (error) {
-        // DevDiem retries 5xx; the sync job covers whatever is still missed.
+        // DevDiem retries 5xx; statement closing covers anything still missed.
         console.error("[webhook/wallet-topups]", error instanceof Error ? error.message : error);
         return NextResponse.json({ error: "INTERNAL" }, { status: 503 });
     }

@@ -49,7 +49,7 @@ Las variables de entorno quedan solo para secretos e infraestructura.
 | Prefijo de la cuenta comercial | Constante en `src/lib/devdiem/fulfillment.ts` | `diem-sas` (cuentas `diem-sas:<companyId>`; no se puede cambiar sin desvincular las existentes) |
 | Recargas habilitadas | Base de datos: `SystemConfig WALLET_TOPUPS_ENABLED` | `'true'` para activarlas; si no existe, apagadas (no se ofrece el botón y el cierre de estados de cuenta no consulta DevDiem) |
 | `DIEM_TOPUP_PAYMENT_METHOD_ID` | Variable de entorno (**transitoria**) | `PaymentMethod` de DevDiem con `gateway_provider=manual_breb`. Se elimina cuando DevDiem resuelva el medio desde la política del canal |
-| `CRON_SECRET` | Variable de entorno (secreto, ya existía) | Protege la recuperación manual `POST /api/jobs/fulfillment` |
+| `CRON_SECRET` | Variable de entorno (secreto, ya existía) | Protege `GET /api/jobs/fulfillment`; no activa ni recupera recargas |
 
 Para activar las recargas:
 
@@ -59,7 +59,9 @@ VALUES ('wallet-topups-enabled', 'WALLET_TOPUPS_ENABLED', 'true', now())
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = now();
 ```
 
-En DevDiem se configuran el service account (`stored_value:topups:create/read`), el `PaymentMethod` con `SIZU_BREB_KEY` y `SIZU_BREB_QR_PAYLOAD` en el entorno, y la `StoredValuePolicy` del canal: `funding_target=partner_wallet`, `allowed_payment_method_types=["BRE_B_MANUAL"]` y TTL de 72 h.
+En DevDiem se ejecuta `configure_vercode_breb` después del corte. El comando conserva los scopes existentes, agrega `stored_value:topups:create/read`, configura el webhook y crea el `PaymentMethod` y la `StoredValuePolicy` (`partner_wallet`, `BRE_B_MANUAL`, TTL 72 h, sin exigir identidad verificada). La llave pública vive en `PaymentMethod.display_key`; el payload EMV de `display_qr_payload` es opcional y puede agregarse después. No son secretos ni variables de entorno.
+
+No existe `/api/jobs/wallet-topups`. La entrega inmediata llega por el webhook firmado; el cierre de estados de cuenta sincroniza créditos pendientes como red de recuperación. DevDiem monitorea créditos sin acuse con `commercial_core_health --strict`.
 
 ## Gate de activación
 La activación en producción requiere el **corte de Vercode a la tienda "Ver código"** (`diem/docs/billetera/CORTE_VERCODE_TIENDA.md`). Activarla sobre la tienda Diem mezclaría las ventas de ambos negocios.

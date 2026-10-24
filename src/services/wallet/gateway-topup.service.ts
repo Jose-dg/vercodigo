@@ -71,8 +71,8 @@ export async function syncTopUp(companyId: string, topUpId: string, actorId?: st
 }
 
 /**
- * Recovery: every credited top-up DevDiem still sees as not
- * acknowledged gets its wallet entry (or just the acknowledgement).
+ * Recovery used before statement closing: every credited top-up DevDiem still
+ * sees as not acknowledged gets its wallet entry (or just the acknowledgement).
  */
 export async function syncPendingCredits(companyIds: string[]) {
     const stats = { companies: 0, credited: 0, errors: 0 };

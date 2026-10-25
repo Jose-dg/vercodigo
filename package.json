@@ -34,6 +34,8 @@
     "origins:export": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/export-canonical-purchase-origins.ts",
     "catalog:reconcile": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/reconcile-buy-codes-catalog.ts",
     "purchase:offline": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node -r ts-node/register -r tsconfig-paths/register scripts/ops/register-offline-code-purchase.ts",
+    "activation:reverse-cancelled": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node --conditions=react-server -r ts-node/register -r tsconfig-paths/register scripts/ops/reverse-cancelled-activation.ts",
+    "activation:reset-reversed-card": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node --conditions=react-server -r ts-node/register -r tsconfig-paths/register scripts/ops/reset-reversed-card.ts",
     "wallet:verify": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/verify-wallet-ledger.ts",
     "postinstall": "prisma generate"
   },

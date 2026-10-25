@@ -1,10 +1,11 @@
 /**
  * Idempotent seed for extra PlayStation USA denoms in Buy Codes:
- * US$1, $2, $3, $5 (cost only), $20, $30, $75, $150, $250.
+ * US$1, $2, $3, $5 (cost only), $20, $30, $75, $80, $150, $250.
  *
  * Usage:
  *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-playstation-usa-extra-denoms.ts
  *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-playstation-usa-extra-denoms.ts --apply
+ *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-playstation-usa-extra-denoms.ts --sku PSN-GC-US-80 --apply
  *
  * Requires DATABASE_URL (loads .env.local if present).
  */
@@ -26,7 +27,7 @@ try {
         ) {
             value = value.slice(1, -1);
         }
-        process.env[key] = value;
+        process.env[key] ??= value;
     }
 } catch {
     // Rely on existing process.env
@@ -89,6 +90,12 @@ const CATALOG: ProductSpec[] = [
         devDiemProductId: "d8842fac-5e08-473a-aaca-be82bdac60db",
     },
     {
+        name: "PlayStation Gift Card US$80 — USA",
+        sku: "PSN-GC-US-80",
+        amount: 80,
+        devDiemProductId: "c6bf325e-3882-5bd8-97bb-2d55d53c2c35",
+    },
+    {
         name: "PlayStation Gift Card US$150 — USA",
         sku: "799366084320",
         amount: 150,
@@ -101,6 +108,16 @@ const CATALOG: ProductSpec[] = [
         devDiemProductId: "2bfdd97a-2d3d-4f9e-af78-68f5d86b2034",
     },
 ];
+
+function selectedCatalog(): ProductSpec[] {
+    const skuIndex = process.argv.indexOf("--sku");
+    if (skuIndex === -1) return CATALOG;
+
+    const sku = process.argv[skuIndex + 1]?.trim();
+    const product = CATALOG.find((item) => item.sku === sku);
+    if (!product) throw new Error(`SKU desconocido para este seed: ${sku || "(vacío)"}`);
+    return [product];
+}
 
 async function upsertGlobalCost(params: {
     productId: string;
@@ -204,13 +221,14 @@ async function upsertProduct(spec: ProductSpec) {
 }
 
 async function main() {
+    const products = selectedCatalog();
     if (!process.argv.includes("--apply")) {
-        console.log(`PLAN: ${CATALOG.length} PlayStation USA denominations would be upserted at the configured historical cost basis.`);
+        console.log(`PLAN: ${products.length} PlayStation USA denomination(s) would be upserted at the configured historical cost basis.`);
         console.log("No database changes were made. Re-run with --apply after verifying DATABASE_URL and costs.");
         return;
     }
-    console.log(`Seeding ${CATALOG.length} PlayStation USA extra denoms...`);
-    for (const spec of CATALOG) {
+    console.log(`Seeding ${products.length} PlayStation USA denomination(s)...`);
+    for (const spec of products) {
         const { product, cost } = await upsertProduct(spec);
         console.log(
             `✓ ${product.name} (${product.sku}) — cost ${cost} COP`,

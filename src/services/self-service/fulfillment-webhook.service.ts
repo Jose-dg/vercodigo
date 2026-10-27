@@ -1,6 +1,5 @@
-import crypto from "crypto";
-
 import prisma from "@/lib/prisma";
+export { verifyDiemFulfillmentSignature } from "@/lib/devdiem/webhook-signature";
 import { processActivationJob, updateOpenActivationJob } from "@/services/self-service/activate-card.service";
 import { notifyActivationJob } from "@/modules/notifications/order-notifications.service";
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
@@ -53,21 +52,6 @@ const ACTIONABLE_STATUSES = new Set([
     "processing",
     "received",
 ]);
-
-export function verifyDiemFulfillmentSignature(body: string, signature: string | null): boolean {
-    const secret = process.env.DIEM_FULFILLMENT_WEBHOOK_SECRET?.trim();
-    if (!secret) {
-        // Dev convenience: allow unsigned only when secret is unset.
-        return process.env.NODE_ENV !== "production";
-    }
-    if (!signature) return false;
-    const expected = crypto.createHmac("sha256", secret).update(body).digest("hex");
-    const provided = signature.trim().toLowerCase();
-    const expectedBuf = Buffer.from(expected, "utf8");
-    const providedBuf = Buffer.from(provided, "utf8");
-    if (expectedBuf.length !== providedBuf.length) return false;
-    return crypto.timingSafeEqual(expectedBuf, providedBuf);
-}
 
 function parsePayload(body: unknown): FulfillmentWebhookPayload | null {
     if (!body || typeof body !== "object") return null;

@@ -4,6 +4,21 @@ export type DiemConfig = {
     storeId: string;
 };
 
+export type DiemConnectionCapabilities = {
+    ok: boolean;
+    store_authorized: boolean;
+    module_active: boolean;
+    scopes: Record<string, boolean>;
+    missing_scopes: string[];
+};
+
+export type DiemConnectionCheck = {
+    key: string;
+    label: string;
+    ok: boolean;
+    detail: string;
+};
+
 export function getDiemConfig(): DiemConfig {
     const configuredUrl = process.env.DIEM_API_URL?.trim();
     const apiKey = process.env.DIEM_SERVICE_API_KEY;
@@ -489,15 +504,23 @@ export async function correctCodeRequestPurchaseOrigin(params: {
     }>(response);
 }
 
-export async function checkDiemConnection(): Promise<{
-    ok: true;
-    storeId: string;
+export async function getDiemConnectionCapabilities(
+    config: DiemConfig = getDiemConfig(),
+): Promise<DiemConnectionCapabilities> {
+    const query = new URLSearchParams({ store_id: config.storeId });
+    const response = await fetch(
+        `${config.baseUrl}/api/v1/connection/capabilities/?${query.toString()}`,
+        { headers: headers(config), cache: 'no-store' },
+    );
+    return parse<DiemConnectionCapabilities>(response);
+}
+
+async function readDiemCatalog(config: DiemConfig): Promise<{
     catalogProducts: number;
     catalogProductIds: string[];
     catalogProductRegions: Record<string, string>;
     catalogProductStock: Record<string, number>;
 }> {
-    const config = getDiemConfig();
     const query = new URLSearchParams({
         store_id: config.storeId,
         fulfillment_enabled: 'true',
@@ -562,11 +585,124 @@ export async function checkDiemConnection(): Promise<{
         nextUrl = parsedNext.toString();
     }
     return {
-        ok: true,
-        storeId: config.storeId,
         catalogProducts: productIds.size,
         catalogProductIds: [...productIds],
         catalogProductRegions: Object.fromEntries(productRegions),
         catalogProductStock: Object.fromEntries(productStock),
     };
+}
+
+export async function checkDiemConnection(): Promise<{
+    ok: true;
+    storeId: string;
+    capabilities: DiemConnectionCapabilities;
+    catalogProducts: number;
+    catalogProductIds: string[];
+    catalogProductRegions: Record<string, string>;
+    catalogProductStock: Record<string, number>;
+}> {
+    const config = getDiemConfig();
+    const capabilities = await getDiemConnectionCapabilities(config);
+    if (!capabilities.module_active) {
+        throw new Error('El módulo de fulfillment no está activo para DIEM_STORE_ID');
+    }
+    if (capabilities.missing_scopes.length) {
+        throw new Error(`Faltan scopes en la service account: ${capabilities.missing_scopes.join(', ')}`);
+    }
+    const catalog = await readDiemCatalog(config);
+    return {
+        ok: true,
+        storeId: config.storeId,
+        capabilities,
+        ...catalog,
+    };
+}
+
+export async function diagnoseDiemConnection(): Promise<{
+    ok: boolean;
+    checks: DiemConnectionCheck[];
+}> {
+    const checks: DiemConnectionCheck[] = [];
+    let config: DiemConfig;
+    try {
+        config = getDiemConfig();
+        checks.push({
+            key: 'diem_sas_config',
+            label: 'Variables de Diem-SAS',
+            ok: true,
+            detail: 'URL, API key y Store ID están configurados y tienen formato válido.',
+        });
+    } catch (error) {
+        checks.push({
+            key: 'diem_sas_config',
+            label: 'Variables de Diem-SAS',
+            ok: false,
+            detail: error instanceof Error ? error.message : 'Configuración inválida.',
+        });
+        return { ok: false, checks };
+    }
+
+    let capabilities: DiemConnectionCapabilities;
+    try {
+        capabilities = await getDiemConnectionCapabilities(config);
+        checks.push({
+            key: 'diem_authentication',
+            label: 'API key y tienda en Diem',
+            ok: capabilities.store_authorized,
+            detail: capabilities.store_authorized
+                ? 'La API key autentica y tiene acceso a la tienda configurada.'
+                : 'La API key no tiene acceso a la tienda configurada.',
+        });
+    } catch (error) {
+        const status = (error as DiemHttpError)?.status;
+        checks.push({
+            key: 'diem_authentication',
+            label: 'API key y tienda en Diem',
+            ok: false,
+            detail: status === 401
+                ? 'Diem rechazó DIEM_SERVICE_API_KEY.'
+                : status === 404
+                    ? 'DIEM_STORE_ID no está autorizado para esta API key.'
+                    : error instanceof Error ? error.message : 'Diem no respondió.',
+        });
+        return { ok: false, checks };
+    }
+
+    checks.push({
+        key: 'fulfillment_module',
+        label: 'Módulo de fulfillment',
+        ok: capabilities.module_active,
+        detail: capabilities.module_active
+            ? 'El módulo está activo para la tienda.'
+            : 'El módulo no está activo para la tienda.',
+    });
+    checks.push({
+        key: 'code_request_scopes',
+        label: 'Scopes de solicitudes de códigos',
+        ok: capabilities.missing_scopes.length === 0,
+        detail: capabilities.missing_scopes.length
+            ? `Faltan: ${capabilities.missing_scopes.join(', ')}.`
+            : 'Los scopes de catálogo, creación, consulta y revelado están activos.',
+    });
+    if (!capabilities.module_active || capabilities.missing_scopes.length) {
+        return { ok: false, checks };
+    }
+
+    try {
+        const catalog = await readDiemCatalog(config);
+        checks.push({
+            key: 'diem_catalog',
+            label: 'Catálogo de códigos',
+            ok: true,
+            detail: `Diem respondió con ${catalog.catalogProducts} producto(s) habilitado(s).`,
+        });
+    } catch (error) {
+        checks.push({
+            key: 'diem_catalog',
+            label: 'Catálogo de códigos',
+            ok: false,
+            detail: error instanceof Error ? error.message : 'No fue posible consultar el catálogo.',
+        });
+    }
+    return { ok: checks.every((check) => check.ok), checks };
 }

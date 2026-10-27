@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from 'node:test';
 import {
     buildCodeRequestCommand,
     checkDiemConnection,
+    diagnoseDiemConnection,
     isDiemContractError,
     isDiemIdempotencyConflict,
     parseCodeRequestCommand,
@@ -15,11 +16,14 @@ import {
     getDiemConfig,
     revealCodeRequest,
 } from '../src/lib/devdiem/fulfillment.ts';
+import { verifyDiemFulfillmentSignature } from '../src/lib/devdiem/webhook-signature.ts';
+import crypto from 'node:crypto';
 
 const ORIGINAL_ENV = {
     DIEM_API_URL: process.env.DIEM_API_URL,
     DIEM_SERVICE_API_KEY: process.env.DIEM_SERVICE_API_KEY,
     DIEM_STORE_ID: process.env.DIEM_STORE_ID,
+    DIEM_FULFILLMENT_WEBHOOK_SECRET: process.env.DIEM_FULFILLMENT_WEBHOOK_SECRET,
 };
 const ORIGINAL_FETCH = globalThis.fetch;
 const STORE_ID = '11111111-1111-4111-8111-111111111111';
@@ -28,6 +32,16 @@ beforeEach(() => {
     process.env.DIEM_API_URL = 'https://diem.example.test/';
     process.env.DIEM_SERVICE_API_KEY = 'ddk_test_secret';
     process.env.DIEM_STORE_ID = STORE_ID;
+});
+
+test('fulfillment webhook accepts the matching signature and rejects a different one', () => {
+    process.env.DIEM_FULFILLMENT_WEBHOOK_SECRET = 'shared-secret';
+    const body = JSON.stringify({ event_type: 'connection_test', event_id: 'event-1' });
+    const signature = crypto.createHmac('sha256', 'shared-secret').update(body).digest('hex');
+
+    assert.equal(verifyDiemFulfillmentSignature(body, signature), true);
+    assert.equal(verifyDiemFulfillmentSignature(body, '0'.repeat(64)), false);
+    assert.equal(verifyDiemFulfillmentSignature(body, null), false);
 });
 
 afterEach(() => {
@@ -299,9 +313,25 @@ test('connection check validates credentials, store grant and catalog access', a
     let calls = 0;
     globalThis.fetch = async (url, init) => {
         calls += 1;
-        assert.match(String(url), /catalog\/products\/\?/);
         assert.equal(init.headers.Authorization, 'Bearer ddk_test_secret');
         if (calls === 1) {
+            assert.match(String(url), /connection\/capabilities\/\?/);
+            assert.match(String(url), new RegExp(`store_id=${STORE_ID}`));
+            return Response.json({
+                ok: true,
+                store_authorized: true,
+                module_active: true,
+                scopes: {
+                    'catalog:read': true,
+                    'code_requests:create': true,
+                    'code_requests:read': true,
+                    'code_requests:codes:reveal': true,
+                },
+                missing_scopes: [],
+            });
+        }
+        assert.match(String(url), /catalog\/products\/\?/);
+        if (calls === 2) {
             assert.match(String(url), new RegExp(`store_id=${STORE_ID}`));
             assert.match(String(url), /page_size=100/);
             return Response.json({
@@ -318,6 +348,18 @@ test('connection check validates credentials, store grant and catalog access', a
     assert.deepEqual(await checkDiemConnection(), {
         ok: true,
         storeId: STORE_ID,
+        capabilities: {
+            ok: true,
+            store_authorized: true,
+            module_active: true,
+            scopes: {
+                'catalog:read': true,
+                'code_requests:create': true,
+                'code_requests:read': true,
+                'code_requests:codes:reveal': true,
+            },
+            missing_scopes: [],
+        },
         catalogProducts: 2,
         catalogProductIds: ['one', 'two'],
         catalogProductRegions: {
@@ -329,6 +371,58 @@ test('connection check validates credentials, store grant and catalog access', a
             two: 0,
         },
     });
+});
+
+test('diagnostic identifies an invalid API key without trying the catalog', async () => {
+    let calls = 0;
+    globalThis.fetch = async () => {
+        calls += 1;
+        return Response.json({ detail: 'Invalid API key.' }, { status: 401 });
+    };
+
+    const result = await diagnoseDiemConnection();
+
+    assert.equal(result.ok, false);
+    assert.equal(calls, 1);
+    assert.equal(result.checks.at(-1).key, 'diem_authentication');
+    assert.match(result.checks.at(-1).detail, /DIEM_SERVICE_API_KEY/);
+});
+
+test('diagnostic distinguishes a store that is not authorized for the API key', async () => {
+    globalThis.fetch = async () => Response.json({ detail: 'Not found.' }, { status: 404 });
+
+    const result = await diagnoseDiemConnection();
+
+    assert.equal(result.ok, false);
+    assert.equal(result.checks.at(-1).key, 'diem_authentication');
+    assert.match(result.checks.at(-1).detail, /DIEM_STORE_ID/);
+});
+
+test('diagnostic reports missing code request scopes without reading the catalog', async () => {
+    let calls = 0;
+    globalThis.fetch = async () => {
+        calls += 1;
+        return Response.json({
+            ok: false,
+            store_authorized: true,
+            module_active: true,
+            scopes: {
+                'catalog:read': true,
+                'code_requests:create': false,
+                'code_requests:read': true,
+                'code_requests:codes:reveal': true,
+            },
+            missing_scopes: ['code_requests:create'],
+        });
+    };
+
+    const result = await diagnoseDiemConnection();
+
+    assert.equal(result.ok, false);
+    assert.equal(calls, 1);
+    const scopes = result.checks.find((check) => check.key === 'code_request_scopes');
+    assert.equal(scopes.ok, false);
+    assert.match(scopes.detail, /code_requests:create/);
 });
 
 const commandParams = () => ({

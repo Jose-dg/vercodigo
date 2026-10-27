@@ -4,6 +4,7 @@ import {
     handleDiemFulfillmentWebhook,
     verifyDiemFulfillmentSignature,
 } from "@/services/self-service/fulfillment-webhook.service";
+import { diagnoseDiemConnection } from "@/lib/devdiem/fulfillment";
 
 export async function POST(request: NextRequest) {
     const rawBody = await request.text();
@@ -14,6 +15,27 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+        let envelope: unknown;
+        try {
+            envelope = JSON.parse(rawBody);
+        } catch {
+            envelope = null;
+        }
+        if (
+            envelope
+            && typeof envelope === "object"
+            && (envelope as { event_type?: unknown }).event_type === "connection_test"
+            && typeof (envelope as { event_id?: unknown }).event_id === "string"
+        ) {
+            const diagnostic = await diagnoseDiemConnection();
+            return NextResponse.json(
+                {
+                    ...diagnostic,
+                    event_id: (envelope as { event_id: string }).event_id,
+                },
+                { status: 200 },
+            );
+        }
         const result = await handleDiemFulfillmentWebhook(rawBody);
         if (!result.ok) {
             return NextResponse.json(

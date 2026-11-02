@@ -26,7 +26,10 @@ function codesOf(value: unknown): string[] {
 
 const sameCodes = (a: string[], b: string[]) => a.length === b.length && a.every((code, index) => code === b[index]);
 
-function cancellationMessage() {
+function cancellationMessage(reasonCode?: string) {
+    if (reasonCode === "partner_return_claim_accepted") {
+        return "Reclamo aceptado: se reembolsó el cobro en la wallet. El código fue devuelto a Diem para custodia y reventa; no se marcó como inválido.";
+    }
     return "Diem anuló la entrega después de completada. Se reembolsó el cobro en la wallet; los códigos entregados quedan sin validez.";
 }
 
@@ -39,14 +42,20 @@ export async function reverseCancelledCodePurchase(purchaseId: string): Promise<
     const reversed = await prisma.$transaction(async (tx) => {
         const claimed = await tx.codePurchase.updateMany({
             where: { id: purchase.id, status: "COMPLETED" },
-            data: { status: "REVERSED", fulfillmentStatus: "cancelled", lastError: cancellationMessage() },
+            data: {
+                status: "REVERSED",
+                fulfillmentStatus: "cancelled",
+                lastError: cancellationMessage(remote.last_error_code),
+            },
         });
         if (!claimed.count) return false;
         const consumption = await tx.walletTransaction.findUnique({ where: { codePurchaseId: purchase.id } });
         if (consumption) {
             await reverseConsumption({
                 consumptionId: consumption.id,
-                description: `Reembolso: Diem anuló la compra ${purchase.id}`,
+                description: remote.last_error_code === "partner_return_claim_accepted"
+                    ? `Reembolso: reclamo aceptado por devolución ${purchase.id}`
+                    : `Reembolso: Diem anuló la compra ${purchase.id}`,
                 tx,
             });
         }
@@ -65,7 +74,11 @@ export async function reverseCancelledCodePurchase(purchaseId: string): Promise<
         entityId: purchase.id,
         before: { status: "COMPLETED", deliveredCodes: purchase.deliveredCodes },
         after: { status: "REVERSED" },
-        details: { diemRequestId: purchase.diemRequestId, trigger: "diem_cancelled_after_delivery" },
+        details: {
+            diemRequestId: purchase.diemRequestId,
+            trigger: "diem_cancelled_after_delivery",
+            reasonCode: remote.last_error_code ?? null,
+        },
     });
     return { status: "REVERSED", action: "reversed" };
 }

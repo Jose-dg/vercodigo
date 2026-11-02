@@ -488,7 +488,7 @@ model CodePurchase {
   count                 Int
   totalAmount           Float
   currency              String               @default("USD")
-  status                String               @default("PENDING") // PENDING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED
+  status                String               @default("PENDING") // PENDING, AWAITING_STOCK, FINALIZING, COMPLETED, ACTION_REQUIRED, FAILED, CANCELLED, REVERSED
   idempotencyKey        String               @unique
   diemRequestId         String?              @unique
   /// Exact command sent to Diem; frozen so retries never break its idempotency hash.

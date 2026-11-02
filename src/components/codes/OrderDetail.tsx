@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
     ArrowDownLeft,
     ArrowUpRight,
@@ -18,9 +18,18 @@ import {
     RefreshCw,
     Tag,
     Wallet,
+    XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { brandAccent, formatDenomAmount } from '@/lib/codes/catalog-regions';
 import type { PurchaseTimeline } from '@/lib/codes/purchase-timeline';
@@ -131,13 +140,19 @@ export function OrderDetail({
     purchase,
     autoRefreshing,
     retrying,
+    cancelling,
     onRetry,
+    onCancel,
 }: {
     purchase: PurchaseDetail;
     autoRefreshing: boolean;
     retrying: boolean;
+    cancelling: boolean;
     onRetry: () => void;
+    onCancel: (reason: string) => Promise<boolean>;
 }) {
+    const [cancelOpen, setCancelOpen] = useState(false);
+    const [cancelReason, setCancelReason] = useState('Ya no se necesita esta solicitud');
     const { timeline } = purchase;
     const tone = TONE_STYLES[timeline.tone];
     const accent = brandAccent(purchase.productBrand ?? purchase.productName ?? '');
@@ -146,6 +161,9 @@ export function OrderDetail({
         : (purchase.productName ?? 'Producto');
     const charged = purchase.walletTransactions.length > 0;
     const showRetry = purchase.needsAction || (purchase.isPending && Boolean(purchase.lastError));
+    const canCancel = purchase.kind !== 'activation'
+        && purchase.status === 'AWAITING_STOCK'
+        && purchase.fulfillmentStatus === 'awaiting_stock';
 
     const copyCodes = () => {
         navigator.clipboard.writeText(purchase.keys.map((row) => row.code).join('\n'));
@@ -233,7 +251,65 @@ export function OrderDetail({
                         )}
                     </div>
                 )}
+
+                {canCancel && (
+                    <div className="mt-5 flex flex-col gap-3 rounded-xl border p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="font-medium">Esta solicitud todavía no tiene códigos asignados.</p>
+                            <p className="mt-1 text-muted-foreground">
+                                Puedes cancelarla ahora. Cuando llegue inventario no se reactivará y la wallet no será debitada.
+                            </p>
+                        </div>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            className="shrink-0"
+                            disabled={cancelling}
+                            onClick={() => setCancelOpen(true)}
+                        >
+                            {cancelling ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <XCircle className="mr-2 size-3.5" />}
+                            Cancelar solicitud
+                        </Button>
+                    </div>
+                )}
             </section>
+
+            <Dialog open={cancelOpen} onOpenChange={(open) => !cancelling && setCancelOpen(open)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Cancelar solicitud pendiente</DialogTitle>
+                        <DialogDescription>
+                            Esta acción es definitiva. Diem dejará de reservar inventario para la solicitud y no se realizará ningún cobro.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <label className="space-y-2 text-sm">
+                        <span className="font-medium">Motivo</span>
+                        <textarea
+                            value={cancelReason}
+                            onChange={(event) => setCancelReason(event.target.value)}
+                            maxLength={500}
+                            rows={3}
+                            disabled={cancelling}
+                            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                    </label>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" disabled={cancelling} onClick={() => setCancelOpen(false)}>
+                            Volver
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={cancelling || cancelReason.trim().length < 5}
+                            onClick={async () => {
+                                if (await onCancel(cancelReason.trim())) setCancelOpen(false);
+                            }}
+                        >
+                            {cancelling && <Loader2 className="mr-2 size-4 animate-spin" />}
+                            Confirmar cancelación
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
                 <div className="space-y-5">

@@ -31,8 +31,8 @@ function fakeDb(status) {
 }
 
 test("settled purchases are absorbing", () => {
-    for (const settled of ["COMPLETED", "FAILED"]) {
-        for (const target of [...OPEN_CODE_PURCHASE_STATUSES, "COMPLETED", "FAILED"]) {
+    for (const settled of ["COMPLETED", "FAILED", "CANCELLED", "REVERSED"]) {
+        for (const target of [...OPEN_CODE_PURCHASE_STATUSES, "COMPLETED", "FAILED", "CANCELLED", "REVERSED"]) {
             assert.equal(canTransitionCodePurchase(settled, target), false, `${settled} → ${target}`);
         }
     }
@@ -43,6 +43,7 @@ test("open purchases move between open states and settle, never into FINALIZING"
     assert.equal(canTransitionCodePurchase("ACTION_REQUIRED", "PENDING"), true);
     assert.equal(canTransitionCodePurchase("PENDING", "COMPLETED"), true);
     assert.equal(canTransitionCodePurchase("AWAITING_STOCK", "FAILED"), true);
+    assert.equal(canTransitionCodePurchase("AWAITING_STOCK", "CANCELLED"), true);
     assert.equal(canTransitionCodePurchase("PENDING", "FINALIZING"), false);
     assert.equal(canTransitionCodePurchase("UNKNOWN", "PENDING"), false);
 });

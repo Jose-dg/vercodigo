@@ -48,6 +48,7 @@ export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'comp
         can('read', ['Card', 'CardActivation', 'CodePurchase', 'Invoice', 'AuditLog']);
         // Compra de códigos en nombre de una compañía (soporte urgente vía plataforma).
         can('create', 'CodePurchase');
+        can('update', 'CodePurchase');
         can(['create', 'update', 'approve'], 'Invoice');
         cannot('delete', 'AuditLog');
         // Solo plataforma genera QR físicos; SYSTEM_ADMIN no activa en mostrador.
@@ -82,6 +83,7 @@ export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'comp
 
         // Purchase
         can('create', 'CodePurchase'); // Assuming they can purchase for their company
+        can('update', 'CodePurchase', { companyId } as any);
 
         // Wallet: balance + histórico en solo lectura. La recarga self-service
         // (Bre-B, cobrada y verificada por DevDiem) la hacen OWNER y GENERAL_ADMIN.
@@ -111,6 +113,7 @@ export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'comp
         // Purchase
         can('read', 'CodePurchase', { storeId } as any);
         can('create', 'CodePurchase'); // purchases assigned to their store
+        can('update', 'CodePurchase', { storeId } as any);
 
         // History
         can('read', 'CardActivation', { storeId } as any);
@@ -139,6 +142,7 @@ export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'comp
         // Purchase
         can('read', 'CodePurchase', { storeId } as any);
         can('create', 'CodePurchase'); // purchases assigned to their store
+        can('update', 'CodePurchase', { storeId } as any);
 
         // History
         can('read', 'CardActivation', { storeId } as any);

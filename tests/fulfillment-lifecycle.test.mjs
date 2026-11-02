@@ -6,9 +6,11 @@ import {
     isSettledFulfillmentStatus,
 } from '../src/services/self-service/fulfillment-lifecycle.ts';
 
-test('settlement is only COMPLETED or FAILED', () => {
+test('settlement includes completed, failed, cancelled and reversed work', () => {
     assert.equal(isSettledFulfillmentStatus('COMPLETED'), true);
     assert.equal(isSettledFulfillmentStatus('FAILED'), true);
+    assert.equal(isSettledFulfillmentStatus('CANCELLED'), true);
+    assert.equal(isSettledFulfillmentStatus('REVERSED'), true);
     assert.equal(isSettledFulfillmentStatus('ACTION_REQUIRED'), false);
     assert.equal(isSettledFulfillmentStatus('PENDING'), false);
     assert.equal(isSettledFulfillmentStatus('AWAITING_STOCK'), false);
@@ -18,6 +20,7 @@ test('local wait stops UI polling but still lets the webhook resume', () => {
     assert.equal(isFulfillmentWaitLocal('ACTION_REQUIRED'), true);
     assert.equal(isFulfillmentWaitLocal('COMPLETED'), true);
     assert.equal(isFulfillmentWaitLocal('FAILED'), true);
+    assert.equal(isFulfillmentWaitLocal('CANCELLED'), true);
     assert.equal(isFulfillmentWaitLocal('PENDING'), false);
     assert.equal(isFulfillmentWaitLocal('AWAITING_STOCK'), false);
 });

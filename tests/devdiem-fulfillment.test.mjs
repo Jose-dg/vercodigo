@@ -3,6 +3,7 @@ import { afterEach, beforeEach, test } from 'node:test';
 
 import {
     buildCodeRequestCommand,
+    cancelCodeRequest,
     checkDiemConnection,
     diagnoseDiemConnection,
     isDiemContractError,
@@ -185,6 +186,30 @@ test('status and reveal use protected endpoints and flatten delivered codes', as
     assert.match(calls[1].url, /request%2Fwith%20spaces\/reveal\/$/);
     assert.equal(calls[1].init.headers['X-Correlation-ID'], 'purchase:1');
     assert.deepEqual(codes, ['CODE-A', 'CODE-B', 'CODE-C']);
+});
+
+test('cancelCodeRequest uses the protected cancellation endpoint and sends the reason', async () => {
+    let captured;
+    globalThis.fetch = async (url, init) => {
+        captured = { url: String(url), init };
+        return Response.json({
+            id: 'request/with spaces',
+            commercial_order_id: 'order-1',
+            status: 'cancelled',
+            external_reference: 'purchase-1',
+        });
+    };
+
+    const result = await cancelCodeRequest('request/with spaces', 'El cliente desistió de la compra');
+
+    assert.equal(result.status, 'cancelled');
+    assert.equal(
+        captured.url,
+        'https://diem.example.test/api/v1/code-requests/request%2Fwith%20spaces/cancel/',
+    );
+    assert.equal(captured.init.method, 'POST');
+    assert.equal(captured.init.headers.Authorization, 'Bearer ddk_test_secret');
+    assert.deepEqual(JSON.parse(captured.init.body), { reason: 'El cliente desistió de la compra' });
 });
 
 test('Diem HTTP errors preserve status and provider detail', async () => {

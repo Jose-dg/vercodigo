@@ -13,6 +13,7 @@ export function FulfillmentOrderPage({ apiPath }: { apiPath: string }) {
     const [purchase, setPurchase] = useState<PurchaseDetail | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [retrying, setRetrying] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
     const lastStatus = useRef<string | null>(null);
 
     const applyPurchase = useCallback((next: PurchaseDetail) => {
@@ -24,6 +25,7 @@ export function FulfillmentOrderPage({ apiPath }: { apiPath: string }) {
         if (next.status === 'COMPLETED') toast.success('Códigos entregados');
         else if (next.status === 'FAILED') toast.error('La entrega falló y no se debitó la wallet.');
         else if (next.status === 'ACTION_REQUIRED') toast.error('La entrega necesita revisión manual.');
+        else if (next.status === 'CANCELLED') toast.success('Solicitud cancelada sin cobro.');
     }, []);
 
     const load = useCallback(async () => {
@@ -73,6 +75,32 @@ export function FulfillmentOrderPage({ apiPath }: { apiPath: string }) {
         }
     };
 
+    const cancel = async (reason: string) => {
+        setCancelling(true);
+        try {
+            const response = await fetch(apiPath, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason }),
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                toast.error(data?.message ?? 'No se pudo cancelar la solicitud');
+                await load();
+                return false;
+            }
+            if (data?.purchase) applyPurchase(data.purchase);
+            else await load();
+            toast.success('Solicitud cancelada. La wallet no fue debitada.');
+            return true;
+        } catch {
+            toast.error('Error de conexión al cancelar');
+            return false;
+        } finally {
+            setCancelling(false);
+        }
+    };
+
     return (
         <main className="min-h-full bg-muted/20">
             <div className="container max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
@@ -97,7 +125,9 @@ export function FulfillmentOrderPage({ apiPath }: { apiPath: string }) {
                         purchase={purchase}
                         autoRefreshing={isOpen}
                         retrying={retrying}
+                        cancelling={cancelling}
                         onRetry={retry}
+                        onCancel={cancel}
                     />
                 )}
             </div>

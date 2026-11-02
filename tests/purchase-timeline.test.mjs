@@ -75,6 +75,19 @@ test("failed purchases end in an error step", () => {
     assert.equal(timeline.isTerminal, true);
 });
 
+test("cancelled purchases are terminal and explicitly report no charge", () => {
+    const timeline = buildPurchaseTimeline({
+        status: "CANCELLED",
+        createdAt,
+        completedAt,
+    });
+
+    assert.equal(timeline.steps[2].label, "Cancelada sin cobro");
+    assert.equal(timeline.statusLabel, "Cancelada sin cobro");
+    assert.equal(timeline.isTerminal, true);
+    assert.equal(timeline.progress, 1);
+});
+
 test("invalid dates do not throw", () => {
     const timeline = buildPurchaseTimeline({ status: "PENDING", createdAt: "not-a-date" });
 

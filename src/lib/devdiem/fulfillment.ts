@@ -402,6 +402,23 @@ export async function getCodeRequest(requestId: string): Promise<CodeRequest> {
     return requireCommercialOrder(await parse<CodeRequest>(response));
 }
 
+export async function cancelCodeRequest(
+    requestId: string,
+    reason: string,
+): Promise<CodeRequest> {
+    const config = getDiemConfig();
+    const response = await fetch(
+        `${config.baseUrl}/api/v1/code-requests/${encodeURIComponent(requestId)}/cancel/`,
+        {
+            method: 'POST',
+            headers: headers(config, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ reason }),
+            cache: 'no-store',
+        },
+    );
+    return requireCommercialOrder(await parse<CodeRequest>(response));
+}
+
 export async function revealCodeRequest(
     requestId: string,
     correlationId: string,

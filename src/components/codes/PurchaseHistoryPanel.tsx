@@ -81,6 +81,8 @@ function statusLabel(purchase: PurchaseHistoryItem): string {
             return "Entregada";
         case "FAILED":
             return "Fallida";
+        case "CANCELLED":
+            return "Cancelada · sin cobro";
         case "REVERSED":
             return "Anulada · reembolsada";
         default:
@@ -91,6 +93,7 @@ function statusLabel(purchase: PurchaseHistoryItem): string {
 function statusVariant(purchase: PurchaseHistoryItem): "default" | "secondary" | "destructive" | "outline" {
     if (purchase.isSuccessful) return "default";
     if (purchase.needsAction || purchase.status === "FAILED" || purchase.status === "REVERSED") return "destructive";
+    if (purchase.status === "CANCELLED") return "outline";
     if (purchase.isPending) return "secondary";
     return "outline";
 }

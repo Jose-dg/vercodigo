@@ -84,6 +84,20 @@ export function buildPurchaseTimeline(purchase: {
         };
     }
 
+    if (purchase.status === "CANCELLED") {
+        return {
+            steps: [
+                created,
+                { key: "processing", label: "Esperó stock", at: createdAt, state: "done" },
+                { key: "completed", label: "Cancelada sin cobro", at: completedAt, state: "done" },
+            ],
+            progress: 1,
+            tone: "waiting",
+            statusLabel: "Cancelada sin cobro",
+            isTerminal: true,
+        };
+    }
+
     if (purchase.status === "REVERSED") {
         return {
             steps: [

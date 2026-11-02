@@ -4,7 +4,7 @@ import { SETTLED_FULFILLMENT_STATUSES, isSettledFulfillmentStatus } from "./fulf
 
 /**
  * CodePurchase lifecycle. Open states move freely between each other while
- * Diem fulfils the request; COMPLETED and FAILED are absorbing.
+ * Diem fulfils the request; COMPLETED, FAILED and CANCELLED are absorbing.
  *
  * Every write that can race with another processor (inline checkout, partner
  * webhook, manual retry, recovery job) is a compare-and-set on "still open".

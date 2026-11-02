@@ -175,6 +175,11 @@ export function laneFulfillmentOrders<T extends Pick<FulfillmentOrderRow, "occur
         completed: ordered.filter((row) => row.isSuccessful),
         // REVERSED: delivered, then cancelled by Diem and refunded. Shown here
         // because the delivered codes are no longer valid.
-        failed: ordered.filter((row) => row.status === "FAILED" || row.status === "REVERSED" || row.needsAction),
+        failed: ordered.filter((row) => (
+            row.status === "FAILED"
+            || row.status === "CANCELLED"
+            || row.status === "REVERSED"
+            || row.needsAction
+        )),
     };
 }

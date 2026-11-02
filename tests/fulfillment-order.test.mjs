@@ -91,6 +91,20 @@ test("compras y activaciones comparten carriles, orden y límite", () => {
     assert.deepEqual(lanes.completed, []);
 });
 
+test("una compra cancelada permanece visible en el historial no entregado", () => {
+    const cancelled = {
+        id: "p-cancelled",
+        occurredAt: new Date("2026-10-12T00:00:00Z"),
+        status: "CANCELLED",
+        isPending: false,
+        isSuccessful: false,
+        needsAction: false,
+    };
+    const lanes = laneFulfillmentOrders([cancelled], 10);
+
+    assert.deepEqual(lanes.failed.map((row) => row.id), ["p-cancelled"]);
+});
+
 test("la visibilidad de activaciones sigue la misma regla que la de compras", () => {
     const actor = (role, extra = {}) => ({ id: "u1", role, companyId: "c1", storeId: "s1", ...extra });
     assert.deepEqual(activationScope(actor("OPERATOR")), { kind: "card", card: { storeId: "s1" } });

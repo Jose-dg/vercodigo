@@ -6,6 +6,7 @@ import type { TokenPayload } from "@/lib/auth";
 import {
     buildCodeRequestCommand,
     buildCommercialAccountCode,
+    cancelCodeRequest,
     sendCodeRequest,
     getCodeRequest,
     isDiemContractError,
@@ -386,6 +387,16 @@ async function processCodePurchaseState(purchaseId: string) {
         // Always revalidate the remote commercial link before reveal or debit,
         // including retries that already persisted the delivered codes.
         const request = await getCodeRequest(purchase.diemRequestId!);
+        if (request.status === "cancelled") {
+            const { current } = await writeWhileOpen({
+                status: "CANCELLED",
+                fulfillmentStatus: request.status,
+                completedAt: new Date(),
+                lastError: "La solicitud fue cancelada antes de recibir códigos. No se debitó la wallet.",
+                nextRetryAt: null,
+            });
+            return serializePurchase(current);
+        }
         if (TERMINAL_FAILURES.has(request.status)) {
             const { current } = await writeWhileOpen({
                 status: "FAILED",
@@ -740,4 +751,55 @@ export async function getCodePurchaseForUser(purchaseId: string, user: Actor) {
             currency: wallet.currency,
         })),
     };
+}
+
+/** Cancel an unfilled purchase in both Diem and the local commercial history. */
+export async function cancelCodePurchase(
+    purchaseId: string,
+    actor: Actor,
+    reason: string,
+) {
+    const reasonText = reason.trim();
+    if (reasonText.length < 5) throw badRequest("Escribe un motivo de al menos 5 caracteres");
+    if (reasonText.length > 500) throw badRequest("El motivo admite máximo 500 caracteres");
+
+    const purchase = await prisma.codePurchase.findUnique({ where: { id: purchaseId } });
+    if (!purchase) throw notFound("Compra no encontrada");
+    if (purchase.status === "CANCELLED") return serializePurchase(purchase);
+    if (purchase.status !== "AWAITING_STOCK" || purchase.fulfillmentStatus !== "awaiting_stock") {
+        throw conflict("Solo se puede cancelar una solicitud que todavía está esperando stock");
+    }
+    if (!purchase.diemRequestId) throw conflict("La solicitud todavía no está vinculada con Diem");
+    const consumption = await prisma.walletTransaction.findUnique({
+        where: { codePurchaseId: purchase.id },
+        select: { id: true },
+    });
+    if (consumption) throw conflict("La solicitud ya tiene un movimiento de wallet y requiere revisión");
+
+    const remote = await cancelCodeRequest(purchase.diemRequestId, reasonText);
+    if (remote.status !== "cancelled") {
+        throw conflict(`Diem no canceló la solicitud; quedó en estado ${remote.status}`);
+    }
+    const changed = await updateOpenCodePurchase(prisma, purchase.id, {
+        status: "CANCELLED",
+        fulfillmentStatus: "cancelled",
+        completedAt: new Date(),
+        nextRetryAt: null,
+        lastError: "Solicitud cancelada antes de la entrega. No se debitó la wallet.",
+    });
+    const current = await loadPurchase(purchase.id);
+    if (changed) {
+        await writeAuditLog({
+            action: "CODE_PURCHASE_CANCELLED",
+            userId: actor.id,
+            companyId: purchase.companyId,
+            storeId: purchase.storeId,
+            entityType: "CodePurchase",
+            entityId: purchase.id,
+            before: { status: purchase.status, fulfillmentStatus: purchase.fulfillmentStatus },
+            after: { status: "CANCELLED", fulfillmentStatus: "cancelled" },
+            details: { diemRequestId: purchase.diemRequestId, reason: reasonText },
+        });
+    }
+    return serializePurchase(current);
 }

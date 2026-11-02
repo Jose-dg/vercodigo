@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 import { withAuth } from "@/lib/auth/guard";
 import {
     getCodePurchaseForUser,
+    cancelCodePurchase,
     processCodePurchase,
 } from "@/services/self-service/purchase-codes.service";
 
@@ -58,3 +59,32 @@ async function retryHandler(
 }
 
 export const POST = withAuth("read", "CodePurchase", retryHandler);
+
+async function cancelHandler(
+    req: NextRequest,
+    context: { params: Promise<{ id: string }> },
+    _ability: unknown,
+    user: { id: string; role: string; companyId: string | null; storeId: string | null },
+) {
+    try {
+        const { id } = await context.params;
+        await getCodePurchaseForUser(id, user);
+        const body = await req.json().catch(() => ({}));
+        await cancelCodePurchase(id, user, typeof body?.reason === "string" ? body.reason : "");
+        const purchase = await getCodePurchaseForUser(id, user);
+        return NextResponse.json({ success: true, purchase });
+    } catch (error) {
+        if (error instanceof AppError) {
+            return NextResponse.json(
+                { error: error.code, message: error.message },
+                { status: error.status },
+            );
+        }
+        return NextResponse.json(
+            { error: "INTERNAL", message: "No se pudo cancelar la solicitud" },
+            { status: 500 },
+        );
+    }
+}
+
+export const DELETE = withAuth("update", "CodePurchase", cancelHandler);

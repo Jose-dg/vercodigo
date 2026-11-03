@@ -21,6 +21,7 @@ if (!["localhost", "127.0.0.1", "::1"].includes(new URL(testDatabaseUrl).hostnam
 process.env.DATABASE_URL = testDatabaseUrl;
 
 let remoteStatus = "delivered";
+let remoteReason: string | null = null;
 let revealedCode = "CODE-A";
 
 function send(res: ServerResponse, body: unknown) {
@@ -33,13 +34,13 @@ async function fakeDiem(req: IncomingMessage, res: ServerResponse) {
     const id = url.split("/")[4] ?? "remote";
     if (req.method === "POST" && url.endsWith("/cancel/")) {
         remoteStatus = "cancelled";
-        return send(res, { id, commercial_order_id: "order-1", status: remoteStatus, external_reference: "x" });
+        return send(res, { id, commercial_order_id: "order-1", status: remoteStatus, external_reference: "x", last_error_code: remoteReason });
     }
     if (req.method === "POST" && url.endsWith("/reveal/")) {
         return send(res, { items: [{ codes: [revealedCode] }] });
     }
     if (req.method === "GET" && url.startsWith("/api/v1/code-requests/")) {
-        return send(res, { id, commercial_order_id: "order-1", status: remoteStatus, external_reference: "x" });
+        return send(res, { id, commercial_order_id: "order-1", status: remoteStatus, external_reference: "x", last_error_code: remoteReason });
     }
     res.writeHead(404).end();
 }
@@ -51,6 +52,8 @@ const server = createServer((req, res) => {
 let prisma: typeof import("@/lib/prisma").default;
 let processCodePurchase: typeof import("@/services/self-service/purchase-codes.service").processCodePurchase;
 let cancelCodePurchase: typeof import("@/services/self-service/purchase-codes.service").cancelCodePurchase;
+let getCodePurchaseForUser: typeof import("@/services/self-service/purchase-codes.service").getCodePurchaseForUser;
+let getWalletForCompany: typeof import("@/services/wallet/wallet.service").getWalletForCompany;
 let processActivationJob: typeof import("@/services/self-service/activate-card.service").processActivationJob;
 let handleWebhook: typeof import("@/services/self-service/fulfillment-webhook.service").handleDiemFulfillmentWebhook;
 let ids: { companyId: string; purchaseId: string; jobId: string; cardId: string };
@@ -83,7 +86,8 @@ before(async () => {
     process.env.DIEM_SERVICE_API_KEY = "test-key";
     process.env.DIEM_STORE_ID = "00000000-0000-4000-8000-000000000000";
     prisma = (await import("@/lib/prisma")).default;
-    ({ processCodePurchase, cancelCodePurchase } = await import("@/services/self-service/purchase-codes.service"));
+    ({ processCodePurchase, cancelCodePurchase, getCodePurchaseForUser } = await import("@/services/self-service/purchase-codes.service"));
+    ({ getWalletForCompany } = await import("@/services/wallet/wallet.service"));
     ({ processActivationJob } = await import("@/services/self-service/activate-card.service"));
     ({ handleDiemFulfillmentWebhook: handleWebhook } = await import("@/services/self-service/fulfillment-webhook.service"));
 });
@@ -95,6 +99,7 @@ after(async () => {
 
 beforeEach(async () => {
     remoteStatus = "delivered";
+    remoteReason = null;
     revealedCode = "CODE-A";
     await prisma.auditLog.deleteMany();
     await prisma.walletTransaction.deleteMany({ where: { reversalOfId: { not: null } } });
@@ -166,11 +171,41 @@ test("Diem cancelling a delivered purchase refunds it exactly once, even if the 
     assert.equal(state.consumptions.length, 1);
     assert.equal(state.refunds.length, 1);
     assert.equal(state.refunds[0].reversalOfId, state.consumptions[0].id);
+    assert.equal(state.refunds[0].reversalPresentation, "SHOW_REVERSAL");
     assert.equal(state.balance, 0);
     assert.deepEqual(
         [first.reason, replay.reason, third.reason].filter((reason) => reason === "reversed"),
         ["reversed"],
     );
+});
+
+test("an accepted partner return neutralizes the pair in the customer presentation", async () => {
+    await processCodePurchase(ids.purchaseId);
+    remoteStatus = "cancelled";
+    remoteReason = "partner_return_claim_accepted";
+
+    await handleWebhook(webhook("PURCHASE", ids.purchaseId, "remote-purchase", "cancelled"));
+
+    const state = await walletState();
+    assert.equal(state.refunds.length, 1);
+    assert.equal(state.refunds[0].reversalPresentation, "OMIT_NEUTRALIZED_PAIR");
+    assert.equal(state.balance, 0);
+
+    const customerWallet = await getWalletForCompany(ids.companyId);
+    assert.equal(customerWallet.transactions.length, 0);
+    assert.equal(customerWallet.pagination.total, 0);
+    const internalWallet = await getWalletForCompany(ids.companyId, { internalLedger: true });
+    assert.equal(internalWallet.transactions.length, 2);
+    assert.ok(internalWallet.transactions.every((row) => row.customerPresentation === "OMIT_NEUTRALIZED_PAIR"));
+
+    const actor = await prisma.user.findFirstOrThrow({ where: { companyId: ids.companyId } });
+    const detail = await getCodePurchaseForUser(ids.purchaseId, {
+        id: actor.id,
+        role: actor.role,
+        companyId: actor.companyId,
+        storeId: actor.storeId,
+    });
+    assert.equal(detail.walletTransactions.length, 0);
 });
 
 test("an awaiting-stock purchase can be cancelled without a debit and remains terminal", async () => {

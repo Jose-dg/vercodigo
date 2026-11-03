@@ -39,6 +39,7 @@ export interface WalletMovement {
     occurredAt: string;
     occurredAtSource: WalletTimeSource;
     effectiveTimeLabel: string | null;
+    customerPresentation?: "SHOW_REVERSAL" | "OMIT_NEUTRALIZED_PAIR";
 }
 
 export interface WalletMovementsPage {
@@ -224,6 +225,11 @@ export function WalletMovementsTable({
                                             <div>{tx.displayDescription}</div>
                                             {tx.originDescription ? (
                                                 <div className="mt-0.5 text-xs text-muted-foreground">{tx.originDescription}</div>
+                                            ) : null}
+                                            {data.scope === "platform" && tx.customerPresentation === "OMIT_NEUTRALIZED_PAIR" ? (
+                                                <div className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                                                    Compra anulada · oculta en el estado del cliente
+                                                </div>
                                             ) : null}
                                         </TableCell>
                                         <TableCell className={`text-right tabular-nums ${isDebit ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>

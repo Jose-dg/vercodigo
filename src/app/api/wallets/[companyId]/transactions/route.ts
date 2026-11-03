@@ -17,7 +17,7 @@ async function handler(req: NextRequest, ctx: { params: Promise<{ companyId: str
         const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } });
         if (!company) throw notFound("Compañía no encontrada");
         const filters = parseMovementQuery(req.nextUrl.searchParams);
-        const data = await getWalletForCompany(company.id, filters);
+        const data = await getWalletForCompany(company.id, { ...filters, internalLedger: true });
         return NextResponse.json({ scope: "platform", company, ...data });
     } catch (e) {
         if (e instanceof AppError) {

@@ -5,6 +5,11 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { notFound } from "@/lib/errors";
 import { getOrCreateWallet } from "@/services/wallet/wallet.service";
+import {
+    customerHiddenWhere,
+    customerRunningBalances,
+    customerVisibleWhere,
+} from "@/lib/wallet/customer-visibility";
 import { serializeDelivery, serializeSandboxDelivery } from "./serializers";
 
 type CursorParams = { limit: number; startingAfter: string | null };
@@ -96,7 +101,7 @@ export function serializeWalletTransaction(row: {
     };
 }
 
-async function publicTransactionWhere(walletId: string): Promise<Prisma.WalletTransactionWhereInput> {
+async function publicTransactionLedgerWindow(walletId: string): Promise<Prisma.WalletTransactionWhereInput> {
     const opening = await prisma.walletTransaction.findFirst({
         where: { walletId, type: "OPENING_BALANCE", status: "CONFIRMED" },
         orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
@@ -121,7 +126,8 @@ async function publicTransactionWhere(walletId: string): Promise<Prisma.WalletTr
 
 export async function listPublicTransactions(companyId: string, params: CursorParams) {
     const wallet = await getOrCreateWallet(companyId);
-    const visibleWhere = await publicTransactionWhere(wallet.id);
+    const ledgerWindow = await publicTransactionLedgerWindow(wallet.id);
+    const visibleWhere = customerVisibleWhere(ledgerWindow);
     const cursor = params.startingAfter
         ? await prisma.walletTransaction.findFirst({
             where: { AND: [visibleWhere, { id: params.startingAfter }] },
@@ -134,15 +140,50 @@ export async function listPublicTransactions(companyId: string, params: CursorPa
         orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
         take: params.limit + 1,
     });
-    return rows.map((row) => serializeWalletTransaction(row, wallet.currency));
+    const newest = rows[0];
+    const hidden = newest
+        ? await prisma.walletTransaction.findMany({
+            where: customerHiddenWhere({
+                AND: [
+                    ledgerWindow,
+                    { status: "CONFIRMED" },
+                    { OR: [
+                        { occurredAt: { lt: newest.occurredAt } },
+                        { occurredAt: newest.occurredAt, occurredSequence: { lt: newest.occurredSequence } },
+                        { occurredAt: newest.occurredAt, occurredSequence: newest.occurredSequence, id: { lte: newest.id } },
+                    ] },
+                ],
+            }),
+        })
+        : [];
+    const balances = customerRunningBalances(rows, hidden);
+    return rows.map((row) => serializeWalletTransaction(
+        { ...row, balanceAfter: balances.get(row.id) ?? row.balanceAfter },
+        wallet.currency,
+    ));
 }
 
 export async function getPublicTransaction(companyId: string, id: string) {
     const wallet = await getOrCreateWallet(companyId);
-    const visibleWhere = await publicTransactionWhere(wallet.id);
+    const ledgerWindow = await publicTransactionLedgerWindow(wallet.id);
+    const visibleWhere = customerVisibleWhere(ledgerWindow);
     const row = await prisma.walletTransaction.findFirst({
         where: { AND: [visibleWhere, { id }] },
     });
     if (!row) throw notFound("Transacción no encontrada");
-    return serializeWalletTransaction(row, wallet.currency);
+    const hidden = await prisma.walletTransaction.findMany({
+        where: customerHiddenWhere({
+            AND: [
+                ledgerWindow,
+                { status: "CONFIRMED" },
+                { OR: [
+                    { occurredAt: { lt: row.occurredAt } },
+                    { occurredAt: row.occurredAt, occurredSequence: { lt: row.occurredSequence } },
+                    { occurredAt: row.occurredAt, occurredSequence: row.occurredSequence, id: { lte: row.id } },
+                ] },
+            ],
+        }),
+    });
+    const balance = customerRunningBalances([row], hidden).get(row.id) ?? row.balanceAfter;
+    return serializeWalletTransaction({ ...row, balanceAfter: balance }, wallet.currency);
 }

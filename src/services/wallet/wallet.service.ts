@@ -13,6 +13,11 @@ import {
     normalizeBankReference,
     type WalletTimeSource,
 } from "@/lib/wallet/effective-time";
+import {
+    customerHiddenWhere,
+    customerRunningBalances,
+    customerVisibleWhere,
+} from "@/lib/wallet/customer-visibility";
 import type { WalletMovementFilters } from "@/lib/wallet/movement-query";
 import { assertLedgerConsistent, assertOpenPeriod, rebuildWalletLedger } from "./ledger-write";
 
@@ -131,6 +136,7 @@ export async function reverseConsumption(params: {
     consumptionId: string;
     description: string;
     createdById?: string | null;
+    presentation?: "SHOW_REVERSAL" | "OMIT_NEUTRALIZED_PAIR";
     tx: Db;
 }) {
     const { tx } = params;
@@ -163,6 +169,7 @@ export async function reverseConsumption(params: {
             description: params.description,
             createdById: params.createdById ?? null,
             reversalOfId: consumption.id,
+            reversalPresentation: params.presentation ?? "SHOW_REVERSAL",
             occurredAt: new Date(),
             occurredAtSource: "LEDGER_EVENT",
         },
@@ -326,7 +333,7 @@ export async function getWalletSummaries() {
  */
 export async function getWalletForCompany(
     companyId: string,
-    opts?: { page?: number; pageSize?: number } & Partial<Omit<WalletMovementFilters, "page">>,
+    opts?: { page?: number; pageSize?: number; internalLedger?: boolean } & Partial<Omit<WalletMovementFilters, "page">>,
 ) {
     const page = Math.max(1, opts?.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? 25));
@@ -339,7 +346,7 @@ export async function getWalletForCompany(
     });
     // FAILED se conserva en DB por auditoría (reclasificaciones) pero no se
     // muestra al cliente: solo CONFIRMED y PENDING (FX pendiente).
-    const visibleWhere = {
+    const ledgerWindow: Prisma.WalletTransactionWhereInput = {
         walletId: wallet.id,
         status: { in: ["CONFIRMED", "PENDING"] as ("CONFIRMED" | "PENDING")[] },
         ...(opening ? {
@@ -353,20 +360,48 @@ export async function getWalletForCompany(
                 },
             ],
         } : {}),
+    };
+    const filteredLedgerWhere: Prisma.WalletTransactionWhereInput = {
+        ...ledgerWindow,
         ...(opts?.type ? { type: opts.type } : {}),
         ...(opts?.from || opts?.to ? {
             AND: [{ occurredAt: { ...(opts.from ? { gte: opts.from } : {}), ...(opts.to ? { lt: opts.to } : {}) } }],
         } : {}),
     };
+    const visibleWhere = opts?.internalLedger
+        ? filteredLedgerWhere
+        : customerVisibleWhere(filteredLedgerWhere);
     const [transactions, total] = await Promise.all([
         prisma.walletTransaction.findMany({
             where: visibleWhere,
             orderBy: [{ occurredAt: "desc" }, { occurredSequence: "desc" }, { id: "desc" }],
             skip: (page - 1) * pageSize,
             take: pageSize,
+            include: {
+                reversal: { select: { id: true, reversalPresentation: true } },
+                reversalOf: { select: { id: true } },
+            },
         }),
         prisma.walletTransaction.count({ where: visibleWhere }),
     ]);
+    const newest = transactions[0];
+    const hiddenTransactions = newest && !opts?.internalLedger
+        ? await prisma.walletTransaction.findMany({
+            where: customerHiddenWhere({
+                AND: [
+                    ledgerWindow,
+                    { status: "CONFIRMED" },
+                    { OR: [
+                        { occurredAt: { lt: newest.occurredAt } },
+                        { occurredAt: newest.occurredAt, occurredSequence: { lt: newest.occurredSequence } },
+                        { occurredAt: newest.occurredAt, occurredSequence: newest.occurredSequence, id: { lte: newest.id } },
+                    ] },
+                ],
+            }),
+            orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],
+        })
+        : [];
+    const customerBalances = customerRunningBalances(transactions, hiddenTransactions);
 
     const purchaseIds = transactions.flatMap((transaction) =>
         transaction.codePurchaseId ? [transaction.codePurchaseId] : []
@@ -435,6 +470,11 @@ export async function getWalletForCompany(
 
         return {
             ...transaction,
+            balanceAfter: customerBalances.get(transaction.id) ?? transaction.balanceAfter,
+            customerPresentation: (
+                transaction.reversalPresentation === "OMIT_NEUTRALIZED_PAIR"
+                || transaction.reversal?.reversalPresentation === "OMIT_NEUTRALIZED_PAIR"
+            ) ? "OMIT_NEUTRALIZED_PAIR" : "SHOW_REVERSAL",
             effectiveTimeLabel: effectiveTimeLabel(transaction.occurredAtSource, transaction.createdAt),
             displayDescription,
             originDescription: purchase

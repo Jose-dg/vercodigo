@@ -5,6 +5,7 @@ import { checkDiemConnection, getDiemConfig } from "@/lib/devdiem/fulfillment";
 import { processActivationJob } from "@/services/self-service/activate-card.service";
 import { notifyActivationJob } from "@/modules/notifications/order-notifications.service";
 import { processCodePurchase } from "@/services/self-service/purchase-codes.service";
+import { reconcileCompletedCodePurchases } from "@/services/self-service/post-delivery.service";
 
 function isAuthorized(request: NextRequest) {
     const secret = process.env.CRON_SECRET;
@@ -160,8 +161,14 @@ export async function POST(request: NextRequest) {
             });
         }
     }
+    const reconciliationResults = await reconcileCompletedCodePurchases({ limit: 50 });
     return NextResponse.json({
         purchases: { processed: results.length, results },
         activations: { processed: activationResults.length, results: activationResults },
+        reconciliation: {
+            processed: reconciliationResults.length,
+            reversed: reconciliationResults.filter((row) => row.action === "reversed").length,
+            results: reconciliationResults,
+        },
     });
 }

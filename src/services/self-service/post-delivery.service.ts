@@ -51,11 +51,13 @@ export async function reverseCancelledCodePurchase(purchaseId: string): Promise<
         if (!claimed.count) return false;
         const consumption = await tx.walletTransaction.findUnique({ where: { codePurchaseId: purchase.id } });
         if (consumption) {
+            const acceptedReturn = remote.last_error_code === "partner_return_claim_accepted";
             await reverseConsumption({
                 consumptionId: consumption.id,
-                description: remote.last_error_code === "partner_return_claim_accepted"
+                description: acceptedReturn
                     ? `Reembolso: reclamo aceptado por devolución ${purchase.id}`
                     : `Reembolso: Diem anuló la compra ${purchase.id}`,
+                presentation: acceptedReturn ? "OMIT_NEUTRALIZED_PAIR" : "SHOW_REVERSAL",
                 tx,
             });
         }
@@ -78,9 +80,49 @@ export async function reverseCancelledCodePurchase(purchaseId: string): Promise<
             diemRequestId: purchase.diemRequestId,
             trigger: "diem_cancelled_after_delivery",
             reasonCode: remote.last_error_code ?? null,
+            customerPresentation: remote.last_error_code === "partner_return_claim_accepted"
+                ? "OMIT_NEUTRALIZED_PAIR"
+                : "SHOW_REVERSAL",
         },
     });
     return { status: "REVERSED", action: "reversed" };
+}
+
+export async function reconcileCompletedCodePurchases(params?: {
+    purchaseIds?: string[];
+    limit?: number;
+}) {
+    const limit = Math.max(1, Math.min(params?.limit ?? 50, 200));
+    const purchases = await prisma.codePurchase.findMany({
+        where: {
+            status: "COMPLETED",
+            diemRequestId: { not: null },
+            ...(params?.purchaseIds?.length ? { id: { in: params.purchaseIds } } : {}),
+        },
+        orderBy: [{ lastRemoteCheckAt: { sort: "asc", nulls: "first" } }, { completedAt: "desc" }],
+        take: limit,
+        select: { id: true },
+    });
+    const results: Array<{ id: string; status: string; action: string; reason?: string }> = [];
+    for (const purchase of purchases) {
+        try {
+            const result = await reverseCancelledCodePurchase(purchase.id);
+            results.push({ id: purchase.id, ...result });
+        } catch (error) {
+            results.push({
+                id: purchase.id,
+                status: "ERROR",
+                action: "unchanged",
+                reason: error instanceof Error ? error.message : "UNKNOWN",
+            });
+        } finally {
+            await prisma.codePurchase.updateMany({
+                where: { id: purchase.id, status: "COMPLETED" },
+                data: { lastRemoteCheckAt: new Date() },
+            });
+        }
+    }
+    return results;
 }
 
 export async function reverseCancelledActivation(jobId: string): Promise<PostDeliveryResult> {

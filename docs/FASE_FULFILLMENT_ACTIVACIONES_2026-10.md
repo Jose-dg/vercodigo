@@ -86,3 +86,23 @@
 2. **Reemplazo en compras de varias unidades.** Diem bloquea el reveal si otra unidad se reveló hace más de 15 min (`FULFILLMENT_REREVEAL_WINDOW_SECONDS`). SAS deja el motivo en `lastError`, pero el reemplazo requiere intervención.
 3. **Activación REVERSED.** La tarjeta queda activada con un código anulado. Falta definir el flujo de reemisión (liberar la tarjeta frente a la facturación de la `CardActivation`).
 4. **Sin crons.** El proyecto no programa trabajos en Vercel (el plan solo admite crons diarios y uno cada 5 min bloqueó los despliegues desde el 13 oct). Si un webhook se pierde, el pedido espera hasta un reintento manual con `POST /api/jobs/fulfillment`.
+# Reconciliación de devoluciones aceptadas (nov 2026)
+
+El webhook sigue siendo la vía inmediata. Como defensa independiente,
+`GET /api/jobs/fulfillment/reconcile` revisa compras completadas empezando por
+las nunca comprobadas o más antiguas; Vercel lo ejecuta diariamente con
+`CRON_SECRET`. Un `cancelled` confirmado por Diem usa el mismo reverso
+idempotente del webhook.
+
+Para el caso auditado de tres PlayStation US$25 se usa primero `plan` y luego
+`apply`, siempre con los tres IDs explícitos. El recibo no contiene PINes:
+
+```bash
+npm run returned-codes:reconcile -- plan \
+  --purchase-id <id-1> --purchase-id <id-2> --purchase-id <id-3> \
+  --receipt /ruta/privada/plan.json
+```
+
+`apply` exige además `--expected-database`, `--actor-email` y la confirmación
+impresa por el plan. Los consumos y reembolsos permanecen en el libro interno;
+los pares `OMIT_NEUTRALIZED_PAIR` no aparecen en la vista ni API del cliente.

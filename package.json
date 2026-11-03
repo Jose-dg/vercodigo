@@ -13,7 +13,7 @@
     "test:devdiem": "node --test --experimental-strip-types tests/order-notifications.test.mjs tests/commercial-account-code.test.mjs tests/catalog-regions.test.mjs tests/devdiem-fulfillment.test.mjs tests/fulfillment-lifecycle.test.mjs tests/purchase-delivery-counts.test.mjs tests/purchase-timeline.test.mjs tests/delivery-recipient.test.mjs tests/api-keys.test.mjs tests/recipients-csv.test.mjs tests/dashboard-range.test.mjs",
     "test:qr": "node --test --experimental-strip-types tests/qr-catalog.test.mjs",
     "test:account-statements": "node --test --experimental-strip-types tests/account-statements.test.mjs",
-    "test:wallet": "node --test --experimental-strip-types tests/wallet-presentation.test.mjs tests/wallet-effective-time.test.mjs",
+    "test:wallet": "node --test --experimental-strip-types tests/wallet-presentation.test.mjs tests/wallet-effective-time.test.mjs tests/wallet-neutralized-pairs.test.mjs",
     "test:wallet-topups": "node --test --experimental-strip-types tests/wallet-topups.test.mjs tests/wallet-topup-evidence.test.mjs",
     "test:wallet-ledger": "node --test --experimental-strip-types tests/wallet-ledger.test.mjs tests/purchase-finalization-idempotency.test.mjs tests/ledger-verification.test.mjs",
     "test:purchase-quote": "node --test --experimental-strip-types tests/company-rate.test.mjs tests/purchase-quote.test.mjs tests/trm.test.mjs",
@@ -36,6 +36,7 @@
     "purchase:offline": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node -r ts-node/register -r tsconfig-paths/register scripts/ops/register-offline-code-purchase.ts",
     "activation:reverse-cancelled": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node --conditions=react-server -r ts-node/register -r tsconfig-paths/register scripts/ops/reverse-cancelled-activation.ts",
     "activation:reset-reversed-card": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node --conditions=react-server -r ts-node/register -r tsconfig-paths/register scripts/ops/reset-reversed-card.ts",
+    "returned-codes:reconcile": "TS_NODE_BASEURL=. TS_NODE_TRANSPILE_ONLY=1 TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' node --conditions=react-server -r ts-node/register -r tsconfig-paths/register scripts/ops/reconcile-returned-code-purchases.ts",
     "wallet:verify": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"node\"}' scripts/verify-wallet-ledger.ts",
     "postinstall": "prisma generate"
   },

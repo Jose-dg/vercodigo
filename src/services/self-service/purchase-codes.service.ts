@@ -20,6 +20,7 @@ import { summarizeCodeDelivery } from "@/lib/codes/delivery-counts";
 import { buildPurchaseTimeline } from "@/lib/codes/purchase-timeline";
 import { resolvePurchaseOrigin, type RequestedOrigin } from "@/services/purchases/purchase-origin";
 import { purchaseOriginSnapshot } from "@/lib/purchases/origin-snapshot";
+import { customerVisibleWhere } from "@/lib/wallet/customer-visibility";
 import { isSettledFulfillmentStatus } from "@/services/self-service/fulfillment-lifecycle";
 import { frozenCodeRequestCommand } from "@/services/self-service/diem-request-snapshot";
 import { writeAuditLog } from "@/services/self-service/audit.service";
@@ -722,7 +723,13 @@ export async function getCodePurchaseForUser(purchaseId: string, user: Actor) {
             select: { name: true, email: true },
         }),
         prisma.walletTransaction.findMany({
-            where: { codePurchaseId: purchase.id, status: { in: ["CONFIRMED", "PENDING"] } },
+            where: customerVisibleWhere({
+                status: { in: ["CONFIRMED", "PENDING"] },
+                OR: [
+                    { codePurchaseId: purchase.id },
+                    { reversalOf: { is: { codePurchaseId: purchase.id } } },
+                ],
+            }),
             orderBy: { createdAt: "asc" },
             select: {
                 id: true,

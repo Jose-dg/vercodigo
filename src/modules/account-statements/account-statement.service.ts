@@ -1,4 +1,5 @@
 import { Prisma, UserRole, WalletTransactionType } from "@prisma/client";
+import { customerVisibleWhere } from "@/lib/wallet/customer-visibility";
 
 import prisma from "@/lib/prisma";
 import { isPrismaWriteConflict, runSerializableTransaction } from "@/lib/prisma-transaction";
@@ -231,12 +232,12 @@ async function buildPreview(db: Db, companyId: string, cutoffAt: Date) {
     }
 
     const transactions = await db.walletTransaction.findMany({
-        where: {
+        where: customerVisibleWhere({
             walletId: company.wallet.id,
             status: "CONFIRMED",
             occurredAt: { lte: cutoffAt },
             ...(cursor ? afterCursor(cursor.occurredAt, cursor.occurredSequence, cursor.id) : {}),
-        },
+        }),
         orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],
     });
     if (transactions.some((transaction) => transaction.balanceAfter == null)) {

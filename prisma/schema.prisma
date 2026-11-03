@@ -156,10 +156,10 @@ model Wallet {
 }
 
 model WalletTransaction {
-  id                   String                  @id @default(cuid())
+  id                   String                     @id @default(cuid())
   walletId             String
   type                 WalletTransactionType
-  status               WalletTransactionStatus @default(CONFIRMED)
+  status               WalletTransactionStatus    @default(CONFIRMED)
   method               WalletRechargeMethod? // solo aplica a RECHARGE; hoy siempre MANUAL
   amount               Float // positivo, en moneda de la wallet; type define la dirección
   balanceAfter         Float? // null si PENDING (no afectó el balance)
@@ -168,27 +168,29 @@ model WalletTransaction {
   exchangeRate         Float? // tasa aplicada; null si PENDING sin tasa configurada
   description          String?
   externalReference    String? // # de transferencia bancaria en recargas manuales
-  gatewayTransactionId String?                 @unique // id de la recarga en DevDiem: una recarga = un RECHARGE
+  gatewayTransactionId String?                    @unique // id de la recarga en DevDiem: una recarga = un RECHARGE
   createdById          String? // userId que originó el movimiento
-  cardActivationId     String?                 @unique
-  codePurchaseId       String?                 @unique
+  cardActivationId     String?                    @unique
+  codePurchaseId       String?                    @unique
   /// REFUND that reverses this CONSUMPTION (cancelled after delivery). Unique: one reversal per movement.
-  reversalOfId         String?                 @unique
+  reversalOfId         String?                    @unique
+  /// Customer treatment for reversals. Neutralized pairs remain in the internal ledger.
+  reversalPresentation WalletReversalPresentation @default(SHOW_REVERSAL)
   /// Manual top-ups: one key per request attempt; a retry returns the same movement.
-  idempotencyKey       String?                 @unique
+  idempotencyKey       String?                    @unique
   /// sha256 of the request behind idempotencyKey; a reused key with other data is rejected.
   requestFingerprint   String?
   /// When the record was written. Never shown as the time of the movement.
-  createdAt            DateTime                @default(now())
+  createdAt            DateTime                   @default(now())
   /// Effective time: when the movement happened (payment made or confirmed for top-ups).
-  occurredAt           DateTime                @default(now())
+  occurredAt           DateTime                   @default(now())
   /// Where occurredAt comes from. Required on every write: no silent fallback.
   occurredAtSource     WalletTimeSource
-  occurredSequence     Int                     @default(0)
-  wallet               Wallet                  @relation(fields: [walletId], references: [id])
+  occurredSequence     Int                        @default(0)
+  wallet               Wallet                     @relation(fields: [walletId], references: [id])
   accountStatementLine AccountStatementLine?
-  reversalOf           WalletTransaction?      @relation("WalletReversal", fields: [reversalOfId], references: [id])
-  reversal             WalletTransaction?      @relation("WalletReversal")
+  reversalOf           WalletTransaction?         @relation("WalletReversal", fields: [reversalOfId], references: [id])
+  reversal             WalletTransaction?         @relation("WalletReversal")
 
   @@index([walletId, createdAt])
   @@index([walletId, occurredAt, occurredSequence, id])
@@ -273,6 +275,11 @@ enum WalletTransactionStatus {
   PENDING
   CONFIRMED
   FAILED
+}
+
+enum WalletReversalPresentation {
+  SHOW_REVERSAL
+  OMIT_NEUTRALIZED_PAIR
 }
 
 enum WalletRechargeMethod {
@@ -498,6 +505,7 @@ model CodePurchase {
   lastError             String?
   attempts              Int                  @default(0)
   nextRetryAt           DateTime?
+  lastRemoteCheckAt     DateTime?
   completedAt           DateTime?
   createdAt             DateTime             @default(now())
   occurredAt            DateTime             @default(now())
@@ -522,6 +530,7 @@ model CodePurchase {
   @@index([purchaseOriginPhoneId])
   @@index([denominationId])
   @@index([status, nextRetryAt])
+  @@index([status, lastRemoteCheckAt])
 }
 
 enum KeyStatus {

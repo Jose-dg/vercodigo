@@ -1,11 +1,11 @@
 /**
  * Idempotent seed for extra PlayStation USA denoms in Buy Codes:
- * US$1, $2, $3, $5 (cost only), $20, $30, $75, $80, $150, $250.
+ * US$1, $2, $3, $5 (cost only), $20, $30, $75, $80, $90, $150, $250.
  *
  * Usage:
  *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-playstation-usa-extra-denoms.ts
  *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-playstation-usa-extra-denoms.ts --apply
- *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-playstation-usa-extra-denoms.ts --sku PSN-GC-US-80 --apply
+ *   npx ts-node --compiler-options '{"module":"CommonJS"}' scripts/seed-playstation-usa-extra-denoms.ts --sku 799366900900 --apply
  *
  * Requires DATABASE_URL (loads .env.local if present).
  */
@@ -94,6 +94,12 @@ const CATALOG: ProductSpec[] = [
         sku: "PSN-GC-US-80",
         amount: 80,
         devDiemProductId: "c6bf325e-3882-5bd8-97bb-2d55d53c2c35",
+    },
+    {
+        name: "PlayStation Gift Card US$90 — USA",
+        sku: "799366900900",
+        amount: 90,
+        devDiemProductId: "c4e006c5-07b6-44c0-9243-56e04051de26",
     },
     {
         name: "PlayStation Gift Card US$150 — USA",

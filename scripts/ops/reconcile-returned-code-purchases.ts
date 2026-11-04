@@ -44,8 +44,17 @@ function writePrivate(path: string, payload: unknown) {
 }
 
 async function databaseIdentity() {
-    const rows = await prisma.$queryRaw<Array<{ database: string; read_replica: boolean }>>(
-        Prisma.sql`SELECT current_database() AS database, pg_is_in_recovery() AS read_replica`,
+    const rows = await prisma.$queryRaw<Array<{
+        database: string;
+        read_replica: boolean;
+        read_only: boolean;
+    }>>(
+        Prisma.sql`
+            SELECT
+                current_database() AS database,
+                pg_is_in_recovery() AS read_replica,
+                current_setting('transaction_read_only') = 'on' AS read_only
+        `,
     );
     return rows[0];
 }
@@ -140,7 +149,12 @@ async function main() {
     const identity = await databaseIdentity();
     const current = await snapshot(purchaseIds);
     validate(current);
-    const receipt = { database: identity.database, readReplica: identity.read_replica, ...current };
+    const receipt = {
+        database: identity.database,
+        readReplica: identity.read_replica,
+        readOnly: identity.read_only,
+        ...current,
+    };
     if (mode === "plan") {
         writePrivate(receiptPath, receipt);
         console.log(JSON.stringify(receipt, null, 2));
@@ -148,7 +162,9 @@ async function main() {
         return;
     }
     const expectedDatabase = value("expected-database");
-    if (identity.database !== expectedDatabase || identity.read_replica) throw new Error("La base no coincide o es una réplica");
+    if (identity.database !== expectedDatabase || identity.read_replica || identity.read_only) {
+        throw new Error("La base no coincide, es una réplica o la sesión PostgreSQL es de solo lectura");
+    }
     const planned = JSON.parse(readFileSync(resolve(receiptPath), "utf8"));
     if (canonical(planned) !== canonical(receipt)) throw new Error("El estado cambió después del plan; genera uno nuevo");
     if (value("confirmation") !== `RECONCILE-${current.fingerprint}`) throw new Error(`Confirmación inválida; usa RECONCILE-${current.fingerprint}`);

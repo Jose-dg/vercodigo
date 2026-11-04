@@ -152,7 +152,6 @@ async function main() {
     const receipt = {
         database: identity.database,
         readReplica: identity.read_replica,
-        readOnly: identity.read_only,
         ...current,
     };
     if (mode === "plan") {

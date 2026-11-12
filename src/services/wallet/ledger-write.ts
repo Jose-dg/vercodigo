@@ -48,10 +48,10 @@ export async function rebuildWalletLedger(tx: Prisma.TransactionClient, walletId
     for (const row of rows) {
         const balanceAfter = rebuilt.balances.get(row.id);
         if (balanceAfter !== undefined && balanceAfter !== row.balanceAfter) {
-            await tx.walletTransaction.update({ where: { id: row.id }, data: { balanceAfter } });
+            await tx.walletTransaction.update({ where: { id: row.id }, data: { balanceAfter }, select: { id: true } });
         }
     }
-    await tx.wallet.update({ where: { id: walletId }, data: { balance: rebuilt.balance } });
+    await tx.wallet.update({ where: { id: walletId }, data: { balance: rebuilt.balance }, select: { id: true } });
     return rebuilt.balance;
 }
 

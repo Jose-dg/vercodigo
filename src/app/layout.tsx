@@ -41,10 +41,8 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        {/* Manifest y configuración de la PWA */}
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="icon" href="/icons/icon-192x192.png" />
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        {/* Manifest, íconos y PWA salen de `metadata` para que las páginas públicas
+            de canje (/scan, /guias) los puedan reemplazar por versiones neutras. */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="theme-color" content="#ffffff" data-app-theme="true" />

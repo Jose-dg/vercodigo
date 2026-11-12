@@ -37,6 +37,8 @@ export async function GET(
                 {
                     error: 'QR no activado',
                     message: 'Comunícate con la tienda',
+                    product: card.product.name,
+                    brand: card.product.brand,
                     store: {
                         name: card.store.name,
                         phone: card.store.phone,
@@ -66,6 +68,9 @@ export async function GET(
                 product: card.product.name,
                 amount: card.denomination?.amount || card.customAmount,
                 currency: card.denomination?.currency || 'USD',
+                // Lets the page pick the redemption guide and its region rule.
+                brand: card.product.brand,
+                region: card.denomination?.countryRegion ?? null,
                 scansRemaining: card.maxScans - card.scanCount - 1,
             });
         }
@@ -120,6 +125,8 @@ export async function GET(
             product: card.product.name,
             amount: card.denomination?.amount || card.customAmount,
             currency: card.denomination?.currency || 'USD',
+            brand: card.product.brand,
+            region: card.denomination?.countryRegion ?? null,
             scansRemaining: card.maxScans - 1,
         });
 

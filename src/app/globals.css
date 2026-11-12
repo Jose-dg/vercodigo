@@ -502,3 +502,66 @@ tr.cursor-pointer:active,
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Public end-customer pages (/scan, /guias). Neutral on purpose: no brand
+   colors, one accent, short ease-out motion. The global reduced-motion rule
+   above collapses every animation here to a single frame. */
+.redeem-page {
+  --redeem-accent: 221 83% 53%;
+  --redeem-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  min-height: 100vh;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+@keyframes redeem-rise {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.redeem-rise {
+  animation: redeem-rise 420ms var(--redeem-ease) both;
+}
+
+@keyframes redeem-char {
+  from {
+    opacity: 0.15;
+    translate: 0 4px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* Each character of the code arrives in sequence (delay set inline). */
+.redeem-char {
+  display: inline-block;
+  animation: redeem-char 260ms var(--redeem-ease) both;
+}
+
+@keyframes redeem-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.redeem-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--border)) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: redeem-shimmer 1.4s linear infinite;
+}

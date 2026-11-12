@@ -452,27 +452,66 @@ export async function processActivationJob(jobId: string) {
     }
 }
 
+const activatableCardInclude = {
+    store: { include: { company: true } },
+    product: { include: { denominations: true } },
+    denomination: true,
+} satisfies Prisma.CardInclude;
+
+export type ActivatableCard = Prisma.CardGetPayload<{ include: typeof activatableCardInclude }>;
+
+export type CardActivationQuote = {
+    quotedAmount?: number;
+    quotedCurrency?: string;
+    quotedRate?: number | null;
+};
+
+export function findActivatableCards(uuids: string[]) {
+    return prisma.card.findMany({
+        where: { uuid: { in: uuids } },
+        include: activatableCardInclude,
+    });
+}
+
 export async function activateCard(params: {
     qr: string;
     userId: string;
     ipAddress?: string | null;
     userAgent?: string | null;
     deviceId?: string | null;
-    quotedAmount?: number;
-    quotedCurrency?: string;
-    quotedRate?: number | null;
-}) {
+} & CardActivationQuote) {
     await checkRateLimit({ userId: params.userId, action: "ACTIVATION" });
     const uuid = extractCardUuid(params.qr);
     const card = await prisma.card.findUnique({
         where: { uuid },
-        include: {
-            store: true,
-            product: { include: { denominations: true } },
-            denomination: true,
-        },
+        include: activatableCardInclude,
     });
     if (!card) throw notFound("Tarjeta no encontrada.");
+    return startCardActivation({ card, userId: params.userId, quote: params });
+}
+
+function quoteMismatch(
+    quote: CardActivationQuote | undefined,
+    billing: { amount: number; currency: string; exchangeRate: number | null },
+) {
+    if (quote?.quotedAmount == null) return false;
+    if (Math.abs(quote.quotedAmount - billing.amount) > 0.005) return true;
+    if (quote.quotedCurrency?.toUpperCase() !== billing.currency.toUpperCase()) return true;
+    if (quote.quotedRate == null) return false;
+    return billing.exchangeRate == null || Math.abs(quote.quotedRate - billing.exchangeRate) > 0.0001;
+}
+
+/**
+ * Validates, locks and processes one card activation. Shared by the single
+ * QR flow (which applies the per-user rate limit first) and the platform
+ * bulk activation.
+ */
+export async function startCardActivation(params: {
+    card: ActivatableCard;
+    userId: string;
+    quote?: CardActivationQuote;
+}) {
+    const { card, quote } = params;
     if (!card.store.isActive) throw forbidden("Tienda inactiva.");
     if (!card.product.isActive) throw forbidden("Producto inactivo.");
     if (card.isActivated) throw conflict("Esta tarjeta ya está activada.");
@@ -496,16 +535,11 @@ export async function activateCard(params: {
     }
     const billingAmount = configuredCost?.amount ?? fallbackAmount!;
     const billingCurrency = configuredCost?.currency ?? effectiveDenomination?.currency ?? "USD";
-    if (
-        params.quotedAmount != null
-        && (
-            Math.abs(params.quotedAmount - billingAmount) > 0.005
-            || params.quotedCurrency?.toUpperCase() !== billingCurrency.toUpperCase()
-            || (params.quotedRate != null
-                && (configuredCost?.exchangeRate == null
-                    || Math.abs(params.quotedRate - configuredCost.exchangeRate) > 0.0001))
-        )
-    ) {
+    if (quoteMismatch(quote, {
+        amount: billingAmount,
+        currency: billingCurrency,
+        exchangeRate: configuredCost?.exchangeRate ?? null,
+    })) {
         throw conflict("La tarifa cambió después de mostrar el total. Revisa el valor y confirma nuevamente.");
     }
 
@@ -607,64 +641,78 @@ export async function previewCardActivation(params: { qr: string; userId: string
     const uuid = extractCardUuid(params.qr);
     const card = await prisma.card.findUnique({
         where: { uuid },
-        include: {
-            store: { include: { company: true } },
-            product: { include: { denominations: true } },
-            denomination: true,
-        },
+        include: activatableCardInclude,
     });
     if (!card) throw notFound("Tarjeta no encontrada.");
     if (!card.store.isActive) throw forbidden("Tienda inactiva.");
     if (!card.product.isActive) throw forbidden("Producto inactivo.");
     if (card.isActivated) throw conflict("Esta tarjeta ya está activada.");
+    return evaluateCardActivation(card, { userId: params.userId });
+}
 
+type CostResolver = typeof resolveCost;
+type PermissionCheck = (card: ActivatableCard) => Promise<unknown>;
+
+/**
+ * What activating this card would bill and whether it can happen. Never
+ * throws for a business block: it reports `canActivate=false` with the reason.
+ * Bulk callers pass memoized cost/permission lookups to avoid one query per card.
+ */
+export async function evaluateCardActivation(
+    card: ActivatableCard,
+    options: { userId: string; resolveCost?: CostResolver; assertPermission?: PermissionCheck },
+) {
+    const denomination = resolveCardDenomination(card);
     const preview = {
         uuid: card.uuid,
         product: card.product.name,
         store: card.store.name,
+        storeId: card.storeId,
         company: card.store.company.name,
-        amount: resolveCardDenomination(card)?.amount ?? card.customAmount,
-        currency: resolveCardDenomination(card)?.currency ?? card.denomination?.currency ?? null,
+        companyId: card.store.companyId,
+        amount: denomination?.amount ?? card.customAmount,
+        currency: denomination?.currency ?? card.denomination?.currency ?? null,
         billingAmount: null as number | null,
         billingCurrency: null as string | null,
         appliedExchangeRate: null as number | null,
         canActivate: true as boolean,
         blockReason: null as string | null,
     };
-
-    if (!resolveDevDiemProductId(card)) {
+    const block = (reason: string) => {
         preview.canActivate = false;
-        preview.blockReason = "El producto no está mapeado al catálogo de Diem";
+        preview.blockReason = reason;
         return preview;
+    };
+
+    if (!card.store.isActive) return block("Tienda inactiva");
+    if (!card.product.isActive) return block("Producto inactivo");
+    if (card.isActivated) return block("Ya activada");
+    if (!resolveDevDiemProductId(card)) {
+        return block("El producto no está mapeado al catálogo de Diem");
     }
 
-    const configuredCost = await resolveCost(
+    const configuredCost = await (options.resolveCost ?? resolveCost)(
         card.store.companyId,
         card.productId,
-        resolveCardDenomination(card)?.id ?? card.denominationId,
+        denomination?.id ?? card.denominationId,
     );
-    const fallbackAmount = resolveCardDenomination(card)?.amount ?? card.customAmount;
+    const fallbackAmount = denomination?.amount ?? card.customAmount;
     preview.billingAmount = configuredCost?.amount ?? fallbackAmount ?? null;
-    preview.billingCurrency = configuredCost?.currency
-        ?? resolveCardDenomination(card)?.currency
-        ?? card.denomination?.currency
-        ?? null;
+    preview.billingCurrency = configuredCost?.currency ?? preview.currency;
     preview.appliedExchangeRate = configuredCost?.exchangeRate ?? null;
     if (!((configuredCost?.amount ?? fallbackAmount ?? 0) > 0)) {
-        preview.canActivate = false;
-        preview.blockReason = "No existe un costo válido para esta activación";
-        return preview;
+        return block("No existe un costo válido para esta activación");
     }
 
     try {
-        await assertCanActivateCard({
-            userId: params.userId,
-            storeId: card.storeId,
-            companyId: card.store.companyId,
-        });
+        await (options.assertPermission
+            ?? ((c: ActivatableCard) => assertCanActivateCard({
+                userId: options.userId,
+                storeId: c.storeId,
+                companyId: c.store.companyId,
+            })))(card);
     } catch (error) {
-        preview.canActivate = false;
-        preview.blockReason = error instanceof Error ? error.message : "No tienes permisos para esta tarjeta";
+        return block(error instanceof Error ? error.message : "No tienes permisos para esta tarjeta");
     }
 
     return preview;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AppError, badRequest, forbidden } from "@/lib/errors";
-import { isPlatformRole } from "@/lib/auth/abilities";
+import { CARD_BULK_OPERATIONS, isPlatformRole } from "@/lib/auth/abilities";
 import { reassignCardsToStore } from "@/services/card.service";
 import { writeAuditLog } from "@/services/self-service/audit.service";
 import { withAuth } from "@/lib/auth/guard";
@@ -58,4 +58,5 @@ async function handler(
     }
 }
 
-export const POST = withAuth("manage", "all", handler);
+const [action, subject] = CARD_BULK_OPERATIONS.reassign;
+export const POST = withAuth(action, subject, handler);

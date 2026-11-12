@@ -5,8 +5,8 @@ import Link from "next/link";
 import { ArrowRightLeft, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { useCurrentUser } from "@/components/auth/ability-context";
-import { isPlatformRole } from "@/lib/auth/abilities";
+import { useAbility, useCurrentUser } from "@/components/auth/ability-context";
+import { canRunCardBulkOperation } from "@/lib/auth/abilities";
 import { Badge } from "@/components/ui/badge";
 import {
     Breadcrumb,
@@ -121,7 +121,8 @@ function blockReasonLabel(reason: string | null): string {
 
 export default function CardReassignPage() {
     const currentUser = useCurrentUser();
-    const canReassign = currentUser ? isPlatformRole(currentUser.role) : false;
+    const ability = useAbility();
+    const canReassign = canRunCardBulkOperation("reassign", currentUser?.role, ability);
 
     const [stores, setStores] = useState<StoreOption[]>([]);
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
@@ -359,7 +360,7 @@ export default function CardReassignPage() {
             <div className="p-8">
                 <p>No tienes permisos para remitir tarjetas entre tiendas.</p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                    Esta operación está reservada a operadores de plataforma (SUPER_ADMIN / SYSTEM_ADMIN).
+                    Esta operación está reservada a SUPER_ADMIN.
                 </p>
             </div>
         );

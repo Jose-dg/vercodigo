@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 
 import { useAbility, useCurrentUser } from "@/components/auth/ability-context"
-import { isPlatformRole, type Actions, type Subjects } from "@/lib/auth/abilities"
+import { canRunCardBulkOperation, isPlatformRole, type Actions, type Subjects } from "@/lib/auth/abilities"
 import { homePathForRole, managementDestinationsForRole, type ManagementDestination } from "@/lib/auth/navigation"
 import type { UserRole } from "@prisma/client"
 
@@ -171,6 +171,14 @@ const data = {
           url: "/activations",
         },
         {
+          title: "Remisión de tarjetas",
+          url: "/cards/reassign",
+        },
+        {
+          title: "Activación en bloque",
+          url: "/cards/activate-bulk",
+        },
+        {
           title: "Invoices",
           url: "/invoices",
         },
@@ -260,7 +268,6 @@ export function AppSidebar({ companyName, ...props }: AppSidebarProps) {
     const PLATFORM_ONLY_URLS = new Set([
       "/qr",
       "/qr/create",
-      "/cards/reassign",
       "/batches",
       "/keys",
       "/ops/diem",
@@ -295,6 +302,9 @@ export function AppSidebar({ companyName, ...props }: AppSidebarProps) {
       if (url === homePathForRole(role)) return true;
       // API docs: every portal user may read them; the keys page checks its own permission.
       if (url === "/developers") return true;
+      // Same check as their API routes, so the link never leads to a 403.
+      if (url === "/cards/reassign") return canRunCardBulkOperation("reassign", role, ability);
+      if (url === "/cards/activate-bulk") return canRunCardBulkOperation("activate", role, ability);
       if (PLATFORM_ONLY_URLS.has(url)) return isPlatformRole(role);
       // Analytics global solo plataforma; OWNER usa /overview (su compañía).
       if (url === "/analytics" && !isPlatformRole(role)) return false;

@@ -1,4 +1,4 @@
-import { AbilityBuilder, createMongoAbility, MongoAbility } from '@casl/ability';
+import { AbilityBuilder, createMongoAbility, type MongoAbility } from '@casl/ability';
 import { UserRole } from '@prisma/client';
 import type { AuthenticatedActor } from './actor';
 
@@ -29,6 +29,29 @@ export const PLATFORM_ROLES: UserRole[] = ['SUPER_ADMIN', 'SYSTEM_ADMIN'];
 
 export function isPlatformRole(role: UserRole): boolean {
     return PLATFORM_ROLES.includes(role);
+}
+
+/**
+ * Bulk card operations run by Diem for a client. Each one is a platform role
+ * plus this ability; the API route (`withAuth`), the sidebar and the page all
+ * read it from here so a link is never shown to someone the API rejects.
+ * Today only SUPER_ADMIN qualifies: SYSTEM_ADMIN cannot activate cards nor
+ * `manage all`.
+ */
+export const CARD_BULK_OPERATIONS = {
+    reassign: ['manage', 'all'],
+    activate: ['activate', 'Card'],
+} as const satisfies Record<string, readonly [Actions, Subjects]>;
+
+export type CardBulkOperation = keyof typeof CARD_BULK_OPERATIONS;
+
+export function canRunCardBulkOperation(
+    operation: CardBulkOperation,
+    role: UserRole | null | undefined,
+    ability: Pick<AppAbility, 'can'>,
+): boolean {
+    const [action, subject] = CARD_BULK_OPERATIONS[operation];
+    return Boolean(role && isPlatformRole(role) && ability.can(action, subject));
 }
 
 export function defineAbilitiesFor(user: Pick<AuthenticatedActor, 'role' | 'companyId' | 'storeId'>) {

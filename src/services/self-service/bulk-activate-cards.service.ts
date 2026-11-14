@@ -203,7 +203,7 @@ async function activateOne(
             outcome: "PROCESSING",
             status,
             jobId,
-            message: status === "AWAITING_STOCK" ? "Sin stock en Diem; se entrega al llegar inventario" : null,
+            message: status === "AWAITING_STOCK" ? "Sin stock por ahora; se entrega al llegar inventario" : null,
         };
     } catch (error) {
         return {

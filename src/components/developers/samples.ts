@@ -13,13 +13,13 @@ export function requestSamples(params: {
 
     const curl = [
         `curl -X ${params.method} "${url}" \\`,
-        `  -H "Authorization: Bearer $DIEM_API_KEY"${json || params.idempotencyKey ? ' \\' : ''}`,
+        `  -H "Authorization: Bearer $CODES_API_KEY"${json || params.idempotencyKey ? ' \\' : ''}`,
         ...(params.idempotencyKey ? [`  -H "Idempotency-Key: ${params.idempotencyKey}"${json ? ' \\' : ''}`] : []),
         ...(json ? ['  -H "Content-Type: application/json" \\', `  -d '${json}'`] : []),
     ].join('\n');
 
     const nodeHeaders = [
-        '    Authorization: `Bearer ${process.env.DIEM_API_KEY}`,',
+        '    Authorization: `Bearer ${process.env.CODES_API_KEY}`,',
         ...(params.idempotencyKey ? [`    "Idempotency-Key": "${params.idempotencyKey}",`] : []),
         ...(json ? ['    "Content-Type": "application/json",'] : []),
     ].join('\n');
@@ -35,7 +35,7 @@ export function requestSamples(params: {
     ].join('\n');
 
     const pythonHeaders = [
-        '        "Authorization": f"Bearer {os.environ[\'DIEM_API_KEY\']}",',
+        '        "Authorization": f"Bearer {os.environ[\'CODES_API_KEY\']}",',
         ...(params.idempotencyKey ? [`        "Idempotency-Key": "${params.idempotencyKey}",`] : []),
     ].join('\n');
     const python = [

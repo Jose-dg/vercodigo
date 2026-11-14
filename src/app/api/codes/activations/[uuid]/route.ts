@@ -46,7 +46,7 @@ async function retryHandler(
         const result = await retryActivationOrderForUser(user, decodeURIComponent(uuid));
         return NextResponse.json({ success: true, ...result });
     } catch (error) {
-        return errorResponse(error, "No se pudo consultar la activación en Diem");
+        return errorResponse(error, "No se pudo consultar el estado de la activación");
     }
 }
 

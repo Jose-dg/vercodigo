@@ -431,7 +431,7 @@ export default function BulkActivationPage() {
                             )}
                             {counts.PROCESSING > 0 && (
                                 <p className="text-sm text-muted-foreground">
-                                    Las tarjetas en proceso siguen solas (o esperan stock en Diem). Revísalas en Activaciones.
+                                    Las tarjetas en proceso siguen solas (o esperan stock). Revísalas en Activaciones.
                                 </p>
                             )}
                             <Button

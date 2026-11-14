@@ -55,11 +55,11 @@ const STATUS_LABELS: Record<string, string> = {
     AWAITING_STOCK: "En espera de stock",
     FINALIZING: "En proceso",
     COMPLETED: "Entregado",
-    ACTION_REQUIRED: "Requiere atención",
+    ACTION_REQUIRED: "Requiere aprobación",
     FAILED: "Fallido",
 };
 
-const BUYER_ATTENTION_REASON = "Diem necesita revisarlo antes de entregar los códigos.";
+const BUYER_ATTENTION_REASON = "La solicitud requiere aprobación antes de entregar los códigos.";
 
 export function statusLabel(status: string): string {
     return STATUS_LABELS[status] ?? status;
@@ -181,6 +181,6 @@ export function parseTeamEmails(raw: string | null | undefined): NotificationRec
             .split(/[\s,;]+/)
             .map((value) => value.trim().toLowerCase())
             .filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
-            .map((email) => ({ key: `team:${email}`, email, name: "Equipo Diem", role: "diem_team" as const })),
+            .map((email) => ({ key: `team:${email}`, email, name: "Equipo de operaciones", role: "diem_team" as const })),
     );
 }

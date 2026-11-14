@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 import { badRequest, conflict, notFound } from "@/lib/errors";
+import { PRODUCT_NOT_MAPPED } from "@/lib/codes/customer-messages";
 import type { DeliveryRecipient } from "@/lib/codes/delivery-recipient";
 import { resolveCost } from "@/services/costing/costing.service";
 import { sandboxScenario } from "./sandbox-scenarios";
@@ -43,7 +44,7 @@ export async function createSandboxDelivery(params: {
         throw badRequest("Selecciona la denominación del producto");
     }
     if (!(denomination?.devDiemProductId ?? product.devDiemProductId)) {
-        throw conflict("El producto no está mapeado al catálogo de Diem");
+        throw conflict(PRODUCT_NOT_MAPPED);
     }
 
     const cost = await resolveCost(params.companyId, product.id, denomination?.id);

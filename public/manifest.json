@@ -1,6 +1,6 @@
 {
-  "name": "Diem SAS",
-  "short_name": "Diem",
+  "name": "Vercode",
+  "short_name": "Vercode",
   "description": "Ver código de activación",
   "start_url": "/",
   "display": "standalone",

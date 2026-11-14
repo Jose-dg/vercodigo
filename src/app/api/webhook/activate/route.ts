@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
  */
 export function POST() {
     return NextResponse.json(
-        { error: "GONE", message: "Las activaciones se hacen desde diem-sas con fulfillment de Diem." },
+        { error: "GONE", message: "Las activaciones se hacen desde el portal." },
         { status: 410 },
     );
 }

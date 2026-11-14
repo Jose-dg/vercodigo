@@ -218,7 +218,7 @@ export async function retryActivationOrderForUser(user: Actor, cardUuid: string)
     const card = await findVisibleCard(user, cardUuid);
     const job = card.activationJobs[0];
     if (card.activation || !job || !OPEN_ACTIVATION_JOB_STATUSES.includes(job.status)) {
-        throw conflict("Esta activación no tiene una solicitud abierta en Diem.");
+        throw conflict("Esta activación no tiene una solicitud abierta.");
     }
     const result = await processActivationJob(job.id);
     notifyActivationJob(job.id);

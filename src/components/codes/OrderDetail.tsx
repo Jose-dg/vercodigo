@@ -82,7 +82,7 @@ const RECIPIENT_DELIVERY_LABEL: Record<'sending' | 'sent' | 'failed', { text: st
     sending: { text: 'Enviando el email', className: 'text-muted-foreground' },
     sent: { text: 'Email enviado', className: 'text-emerald-700 dark:text-emerald-400' },
     failed: {
-        text: 'El email no se pudo enviar. Comparte los códigos con tu cliente o escribe a soporte Diem.',
+        text: 'El email no se pudo enviar. Comparte los códigos con tu cliente o escribe a soporte.',
         className: 'text-destructive',
     },
 };
@@ -246,7 +246,7 @@ export function OrderDetail({
                         {showRetry && (
                             <Button variant="outline" size="sm" className="shrink-0" disabled={retrying} onClick={onRetry}>
                                 {retrying ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <RefreshCw className="mr-2 size-3.5" />}
-                                {purchase.needsAction ? 'Reintentar Diem' : 'Consultar Diem'}
+                                {purchase.needsAction ? 'Reintentar' : 'Consultar estado'}
                             </Button>
                         )}
                     </div>
@@ -279,7 +279,7 @@ export function OrderDetail({
                     <DialogHeader>
                         <DialogTitle>Cancelar solicitud pendiente</DialogTitle>
                         <DialogDescription>
-                            Esta acción es definitiva. Diem dejará de reservar inventario para la solicitud y no se realizará ningún cobro.
+                            Esta acción es definitiva. Se dejará de reservar inventario para la solicitud y no se realizará ningún cobro.
                         </DialogDescription>
                     </DialogHeader>
                     <label className="space-y-2 text-sm">

@@ -49,3 +49,6 @@ next-env.d.ts
 /.codex/hooks.json
 /CLAUDE.md
 /.secure/
+
+# Respaldos locales de scripts de datos
+.backups/

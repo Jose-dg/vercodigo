@@ -46,7 +46,7 @@ export function QRStatusToggle({ isActivated, isRedeemed, qr }: QRStatusTogglePr
                     title: result.processing ? "Activación recibida" : "QR activado",
                     description:
                         result.message ??
-                        "La tarjeta se activará cuando Diem confirme la asignación del código.",
+                        "La tarjeta se activará cuando se confirme la asignación del código.",
                 });
             } else {
                 throw new Error(result.message || result.error);

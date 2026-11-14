@@ -80,7 +80,7 @@ export async function requireAuthenticatedActor(): Promise<AuthenticatedActor> {
 }
 
 export async function getActorCompanyName(actor: AuthenticatedActor): Promise<string> {
-    if (actorIsPlatform(actor)) return "Diem";
+    if (actorIsPlatform(actor)) return "Plataforma";
     if (!actor.companyId) return "Empresa";
     const company = await prisma.company.findFirst({
         where: { id: actor.companyId, isActive: true },

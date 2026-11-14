@@ -34,8 +34,8 @@ ${STACK_GUIDANCE[stack]}
 
 Contrato de la API:
 - Base URL: ${apiBaseUrl}
-- Autenticación: Authorization: Bearer \${DIEM_API_KEY}
-- Guarda DIEM_API_KEY únicamente en variables de entorno o en el gestor de secretos del servidor.
+- Autenticación: Authorization: Bearer \${CODES_API_KEY}
+- Guarda CODES_API_KEY únicamente en variables de entorno o en el gestor de secretos del servidor.
 - Nunca envíes la API key al navegador o a una app móvil; tampoco la imprimas, registres ni incluyas en el repositorio.
 - Comienza con una key sandbox. No ejecutes compras reales ni uses una key de producción durante el desarrollo o las pruebas.
 - Todas las peticiones y respuestas usan JSON con campos snake_case.

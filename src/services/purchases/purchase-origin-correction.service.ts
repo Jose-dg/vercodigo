@@ -44,10 +44,10 @@ function mapRemoteError(error: unknown) {
     const status = (error as DiemHttpError | undefined)?.status;
     const correlationId = (error as DiemHttpError | undefined)?.correlationId;
     const details = correlationId ? { correlationId } : undefined;
-    if (status === 409) return conflict("El origen comercial cambió en Diem; vuelve a cargar la compra", details);
-    if (status === 400 || status === 422) return badRequest("Diem rechazó la corrección de origen", details);
-    if (typeof status === "number" && status >= 500) return badGateway("Diem no pudo corregir el origen", "DIEM_UNAVAILABLE", details);
-    return serviceUnavailable("No fue posible conectar con Diem", "DIEM_UNREACHABLE", details);
+    if (status === 409) return conflict("El origen comercial cambió en el proveedor; vuelve a cargar la compra", details);
+    if (status === 400 || status === 422) return badRequest("El proveedor rechazó la corrección de origen", details);
+    if (typeof status === "number" && status >= 500) return badGateway("El proveedor no pudo corregir el origen", "DIEM_UNAVAILABLE", details);
+    return serviceUnavailable("No fue posible conectar con el proveedor", "DIEM_UNREACHABLE", details);
 }
 
 export async function listPurchaseOriginCorrectionData(params: {
@@ -169,7 +169,7 @@ export async function applyPurchaseOriginCorrection(params: {
     const purchase = await loadPurchase(params.purchaseId, prisma);
     if (!purchase) throw notFound("Compra no encontrada");
     if (purchase.status !== "COMPLETED") throw conflict("Solo se puede corregir el origen de una compra completada");
-    if (!purchase.diemRequestId) throw conflict("La compra todavía no tiene una solicitud asociada en Diem");
+    if (!purchase.diemRequestId) throw conflict("La compra todavía no tiene una solicitud asociada en el proveedor");
     const resolved = await resolvePurchaseOrigin({
         actor: { ...params.actor, purchaseOriginPhoneId: null },
         targetCompanyId: purchase.companyId,

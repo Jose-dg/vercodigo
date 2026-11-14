@@ -110,7 +110,7 @@ function activationLastError(state: {
     if (state.reversed) return state.jobError;
     if (state.settled) return null;
     if (state.orphanCompletion) {
-        return "Diem entregó el código pero la activación no quedó registrada ni cobrada. Requiere revisión.";
+        return "El código se entregó pero la activación no quedó registrada ni cobrada. Requiere revisión.";
     }
     return state.jobError;
 }

@@ -52,7 +52,7 @@ test("a historical top-up without payment time says so and shows its registratio
     assert.match(label, /^Sin hora de pago · registrado el /);
     assert.equal(effectiveTimeLabel("LEDGER_EVENT", "2026-08-02T20:20:03.494Z"), null);
     assert.equal(effectiveTimeLabel("PAYMENT", "2026-08-02T20:20:03.494Z"), "Hora del pago");
-    assert.equal(effectiveTimeLabel("GATEWAY_CONFIRMATION", "2026-08-02T20:20:03.494Z"), "Pago confirmado por Diem");
+    assert.equal(effectiveTimeLabel("GATEWAY_CONFIRMATION", "2026-08-02T20:20:03.494Z"), "Pago confirmado");
 });
 
 test("bank references and request fingerprints ignore case and spacing only", () => {

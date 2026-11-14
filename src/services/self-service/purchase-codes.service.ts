@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 import { badRequest, conflict, notFound } from "@/lib/errors";
+import { PRODUCT_NOT_MAPPED, REQUIRES_APPROVAL } from "@/lib/codes/customer-messages";
 import type { TokenPayload } from "@/lib/auth";
 import {
     buildCodeRequestCommand,
@@ -339,7 +340,7 @@ async function processCodePurchaseState(purchaseId: string) {
     const remoteProductId =
         purchase.denomination?.devDiemProductId ?? product.devDiemProductId;
     if (!remoteProductId) {
-        throw conflict("El producto no está mapeado al catálogo de Diem");
+        throw conflict(PRODUCT_NOT_MAPPED);
     }
 
     // Every local write below is conditional on the purchase still being open.
@@ -381,7 +382,7 @@ async function processCodePurchaseState(purchaseId: string) {
             purchase = await loadPurchase(purchaseId);
             if (!linked.count) {
                 if (isSettledFulfillmentStatus(purchase.status)) return serializePurchase(purchase);
-                throw conflict("La compra ya está vinculada a otra solicitud de Diem");
+                throw conflict("La compra ya está vinculada a otra solicitud");
             }
         }
 
@@ -413,7 +414,7 @@ async function processCodePurchaseState(purchaseId: string) {
                 status: "ACTION_REQUIRED",
                 fulfillmentStatus: request.status,
                 ...(request.status === "pending_review"
-                    ? { lastError: "Diem exige revisión manual de esta solicitud. No se debitó la wallet." }
+                    ? { lastError: REQUIRES_APPROVAL }
                     : {}),
                 nextRetryAt: null,
             });
@@ -438,7 +439,7 @@ async function processCodePurchaseState(purchaseId: string) {
             // Idempotent in Diem: the same correlation id reveals the same codes.
             const codes = await revealCodeRequest(request.id, `code-purchase:${purchase.id}`);
             if (codes.length !== purchase.count) {
-                throw new Error(`Diem reveló ${codes.length} de ${purchase.count} códigos`);
+                throw new Error(`Se revelaron ${codes.length} de ${purchase.count} códigos`);
             }
             const { applied, current } = await writeWhileOpen({
                 deliveredCodes: codes,
@@ -570,7 +571,7 @@ async function placeCodePurchase(params: {
     }
     const remoteProductId = denomination?.devDiemProductId ?? product.devDiemProductId;
     if (!remoteProductId) {
-        throw conflict("El producto no está mapeado al catálogo de Diem");
+        throw conflict(PRODUCT_NOT_MAPPED);
     }
 
     // Stock is informational only, not a gate: Diem accepts requests against
@@ -695,7 +696,7 @@ async function placeCodePurchase(params: {
         if (isDiemContractError(error)) {
             await updateOpenCodePurchase(prisma, purchase.id, {
                 status: "ACTION_REQUIRED",
-                lastError: (error instanceof Error ? error.message : "Contrato Diem").slice(0, 1000),
+                lastError: (error instanceof Error ? error.message : "Contrato del proveedor").slice(0, 1000),
                 nextRetryAt: null,
             });
             return serializePurchase(await loadPurchase(purchase.id));
@@ -776,7 +777,7 @@ export async function cancelCodePurchase(
     if (purchase.status !== "AWAITING_STOCK" || purchase.fulfillmentStatus !== "awaiting_stock") {
         throw conflict("Solo se puede cancelar una solicitud que todavía está esperando stock");
     }
-    if (!purchase.diemRequestId) throw conflict("La solicitud todavía no está vinculada con Diem");
+    if (!purchase.diemRequestId) throw conflict("La solicitud todavía no está vinculada con el proveedor");
     const consumption = await prisma.walletTransaction.findUnique({
         where: { codePurchaseId: purchase.id },
         select: { id: true },
@@ -785,7 +786,7 @@ export async function cancelCodePurchase(
 
     const remote = await cancelCodeRequest(purchase.diemRequestId, reasonText);
     if (remote.status !== "cancelled") {
-        throw conflict(`Diem no canceló la solicitud; quedó en estado ${remote.status}`);
+        throw conflict(`El proveedor no canceló la solicitud; quedó en estado ${remote.status}`);
     }
     const changed = await updateOpenCodePurchase(prisma, purchase.id, {
         status: "CANCELLED",

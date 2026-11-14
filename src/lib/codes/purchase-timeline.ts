@@ -40,7 +40,7 @@ function iso(value: DateInput): string | null {
 function processingLabel(status: string, fulfillmentStatus?: string | null): string {
     if (status === "AWAITING_STOCK") return "Esperando stock";
     if (status === "ACTION_REQUIRED") {
-        return fulfillmentStatus === "pending_review" ? "Revisión operativa" : "Revisión requerida";
+        return fulfillmentStatus === "pending_review" ? "Requiere aprobación" : "Requiere confirmación";
     }
     if (status === "FINALIZING") return "Finalizando";
     return "Procesando";

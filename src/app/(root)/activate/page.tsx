@@ -52,7 +52,7 @@ type CardPreview = {
 };
 
 const JOB_POLL_MS = 3000;
-// Pasado este tiempo se deja de consultar solo; el botón "Consultar Diem" sigue disponible.
+// Pasado este tiempo se deja de consultar solo; el botón "Consultar estado" sigue disponible.
 const JOB_POLL_LIMIT_MS = 2 * 60_000;
 
 export default function ActivatePage() {
@@ -162,13 +162,13 @@ export default function ActivatePage() {
             });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data) {
-                throw new Error(data?.message || 'No se pudo consultar Diem');
+                throw new Error(data?.message || 'No se pudo consultar el estado');
             }
             const completed = data.status === 'COMPLETED';
             setResult({ ...data, success: true, processing: !completed });
-            toast.success(completed ? 'Tarjeta activada exitosamente' : 'Estado actualizado desde Diem');
+            toast.success(completed ? 'Tarjeta activada exitosamente' : 'Estado actualizado');
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'No se pudo consultar Diem');
+            toast.error(error instanceof Error ? error.message : 'No se pudo consultar el estado');
         } finally {
             setLoading(false);
         }
@@ -394,7 +394,7 @@ export default function ActivatePage() {
                                     {tone === 'processing' && (
                                         <p className="text-sm text-sky-800 dark:text-sky-300">
                                             {pollingStopped
-                                                ? 'Sigue en proceso en Diem. Consulta de nuevo en unos minutos.'
+                                                ? 'Sigue en proceso. Consulta de nuevo en unos minutos.'
                                                 : 'Estamos asignando el código. Esta pantalla se actualiza sola.'}
                                         </p>
                                     )}
@@ -434,7 +434,7 @@ export default function ActivatePage() {
                                         {loading
                                             ? 'Consultando…'
                                             : result.processing
-                                                ? 'Consultar Diem'
+                                                ? 'Consultar estado'
                                                 : result.success
                                                     ? 'Activar otra tarjeta'
                                                     : 'Intentar de nuevo'}

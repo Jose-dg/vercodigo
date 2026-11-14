@@ -26,7 +26,7 @@ async function parseJson<T>(response: Response): Promise<T> {
         const error = new Error(
             typeof body === 'object' && body && 'detail' in body
                 ? String((body as { detail: unknown }).detail)
-                : `Diem ops HTTP ${response.status}`,
+                : `Operaciones del proveedor HTTP ${response.status}`,
         ) as DiemHttpError;
         error.status = response.status;
         error.detail = body;

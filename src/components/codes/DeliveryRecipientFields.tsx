@@ -54,7 +54,7 @@ export function DeliveryRecipientFields({
                         Enviar los códigos al email de mi cliente
                     </span>
                     <span className="text-muted-foreground">
-                        Diem le envía el correo con los códigos. Tú también los verás aquí.
+                        Le enviamos el correo con los códigos. Tú también los verás aquí.
                     </span>
                 </span>
             </label>

@@ -15,7 +15,7 @@ export default function RetrieveDeliveryPage() {
         Consulta cada pocos minutos mientras <code>status</code> sea <code>processing</code> o{" "}
         <code>awaiting_stock</code>.
       </p>
-      <p>La respuesta nunca contiene el código o PIN. Diem lo envía exclusivamente al email del destinatario.</p>
+      <p>La respuesta nunca contiene el código o PIN. Se envía exclusivamente al email del destinatario.</p>
     </DocPage>
   )
 }

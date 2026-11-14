@@ -16,7 +16,7 @@ const ERROR_MESSAGES: Record<QrSelectionError | "QR_QUANTITY_INVALID", string> =
     QR_PRODUCT_INACTIVE: "El producto no está activo",
     QR_PRODUCT_NOT_ELIGIBLE: "El producto no es elegible para generar QR",
     QR_DENOMINATION_INVALID: "La denominación no pertenece al producto",
-    QR_MAPPING_MISSING: "La denominación no tiene mapeo con Diem",
+    QR_MAPPING_MISSING: "La denominación no está habilitada en el catálogo del proveedor",
     QR_CUSTOM_AMOUNT_NOT_ALLOWED: "El monto se deriva de la denominación y no puede enviarse manualmente",
     QR_QUANTITY_INVALID: "La cantidad debe ser un entero entre 1 y 100",
 };

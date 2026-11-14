@@ -11,7 +11,7 @@ async function handler(
     user: { role: string },
 ) {
     if (!isPlatformRole(user.role as "SUPER_ADMIN" | "SYSTEM_ADMIN")) {
-        throw forbidden("Solo plataforma puede usar Ops Diem");
+        throw forbidden("Solo plataforma puede usar Operaciones de catálogo");
     }
     const { searchParams } = req.nextUrl;
     const results = await listOpsClients({

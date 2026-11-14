@@ -78,7 +78,7 @@ async function retryHandler(
             {
                 success: false,
                 error: "FULFILLMENT_RETRY_FAILED",
-                message: error instanceof Error ? error.message : "No se pudo consultar Diem",
+                message: error instanceof Error ? error.message : "No se pudo consultar el estado",
             },
             { status: 409 },
         );

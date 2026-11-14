@@ -68,15 +68,15 @@ interface PurchaseHistoryPanelProps {
 function statusLabel(purchase: PurchaseHistoryItem): string {
     switch (purchase.status) {
         case "PENDING":
-            return purchase.lastError ? "Pendiente · error Diem" : "Pendiente en Diem";
+            return purchase.lastError ? "Requiere confirmación · ver detalle" : "Requiere confirmación";
         case "PROCESSING":
-            return "Procesando en Diem";
+            return "En proceso";
         case "AWAITING_STOCK":
             return "Esperando stock";
         case "FINALIZING":
             return "Finalizando";
         case "ACTION_REQUIRED":
-            return "Acción requerida";
+            return "Requiere aprobación";
         case "COMPLETED":
             return "Entregada";
         case "FAILED":
@@ -323,7 +323,7 @@ function PurchaseTable({
                                                 ) : (
                                                     <RefreshCw className="mr-2 h-3 w-3" />
                                                 )}
-                                                {purchase.needsAction ? "Reintentar Diem" : "Consultar Diem"}
+                                                {purchase.needsAction ? "Reintentar" : "Consultar estado"}
                                             </Button>
                                         ) : null}
                                         {showCodes ? (
@@ -410,16 +410,16 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
             });
             const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || "No se pudo consultar la entrega en Diem");
+                throw new Error(data?.message || "No se pudo consultar el estado de la entrega");
             }
             toast.success(
                 (data?.purchase?.status ?? data?.status) === "COMPLETED"
                     ? "Entrega completada"
-                    : "Estado actualizado desde Diem",
+                    : "Estado actualizado",
             );
             await loadHistory("refresh");
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "No se pudo consultar Diem");
+            toast.error(error instanceof Error ? error.message : "No se pudo consultar el estado");
         } finally {
             setRetryingId(null);
         }
@@ -476,7 +476,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                 <div className="min-w-0">
                     <h2 className="text-xl font-semibold">Mis solicitudes</h2>
                     <p className="text-sm text-muted-foreground">
-                        Compras de códigos y activaciones de tarjetas QR. Las solicitudes quedan registradas aunque cierres esta pantalla. Si Diem ya resolvió stock o aprobación, consulta nuevamente su estado.
+                        Compras de códigos y activaciones de tarjetas QR. Las solicitudes quedan registradas aunque cierres esta pantalla. Si ya se resolvió el stock o la aprobación, consulta nuevamente su estado.
                     </p>
                 </div>
                 <Button
@@ -517,7 +517,7 @@ export function PurchaseHistoryPanel({ refreshToken = 0 }: PurchaseHistoryPanelP
                     </CardTitle>
                     <CardDescription>
                         {pending.length
-                            ? `${pending.length} solicitud(es) esperando asignación de Diem.`
+                            ? `${pending.length} solicitud(es) esperando confirmación.`
                             : "No hay entregas pendientes en este momento."}
                     </CardDescription>
                 </CardHeader>

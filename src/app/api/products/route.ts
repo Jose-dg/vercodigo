@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
             try {
                 catalog = await checkDiemConnection();
             } catch (error) {
-                const message = error instanceof Error ? error.message : 'No se pudo consultar el catálogo de Diem';
+                const message = error instanceof Error ? error.message : 'No se pudo consultar el catálogo del proveedor';
                 console.error("[products/purchasable] Diem catalog error:", message);
                 return NextResponse.json({ error: message }, { status: 503 });
             }

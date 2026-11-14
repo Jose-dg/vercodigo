@@ -54,23 +54,23 @@ function remoteCorrectionError(error: unknown) {
     const suffix = correlationId ? ` (correlación: ${correlationId})` : "";
 
     if (remote?.status === 409) {
-        return conflict(`Diem detectó que el precio comercial cambió después de la vista previa${suffix}`, details);
+        return conflict(`El proveedor detectó que el precio comercial cambió después de la vista previa${suffix}`, details);
     }
     if (remote?.status === 422) {
         return new AppError(
-            `Diem rechazó la corrección comercial${suffix}`,
+            `El proveedor rechazó la corrección comercial${suffix}`,
             422,
             "DIEM_VALIDATION",
             details,
         );
     }
     if (typeof remote?.status === "number" && remote.status >= 500) {
-        return badGateway(`Diem no pudo procesar la corrección comercial${suffix}`, "DIEM_UNAVAILABLE", details);
+        return badGateway(`El proveedor no pudo procesar la corrección comercial${suffix}`, "DIEM_UNAVAILABLE", details);
     }
     if (error instanceof TypeError || typeof remote?.status !== "number") {
-        return serviceUnavailable(`No fue posible comunicarse con Diem${suffix}`, "DIEM_UNREACHABLE", details);
+        return serviceUnavailable(`No fue posible comunicarse con el proveedor${suffix}`, "DIEM_UNREACHABLE", details);
     }
-    return badGateway(`Diem rechazó la corrección comercial${suffix}`, "DIEM_REJECTED", details);
+    return badGateway(`El proveedor rechazó la corrección comercial${suffix}`, "DIEM_REJECTED", details);
 }
 
 async function loadTarget(targetType: RepriceTargetType, targetId: string, db: Db = prisma): Promise<Target> {
@@ -83,7 +83,7 @@ async function loadTarget(targetType: RepriceTargetType, targetId: string, db: D
         if (!purchase.denomination || purchase.denomination.currency !== "USD") {
             throw badRequest("La compra no tiene una denominación USD corregible");
         }
-        if (!purchase.diemRequestId) throw conflict("La compra no tiene una solicitud asociada en Diem");
+        if (!purchase.diemRequestId) throw conflict("La compra no tiene una solicitud asociada en el proveedor");
         const [transaction, product] = await Promise.all([
             db.walletTransaction.findFirst({
                 where: { codePurchaseId: purchase.id, type: "CONSUMPTION", status: "CONFIRMED" },
@@ -130,7 +130,7 @@ async function loadTarget(targetType: RepriceTargetType, targetId: string, db: D
         throw notFound("Activación USD corregible no encontrada");
     }
     const job = activation.card.activationJobs[0];
-    if (!job?.diemRequestId) throw conflict("La activación no tiene una solicitud asociada en Diem");
+    if (!job?.diemRequestId) throw conflict("La activación no tiene una solicitud asociada en el proveedor");
     const transaction = await db.walletTransaction.findFirst({
         where: { cardActivationId: activation.id, type: "CONSUMPTION", status: "CONFIRMED" },
         include: { wallet: true, accountStatementLine: true },
@@ -416,11 +416,11 @@ export async function applySaleReprice(params: {
         });
         if (latestOperation.status === "COMPLETED") return latestOperation;
         if (latestOperation.status !== "REMOTE_APPLIED") {
-            throw conflict("Diem todavía no ha confirmado la corrección comercial");
+            throw conflict("La corrección comercial todavía requiere confirmación del proveedor");
         }
         const current = await loadTarget(params.targetType, params.targetId, tx);
         if (fingerprint(current, params.newRate) !== params.fingerprint) {
-            throw conflict("La venta cambió después de sincronizar Diem; la corrección local requiere revisión");
+            throw conflict("La venta cambió después de sincronizar con el proveedor; la corrección local requiere revisión");
         }
         const sourceAmount = money(current.denominationAmount * current.quantity);
         if (params.targetType === "CODE_PURCHASE") {

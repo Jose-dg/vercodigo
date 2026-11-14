@@ -28,7 +28,7 @@ test("awaiting stock is a waiting state, not terminal", () => {
     assert.equal(timeline.isTerminal, false);
 });
 
-test("action required distinguishes manual review from Diem", () => {
+test("action required distinguishes manual review from other confirmations", () => {
     const review = buildPurchaseTimeline({
         status: "ACTION_REQUIRED",
         fulfillmentStatus: "pending_review",
@@ -36,8 +36,8 @@ test("action required distinguishes manual review from Diem", () => {
     });
     const generic = buildPurchaseTimeline({ status: "ACTION_REQUIRED", createdAt });
 
-    assert.equal(review.statusLabel, "Revisión operativa");
-    assert.equal(generic.statusLabel, "Revisión requerida");
+    assert.equal(review.statusLabel, "Requiere aprobación");
+    assert.equal(generic.statusLabel, "Requiere confirmación");
     assert.equal(review.tone, "waiting");
 });
 

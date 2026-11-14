@@ -126,7 +126,7 @@ export default function PurchaseCodesPage() {
                         || (data && typeof data.detail === 'string' && data.detail)
                         || 'No se pudieron cargar los productos disponibles.';
                     const message = /invalid api key/i.test(rawMessage)
-                        ? 'Diem rechazó la API key. Verifica DIEM_SERVICE_API_KEY en .env.local (debe ser la misma que en Vercel).'
+                        ? 'El proveedor rechazó la API key. Verifica DIEM_SERVICE_API_KEY en .env.local (debe ser la misma que en Vercel).'
                         : rawMessage;
                     setProducts([]);
                     setProductsError(message);
@@ -156,7 +156,7 @@ export default function PurchaseCodesPage() {
                 setProducts(purchasableProducts);
                 if (purchasableProducts.length === 0) {
                     setProductsError(
-                        'No hay productos habilitados para compra. Revisa el mapeo con Diem y que estén activos.',
+                        'No hay productos habilitados para compra. Revisa el mapeo con el catálogo del proveedor y que estén activos.',
                     );
                 }
             } catch (err) {
@@ -361,7 +361,7 @@ export default function PurchaseCodesPage() {
             if (data.purchase?.status === 'COMPLETED') {
                 toast.success(
                     payload.recipient
-                        ? `Compra exitosa. Diem enviará los códigos a ${payload.recipient.email}`
+                        ? `Compra exitosa. Enviaremos los códigos a ${payload.recipient.email}`
                         : 'Compra exitosa',
                 );
             } else if (data.purchase?.isPending) {

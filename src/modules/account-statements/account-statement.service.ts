@@ -282,7 +282,7 @@ async function buildPreview(db: Db, companyId: string, cutoffAt: Date) {
     };
 }
 
-const TOP_UPS_UNVERIFIED = "No se pudieron verificar con Diem las recargas acreditadas pendientes. Intenta de nuevo antes de emitir.";
+const TOP_UPS_UNVERIFIED = "No se pudieron verificar las recargas acreditadas pendientes. Intenta de nuevo antes de emitir.";
 
 export async function previewAccountStatement(params: {
     companyId: string;

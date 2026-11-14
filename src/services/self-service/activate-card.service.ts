@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
+import { PRODUCT_NOT_MAPPED, REQUIRES_APPROVAL } from "@/lib/codes/customer-messages";
 import {
     buildCodeRequestCommand,
     buildCommercialAccountCode,
@@ -36,7 +37,7 @@ type ActivationJobWriter = Pick<typeof prisma, "activationJob">;
  */
 class CardAlreadyActivatedError extends Error {
     constructor() {
-        super("Diem entregó un código para una tarjeta que ya estaba activada. No se debitó la wallet; requiere revisión.");
+        super("Se entregó un código para una tarjeta que ya estaba activada. No se debitó la wallet; requiere revisión.");
     }
 }
 
@@ -82,7 +83,7 @@ export async function processActivationJob(jobId: string) {
 
     const effectiveDenomination = resolveCardDenomination(job.card);
     const remoteProductId = resolveDevDiemProductId(job.card);
-    if (!remoteProductId) throw conflict("El producto no está mapeado al catálogo de Diem");
+    if (!remoteProductId) throw conflict(PRODUCT_NOT_MAPPED);
     const actor = await prisma.user.findUnique({
         where: { id: job.userId },
         select: { email: true, name: true },
@@ -193,7 +194,7 @@ export async function processActivationJob(jobId: string) {
             });
             if (!linked.count) {
                 if (isSettledFulfillmentStatus(job.status)) return { status: job.status, jobId: job.id };
-                throw conflict("La activación ya está vinculada a otra solicitud de Diem");
+                throw conflict("La activación ya está vinculada a otra solicitud");
             }
         }
 
@@ -239,10 +240,10 @@ export async function processActivationJob(jobId: string) {
                 fulfillmentStatus: remote.status,
                 lastError: remote.last_error_summary
                     || (remote.last_error_code === "procurement_route_missing"
-                        ? "Diem no tiene una ruta automática de abastecimiento aprobada para este producto."
+                        ? "Este producto no tiene una ruta automática de abastecimiento aprobada. Requiere aprobación."
                         : remote.status === "pending_review"
-                            ? "Diem exige revisión manual de esta solicitud. No se debitó la wallet."
-                            : "Diem requiere una acción operativa antes de completar la activación."),
+                            ? REQUIRES_APPROVAL
+                            : "La activación requiere confirmación antes de completarse."),
                 nextRetryAt: null,
             });
             return { status: "ACTION_REQUIRED", jobId: job.id };
@@ -254,7 +255,7 @@ export async function processActivationJob(jobId: string) {
                 fulfillmentStatus: remote.status,
                 // Replace any earlier wait reason (e.g. manual review already approved).
                 lastError: remote.status === "awaiting_stock"
-                    ? "Diem no tiene stock de este producto. La activación se completará sola cuando llegue el inventario; no se ha debitado la wallet."
+                    ? "Sin stock por ahora. La activación se completará sola cuando llegue el inventario; no se ha debitado la wallet."
                     : null,
                 attempts: { increment: 1 },
                 nextRetryAt: new Date(Date.now() + delayMinutes * 60_000),
@@ -265,7 +266,7 @@ export async function processActivationJob(jobId: string) {
         const codes = persistedCodes.length === 1
             ? persistedCodes
             : await revealCodeRequest(remote.id, `activation-job:${job.id}`);
-        if (codes.length !== 1) throw new Error(`Diem reveló ${codes.length} códigos; se esperaba 1`);
+        if (codes.length !== 1) throw new Error(`Se revelaron ${codes.length} códigos; se esperaba 1`);
         if (persistedCodes.length !== 1) {
             const stored = await updateOpenActivationJob(prisma, job.id, {
                 deliveredCodes: codes,
@@ -424,7 +425,7 @@ export async function processActivationJob(jobId: string) {
             await updateOpenActivationJob(prisma, job.id, {
                 status: "ACTION_REQUIRED",
                 attempts: { increment: 1 },
-                lastError: `Diem rechazó el reintento por idempotencia: ${message}`.slice(0, 1000),
+                lastError: `El proveedor rechazó el reintento por idempotencia: ${message}`.slice(0, 1000),
                 nextRetryAt: null,
             }).catch(() => undefined);
             throw error;
@@ -517,7 +518,7 @@ export async function startCardActivation(params: {
     if (card.isActivated) throw conflict("Esta tarjeta ya está activada.");
     const effectiveDenomination = resolveCardDenomination(card);
     if (!resolveDevDiemProductId(card)) {
-        throw conflict("El producto no está mapeado al catálogo de Diem");
+        throw conflict(PRODUCT_NOT_MAPPED);
     }
     const user = await assertCanActivateCard({
         userId: params.userId,
@@ -601,7 +602,7 @@ export async function startCardActivation(params: {
                 status: processed.status,
                 message:
                     latest?.lastError
-                    || "La activación no se pudo completar. Revisa la cuenta comercial o el catálogo en Diem.",
+                    || "La activación no se pudo completar. Revisa la cuenta comercial o el catálogo del proveedor.",
                 card: cardSummary,
             };
         }
@@ -632,7 +633,7 @@ export async function startCardActivation(params: {
             where: { id: job.id },
             select: { status: true },
         }))?.status ?? "PROCESSING",
-        message: "Activación recibida. Diem está asignando el código.",
+        message: "Activación recibida. Estamos asignando el código.",
         card: cardSummary,
     };
 }
@@ -688,7 +689,7 @@ export async function evaluateCardActivation(
     if (!card.product.isActive) return block("Producto inactivo");
     if (card.isActivated) return block("Ya activada");
     if (!resolveDevDiemProductId(card)) {
-        return block("El producto no está mapeado al catálogo de Diem");
+        return block(PRODUCT_NOT_MAPPED);
     }
 
     const configuredCost = await (options.resolveCost ?? resolveCost)(

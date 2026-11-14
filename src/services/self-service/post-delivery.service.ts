@@ -28,9 +28,9 @@ const sameCodes = (a: string[], b: string[]) => a.length === b.length && a.every
 
 function cancellationMessage(reasonCode?: string) {
     if (reasonCode === "partner_return_claim_accepted") {
-        return "Reclamo aceptado: se reembolsó el cobro en la wallet. El código fue devuelto a Diem para custodia y reventa; no se marcó como inválido.";
+        return "Reclamo aceptado: se reembolsó el cobro en la wallet. El código fue devuelto al proveedor para custodia y reventa; no se marcó como inválido.";
     }
-    return "Diem anuló la entrega después de completada. Se reembolsó el cobro en la wallet; los códigos entregados quedan sin validez.";
+    return "La entrega se anuló después de completada. Se reembolsó el cobro en la wallet; los códigos entregados quedan sin validez.";
 }
 
 export async function reverseCancelledCodePurchase(purchaseId: string): Promise<PostDeliveryResult> {
@@ -56,7 +56,7 @@ export async function reverseCancelledCodePurchase(purchaseId: string): Promise<
                 consumptionId: consumption.id,
                 description: acceptedReturn
                     ? `Reembolso: reclamo aceptado por devolución ${purchase.id}`
-                    : `Reembolso: Diem anuló la compra ${purchase.id}`,
+                    : `Reembolso: compra ${purchase.id} anulada`,
                 presentation: acceptedReturn ? "OMIT_NEUTRALIZED_PAIR" : "SHOW_REVERSAL",
                 tx,
             });
@@ -151,7 +151,7 @@ export async function reverseCancelledActivation(jobId: string): Promise<PostDel
         if (consumption) {
             await reverseConsumption({
                 consumptionId: consumption.id,
-                description: `Reembolso: Diem anuló la activación ${job.card.uuid}`,
+                description: `Reembolso: activación ${job.card.uuid} anulada`,
                 tx,
             });
         }
@@ -191,7 +191,7 @@ export async function refreshReplacedPurchaseCodes(purchaseId: string): Promise<
         await prisma.codePurchase.updateMany({
             where: { id: purchase.id, status: "COMPLETED" },
             data: {
-                lastError: `Diem reemplazó un código pero no se pudo obtener: ${error instanceof Error ? error.message : "error"}`.slice(0, 1000),
+                lastError: `Se reemplazó un código pero no se pudo obtener: ${error instanceof Error ? error.message : "error"}`.slice(0, 1000),
             },
         });
         throw error;
@@ -236,7 +236,7 @@ export async function refreshReplacedActivationCode(jobId: string): Promise<Post
         await prisma.activationJob.updateMany({
             where: { id: job.id, status: "COMPLETED" },
             data: {
-                lastError: `Diem reemplazó el código pero no se pudo obtener: ${error instanceof Error ? error.message : "error"}`.slice(0, 1000),
+                lastError: `Se reemplazó el código pero no se pudo obtener: ${error instanceof Error ? error.message : "error"}`.slice(0, 1000),
             },
         });
         throw error;

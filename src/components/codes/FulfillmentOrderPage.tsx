@@ -24,7 +24,7 @@ export function FulfillmentOrderPage({ apiPath }: { apiPath: string }) {
         if (!previous || previous === next.status) return;
         if (next.status === 'COMPLETED') toast.success('Códigos entregados');
         else if (next.status === 'FAILED') toast.error('La entrega falló y no se debitó la wallet.');
-        else if (next.status === 'ACTION_REQUIRED') toast.error('La entrega necesita revisión manual.');
+        else if (next.status === 'ACTION_REQUIRED') toast.error('La entrega requiere aprobación.');
         else if (next.status === 'CANCELLED') toast.success('Solicitud cancelada sin cobro.');
     }, []);
 
@@ -63,7 +63,7 @@ export function FulfillmentOrderPage({ apiPath }: { apiPath: string }) {
             const response = await fetch(apiPath, { method: 'POST' });
             const data = await response.json().catch(() => null);
             if (!response.ok) {
-                toast.error(data?.message ?? 'No se pudo consultar Diem');
+                toast.error(data?.message ?? 'No se pudo consultar el estado');
                 return;
             }
             // POST returns the base serialization; reload for the enriched detail.

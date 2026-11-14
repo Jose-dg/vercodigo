@@ -166,7 +166,7 @@ export function ProductForm() {
                                         />
                                     </div>
                                     <div className="flex-[1.5] space-y-1">
-                                        <Label className="text-xs text-muted-foreground">Product ID en Diem</Label>
+                                        <Label className="text-xs text-muted-foreground">ID de producto en el proveedor</Label>
                                         <Input
                                             placeholder="UUID del producto"
                                             value={denom.devDiemProductId}
@@ -218,7 +218,7 @@ export function ProductForm() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="devdiem-product-id" className="text-foreground font-medium">
-                                    Product ID en Diem (fallback)
+                                    ID de producto en el proveedor (fallback)
                                 </Label>
                                 <Input
                                     id="devdiem-product-id"

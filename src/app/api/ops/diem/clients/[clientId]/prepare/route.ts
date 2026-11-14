@@ -19,7 +19,7 @@ async function handler(
     user: { role: string },
 ) {
     if (!isPlatformRole(user.role as "SUPER_ADMIN" | "SYSTEM_ADMIN")) {
-        throw forbidden("Solo plataforma puede clasificar clientes Diem");
+        throw forbidden("Solo plataforma puede clasificar clientes");
     }
     const { clientId } = await context.params;
     const id = Number(clientId);

@@ -13,7 +13,7 @@ export default function AiIntegrationPage() {
             lead="Copia un prompt completo para que tu agente de código implemente la API de Vercode siguiendo el contrato y las prácticas de seguridad correctas."
         >
             <Callout tone="warning">
-                No pegues una API key en el prompt. El agente debe referenciar <InlineCode>DIEM_API_KEY</InlineCode> y tú
+                No pegues una API key en el prompt. El agente debe referenciar <InlineCode>CODES_API_KEY</InlineCode> y tú
                 debes configurarla en las variables de entorno del servidor.
             </Callout>
 

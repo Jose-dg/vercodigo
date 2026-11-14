@@ -52,7 +52,7 @@ async function retryHandler(
             );
         }
         return NextResponse.json(
-            { error: "INTERNAL", message: "No se pudo consultar la entrega en Diem" },
+            { error: "INTERNAL", message: "No se pudo consultar el estado de la entrega" },
             { status: 500 },
         );
     }

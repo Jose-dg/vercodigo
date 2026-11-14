@@ -35,7 +35,7 @@ export default async function ApiKeysPage() {
       ) : (
         <Callout tone="warning">
           Las API keys todavía no están habilitadas en este servidor (falta la variable API_KEY_PEPPER). Avísale al equipo
-          de Diem.
+          de soporte.
         </Callout>
       )}
     </DocPage>

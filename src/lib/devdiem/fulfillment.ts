@@ -136,7 +136,7 @@ export function commercialLineMoney(totalAmount: number, quantity: number): {
 } {
     const totalCents = Math.round(Number(totalAmount) * 100);
     if (!Number.isFinite(totalCents) || totalCents < 1 || quantity < 1) {
-        throw new Error('Montos comerciales inválidos para Diem');
+        throw new Error('Montos comerciales inválidos para el proveedor');
     }
     if (totalCents % quantity === 0) {
         const unitCents = totalCents / quantity;
@@ -189,13 +189,13 @@ export async function parse<T>(response: Response): Promise<T> {
             : undefined;
         const detailText = typeof body?.detail === 'string'
             ? body.detail
-            : `Diem respondió HTTP ${response.status}`;
+            : `El proveedor respondió HTTP ${response.status}`;
         const retryAfterSeconds = extractRetryAfterSeconds(response, body?.detail ?? body);
         const message = response.status === 429
             ? (
                 retryAfterSeconds
-                    ? `Diem está limitando solicitudes. Reintenta en ${retryAfterSeconds}s.`
-                    : 'Diem está limitando solicitudes (Too Many Requests).'
+                    ? `El proveedor está limitando solicitudes. Reintenta en ${retryAfterSeconds}s.`
+                    : 'El proveedor está limitando solicitudes (Too Many Requests).'
             )
             : detailText;
         const error = new Error(message) as DiemHttpError;
@@ -249,7 +249,7 @@ function requireCommercialOrder(request: CodeRequest): CodeRequest {
         || request.commercial_order_id.trim() === ''
     ) {
         throw new Error(
-            'Diem devolvió una solicitud sin commercial_order_id; se detuvo el fulfillment',
+            'El proveedor devolvió una solicitud sin commercial_order_id; se detuvo el fulfillment',
         );
     }
     return request;
@@ -298,7 +298,7 @@ export type CodeRequestCommand = {
 export function buildCodeRequestCommand(params: CodeRequestParams): CodeRequestCommand {
     const config = getDiemConfig();
     if (!params.commercial?.accountCode?.trim()) {
-        throw new Error('commercial.accountCode es obligatorio para el contrato Diem');
+        throw new Error('commercial.accountCode es obligatorio para el contrato del proveedor');
     }
     const money = commercialLineMoney(params.commercial.totalAmount, params.quantity);
     const commercialPayload = {
@@ -550,7 +550,7 @@ async function readDiemCatalog(config: DiemConfig): Promise<{
     const productStock = new Map<string, number>();
     let pageCount = 0;
     while (nextUrl) {
-        if (++pageCount > 50) throw new Error('El catálogo de Diem excede el límite de páginas');
+        if (++pageCount > 50) throw new Error('El catálogo del proveedor excede el límite de páginas');
         const response: Response = await fetch(nextUrl, {
             headers: headers(config),
             cache: 'no-store',
@@ -597,7 +597,7 @@ async function readDiemCatalog(config: DiemConfig): Promise<{
         }
         const parsedNext: URL = new URL(next, config.baseUrl);
         if (parsedNext.origin !== new URL(config.baseUrl).origin) {
-            throw new Error('Diem devolvió una URL de paginación fuera de su dominio');
+            throw new Error('El proveedor devolvió una URL de paginación fuera de su dominio');
         }
         nextUrl = parsedNext.toString();
     }
@@ -645,14 +645,14 @@ export async function diagnoseDiemConnection(): Promise<{
         config = getDiemConfig();
         checks.push({
             key: 'diem_sas_config',
-            label: 'Variables de Diem-SAS',
+            label: 'Variables del portal',
             ok: true,
             detail: 'URL, API key y Store ID están configurados y tienen formato válido.',
         });
     } catch (error) {
         checks.push({
             key: 'diem_sas_config',
-            label: 'Variables de Diem-SAS',
+            label: 'Variables del portal',
             ok: false,
             detail: error instanceof Error ? error.message : 'Configuración inválida.',
         });
@@ -664,7 +664,7 @@ export async function diagnoseDiemConnection(): Promise<{
         capabilities = await getDiemConnectionCapabilities(config);
         checks.push({
             key: 'diem_authentication',
-            label: 'API key y tienda en Diem',
+            label: 'API key y tienda del proveedor',
             ok: capabilities.store_authorized,
             detail: capabilities.store_authorized
                 ? 'La API key autentica y tiene acceso a la tienda configurada.'
@@ -674,13 +674,13 @@ export async function diagnoseDiemConnection(): Promise<{
         const status = (error as DiemHttpError)?.status;
         checks.push({
             key: 'diem_authentication',
-            label: 'API key y tienda en Diem',
+            label: 'API key y tienda del proveedor',
             ok: false,
             detail: status === 401
-                ? 'Diem rechazó DIEM_SERVICE_API_KEY.'
+                ? 'El proveedor rechazó DIEM_SERVICE_API_KEY.'
                 : status === 404
                     ? 'DIEM_STORE_ID no está autorizado para esta API key.'
-                    : error instanceof Error ? error.message : 'Diem no respondió.',
+                    : error instanceof Error ? error.message : 'El proveedor no respondió.',
         });
         return { ok: false, checks };
     }
@@ -711,7 +711,7 @@ export async function diagnoseDiemConnection(): Promise<{
             key: 'diem_catalog',
             label: 'Catálogo de códigos',
             ok: true,
-            detail: `Diem respondió con ${catalog.catalogProducts} producto(s) habilitado(s).`,
+            detail: `El proveedor respondió con ${catalog.catalogProducts} producto(s) habilitado(s).`,
         });
     } catch (error) {
         checks.push({

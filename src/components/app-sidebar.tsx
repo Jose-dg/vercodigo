@@ -187,7 +187,7 @@ const data = {
           url: "/draft",
         },
         {
-          title: "Ops Diem",
+          title: "Operaciones de catálogo",
           url: "/ops/diem",
         },
       ],
@@ -248,9 +248,9 @@ export function AppSidebar({ companyName, ...props }: AppSidebarProps) {
   const isPlatform = currentUser?.role != null && isPlatformRole(currentUser.role);
   const teams = React.useMemo(
     () => [{
-      name: isPlatform ? "Diem" : companyName,
+      name: isPlatform ? "Plataforma" : companyName,
       logo: isPlatform ? GalleryVerticalEnd : Building2,
-      plan: isPlatform ? "Plataforma Diem" : "Empresa activa",
+      plan: isPlatform ? "Administración" : "Empresa activa",
     }],
     [companyName, isPlatform],
   );

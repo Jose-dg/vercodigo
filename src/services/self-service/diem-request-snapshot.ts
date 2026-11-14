@@ -24,6 +24,6 @@ export async function frozenCodeRequestCommand(params: {
     const built = await params.build();
     if (await params.persistIfAbsent(built)) return built;
     const winner = parseCodeRequestCommand(await params.reload());
-    if (!winner) throw new Error("No se pudo congelar la solicitud a Diem");
+    if (!winner) throw new Error("No se pudo congelar la solicitud al proveedor");
     return winner;
 }

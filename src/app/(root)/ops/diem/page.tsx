@@ -282,7 +282,7 @@ export default function OpsDiemPage() {
     if (!canUse) {
         return (
             <div className="flex flex-1 flex-col gap-4 p-6">
-                <h1 className="text-2xl font-semibold">Ops Diem</h1>
+                <h1 className="text-2xl font-semibold">Operaciones de catálogo</h1>
                 <p className="text-muted-foreground">Solo roles de plataforma pueden usar esta herramienta.</p>
             </div>
         );
@@ -301,7 +301,7 @@ export default function OpsDiemPage() {
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Ops Diem</BreadcrumbPage>
+                                <BreadcrumbPage>Operaciones de catálogo</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -310,9 +310,9 @@ export default function OpsDiemPage() {
 
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Ops Diem</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">Operaciones de catálogo</h1>
                     <p className="text-muted-foreground">
-                        Clasifica clientes sin LegalParty y activa fulfillment del surtido Diem.
+                        Clasifica clientes sin LegalParty y activa fulfillment del surtido del proveedor.
                     </p>
                 </div>
 

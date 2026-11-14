@@ -137,7 +137,7 @@ export function PendingActivationCard({ data, onReset }: { data: PendingActivati
                 </div>
             </CardHeader>
             <CardContent className="space-y-3 pt-6 text-sm">
-                <p>{data.lastError || data.message || "Diem está abasteciendo y asignando el código. Esta pantalla se actualizará automáticamente."}</p>
+                <p>{data.lastError || data.message || "Estamos asignando el código. Esta pantalla se actualizará automáticamente."}</p>
                 {data.card ? <p className="text-muted-foreground">{data.card.product} · {data.card.store} · {data.card.uuid}</p> : null}
                 <p className="font-mono text-xs text-muted-foreground">Trabajo: {data.jobId}</p>
             </CardContent>

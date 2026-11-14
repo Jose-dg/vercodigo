@@ -84,7 +84,7 @@ export function effectiveTimeLabel(source: WalletTimeSource, createdAt: Date | s
         case "PAYMENT":
             return "Hora del pago";
         case "GATEWAY_CONFIRMATION":
-            return "Pago confirmado por Diem";
+            return "Pago confirmado";
         case "SOURCE_SYSTEM":
             return "Hora del sistema de origen";
         case "REGISTRATION_ONLY":

@@ -22,6 +22,7 @@ import {
 import { CheckoutPanel, type OriginPhone, type PriceRow, type PricesStatus, type WalletBalance } from './CheckoutPanel';
 import { formatMoney } from './order-format';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { PurchaseTargetStore } from '@/lib/codes/purchase-target';
 
 export type { OriginPhone, PriceRow, PricesStatus, WalletBalance } from './CheckoutPanel';
 
@@ -69,7 +70,7 @@ export interface PurchaseWizardProps {
     balance: WalletBalance | null;
     isPlatform: boolean;
     companies: { companyId: string; companyName: string }[];
-    storesForSelectedCompany: { id: string; name: string; companyId: string }[];
+    storesForSelectedCompany: PurchaseTargetStore[];
     targetCompanyId: string;
     targetStoreId: string;
     onTargetCompanyChange: (companyId: string) => void;

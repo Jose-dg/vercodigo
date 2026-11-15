@@ -46,6 +46,11 @@ import {
     productStock,
 } from '@/lib/codes/catalog-regions';
 import { formatMoney } from './order-format';
+import {
+    formatPurchaseTargetStore,
+    purchaseTargetWarning,
+    type PurchaseTargetStore,
+} from '@/lib/codes/purchase-target';
 
 export interface PriceRow {
     productId: string;
@@ -152,7 +157,7 @@ export function CheckoutPanel({
     balance: WalletBalance | null;
     isPlatform: boolean;
     companies: { companyId: string; companyName: string }[];
-    storesForSelectedCompany: { id: string; name: string; companyId: string }[];
+    storesForSelectedCompany: PurchaseTargetStore[];
     targetCompanyId: string;
     targetStoreId: string;
     onTargetCompanyChange: (companyId: string) => void;
@@ -213,6 +218,14 @@ export function CheckoutPanel({
     }, [sendToCustomer, recipientDraft]);
 
     const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
+    const selectedCompany = companies.find((company) => company.companyId === targetCompanyId) ?? null;
+    const selectedStore = storesForSelectedCompany.find((store) => store.id === targetStoreId) ?? null;
+    const selectedOriginPhone = originPhones.find((phone) => phone.id === targetOriginPhoneId) ?? null;
+    const selectedOriginLabel = selectedStore
+        ? formatPurchaseTargetStore(selectedStore)
+        : selectedOriginPhone
+            ? `${selectedOriginPhone.label} · ${selectedOriginPhone.phone}`
+            : null;
     const filtered = query.trim()
         ? rows.filter((row) => row.label.toLowerCase().includes(query.trim().toLowerCase()))
         : rows;
@@ -332,7 +345,7 @@ export function CheckoutPanel({
                 <div className="mb-5 grid gap-3 rounded-xl border border-amber-300/60 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-500/10 sm:grid-cols-2">
                     <div className="space-y-1.5">
                         <Label htmlFor="target-company" className="flex items-center gap-1.5 text-xs">
-                            <Building2 className="size-3.5" /> Empresa que paga
+                            <Building2 className="size-3.5" /> Compañía que recibe el cargo
                         </Label>
                         <Select
                             value={targetCompanyId || undefined}
@@ -343,7 +356,7 @@ export function CheckoutPanel({
                             }}
                         >
                             <SelectTrigger id="target-company" className="h-11 bg-background">
-                                <SelectValue placeholder="Seleccionar empresa…" />
+                                <SelectValue placeholder="Seleccionar compañía…" />
                             </SelectTrigger>
                             <SelectContent position="popper" className="z-[100]">
                                 {companies.map((company) => (
@@ -356,7 +369,7 @@ export function CheckoutPanel({
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="target-origin" className="text-xs">
-                            Origen <span className="font-normal text-muted-foreground">(sede o número)</span>
+                            Sede o número al que se atribuye la compra
                         </Label>
                         <Select value={originValue} onValueChange={selectOrigin} disabled={!targetCompanyId}>
                             <SelectTrigger id="target-origin" className="h-11 bg-background">
@@ -368,7 +381,7 @@ export function CheckoutPanel({
                                         <SelectLabel>Sedes</SelectLabel>
                                         {storesForSelectedCompany.map((store) => (
                                             <SelectItem key={store.id} value={`store:${store.id}`}>
-                                                {store.name}
+                                                {formatPurchaseTargetStore(store)}
                                             </SelectItem>
                                         ))}
                                     </SelectGroup>
@@ -385,7 +398,7 @@ export function CheckoutPanel({
                                 )}
                                 {storesForSelectedCompany.length === 0 && originPhones.length === 0 && (
                                     <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                                        La empresa no tiene sedes ni números de origen.
+                                        La compañía no tiene sedes ni números de origen.
                                     </p>
                                 )}
                             </SelectContent>
@@ -463,6 +476,27 @@ export function CheckoutPanel({
             )}
 
             <div className="mt-3">
+                {isPlatform && selectedCompany && (
+                    <>
+                        <SummaryRow
+                            icon={<Building2 className="size-4" />}
+                            label="Compañía que recibe el cargo"
+                            value={selectedCompany.companyName}
+                        />
+                        <SummaryRow
+                            icon={<Wallet className="size-4" />}
+                            label="Wallet afectada"
+                            value={selectedCompany.companyName}
+                        />
+                    </>
+                )}
+                {isPlatform && selectedOriginLabel && (
+                    <SummaryRow
+                        icon={<Building2 className="size-4" />}
+                        label="Atribución comercial"
+                        value={selectedOriginLabel}
+                    />
+                )}
                 <SummaryRow icon={<Gift className="size-4" />} label="Denominación" value={selected?.label ?? '—'} />
                 {selected?.price?.effectiveRateCopPerUsd != null && (
                     <SummaryRow
@@ -491,6 +525,12 @@ export function CheckoutPanel({
                 )}
             </div>
 
+            {isPlatform && selectedCompany && selectedOriginLabel && (
+                <p className="mt-3 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                    {purchaseTargetWarning(selectedCompany.companyName, selectedOriginLabel)}
+                </p>
+            )}
+
             {selected && unitPrice == null && pricesStatus === 'ready' && (
                 <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
                     <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -500,7 +540,7 @@ export function CheckoutPanel({
             {pricesStatus === 'idle' && isPlatform && (
                 <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
                     <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                    Elige la empresa que paga para ver su precio.
+                    Elige la compañía que recibirá el cargo para ver su precio.
                 </p>
             )}
             {pricesStatus === 'error' && (

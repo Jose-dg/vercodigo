@@ -19,6 +19,7 @@ import {
 } from '@/components/codes/recipients-batch';
 import type { CatalogProduct } from '@/lib/codes/catalog-regions';
 import type { UserRole } from '@prisma/client';
+import type { PurchaseTargetStore } from '@/lib/codes/purchase-target';
 
 export default function PurchaseCodesPage() {
     const router = useRouter();
@@ -53,9 +54,7 @@ export default function PurchaseCodesPage() {
         { companyId: string; companyName: string; balance: number; currency: string }[]
     >([]);
     const [companyBalance, setCompanyBalance] = useState<WalletBalance | null>(null);
-    const [platformStores, setPlatformStores] = useState<
-        { id: string; name: string; companyId: string }[]
-    >([]);
+    const [platformStores, setPlatformStores] = useState<PurchaseTargetStore[]>([]);
     // Back-link from an order detail opens the history tab (?tab=history).
     useEffect(() => {
         if (new URLSearchParams(window.location.search).get('tab') === 'history') {
@@ -246,10 +245,12 @@ export default function PurchaseCodesPage() {
             .then((rows) => {
                 if (Array.isArray(rows)) {
                     setPlatformStores(
-                        rows.map((s: { id: string; name: string; companyId: string }) => ({
+                        rows.map((s: PurchaseTargetStore) => ({
                             id: s.id,
                             name: s.name,
                             companyId: s.companyId,
+                            code: s.code,
+                            address: s.address,
                         })),
                     );
                 }

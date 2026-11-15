@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planStoreSplit } from "../src/lib/wallet/store-split.ts";
+import { planStoreMerge, planStoreSplit } from "../src/lib/wallet/store-split.ts";
 
 const row = (id, type, amount, occurredAt, extra = {}) => ({
     id,
@@ -94,4 +94,65 @@ test("a source wallet with drift must be reconciled first", () => {
         sourceRows: labRows(),
         sourceBalance: -1,
     }), /drift/);
+});
+
+test("a split store can rejoin an existing wallet without compensation", () => {
+    const sourceRows = [
+        row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", { codePurchaseId: "p-192-a" }),
+        row("192-2", "CONSUMPTION", 180_000, "2026-10-10T21:30:29-05:00", { codePurchaseId: "p-192-b" }),
+    ];
+    const targetRows = [
+        row("lab-1", "CONSUMPTION", 1_000_000, "2026-10-01T10:00:00-05:00", { codePurchaseId: "p-lab" }),
+        row("lab-2", "CONSUMPTION", 500_000, "2026-10-20T10:00:00-05:00", { codePurchaseId: "p-lab-2" }),
+    ];
+    const plan = planStoreMerge({
+        purchases: [{ id: "p-192-a", status: "COMPLETED" }, { id: "p-192-b", status: "COMPLETED" }],
+        activationIds: [],
+        sourceRows,
+        sourceBalance: -504_000,
+        targetRows,
+        targetBalance: -1_500_000,
+    });
+    assert.deepEqual(plan.movementIds, ["192-1", "192-2"]);
+    assert.equal(plan.source.balanceAfter, 0);
+    assert.equal(plan.target.balanceBefore, -1_500_000);
+    assert.equal(plan.target.balanceAfter, -2_004_000);
+});
+
+test("a merge cannot insert movements into the target's closed period", () => {
+    assert.throws(() => planStoreMerge({
+        purchases: [{ id: "p-192-a", status: "COMPLETED" }],
+        activationIds: [],
+        sourceRows: [row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", { codePurchaseId: "p-192-a" })],
+        sourceBalance: -324_000,
+        targetRows: labRows(),
+        targetBalance: -2_064_000,
+        targetClosedThrough: new Date("2026-10-15T23:59:59-05:00"),
+    }), /periodo ya cerrado/);
+});
+
+test("a merge refuses target wallet drift", () => {
+    assert.throws(() => planStoreMerge({
+        purchases: [{ id: "p-192-a", status: "COMPLETED" }],
+        activationIds: [],
+        sourceRows: [row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", { codePurchaseId: "p-192-a" })],
+        sourceBalance: -324_000,
+        targetRows: labRows(),
+        targetBalance: -1,
+    }), /wallet destino tiene drift/);
+});
+
+test("a merge cannot hide movements behind the target's active opening balance", () => {
+    const targetRows = [
+        row("opening", "OPENING_BALANCE", 800_000, "2026-10-15T00:00:00-05:00"),
+        row("lab-2", "CONSUMPTION", 500_000, "2026-10-20T10:00:00-05:00", { codePurchaseId: "p-lab-2" }),
+    ];
+    assert.throws(() => planStoreMerge({
+        purchases: [{ id: "p-192-a", status: "COMPLETED" }],
+        activationIds: [],
+        sourceRows: [row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", { codePurchaseId: "p-192-a" })],
+        sourceBalance: -324_000,
+        targetRows,
+        targetBalance: -1_300_000,
+    }), /saldo inicial vigente de la wallet destino/);
 });

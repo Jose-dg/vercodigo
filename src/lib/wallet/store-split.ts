@@ -29,6 +29,10 @@ export type StoreSplitPlan = {
     target: { balanceAfter: number };
 };
 
+export type StoreMergePlan = Omit<StoreSplitPlan, "target"> & {
+    target: { balanceBefore: number; balanceAfter: number };
+};
+
 const round = (value: number) => Math.round(value * 100) / 100;
 
 export function planStoreSplit(params: {
@@ -85,5 +89,48 @@ export function planStoreSplit(params: {
         movedAmount: { consumptions: sum("CONSUMPTION"), refunds: sum("REFUND") },
         source: { balanceBefore: before, balanceAfter: rebuildBalances(params.sourceRows.filter((row) => !movedIds.has(row.id))).balance },
         target: { balanceAfter: rebuildBalances(moved).balance },
+    };
+}
+
+/**
+ * Rejoins a previously split store to an existing company wallet. The source
+ * safety rules are identical to a split; the target additionally must have a
+ * consistent ledger and no closed period that would hide the imported rows.
+ */
+export function planStoreMerge(params: {
+    purchases: SplitPurchase[];
+    activationIds: string[];
+    sourceRows: SplitMovement[];
+    sourceBalance: number;
+    targetRows: LedgerRow[];
+    targetBalance: number;
+    targetClosedThrough?: Date | null;
+}): StoreMergePlan {
+    const split = planStoreSplit({
+        purchases: params.purchases,
+        activationIds: params.activationIds,
+        sourceRows: params.sourceRows,
+        sourceBalance: params.sourceBalance,
+    });
+    const movedIds = new Set(split.movementIds);
+    const movedRows = params.sourceRows.filter((row) => movedIds.has(row.id));
+    const targetBefore = rebuildBalances(params.targetRows);
+    if (Math.abs(targetBefore.balance - params.targetBalance) > 0.005) {
+        throw new Error(`La wallet destino tiene drift (guardado ${params.targetBalance}, movimientos ${targetBefore.balance}); concílialo primero`);
+    }
+    if (params.targetClosedThrough) {
+        const closed = movedRows.filter((row) => row.status === "CONFIRMED" && row.occurredAt <= params.targetClosedThrough!);
+        if (closed.length) {
+            throw new Error(`Movimientos caerían en un periodo ya cerrado de la wallet destino: ${closed.map((row) => row.id).join(", ")}`);
+        }
+    }
+    const targetAfter = rebuildBalances([...params.targetRows, ...movedRows]);
+    const inactive = movedRows.filter((row) => row.status === "CONFIRMED" && !targetAfter.balances.has(row.id));
+    if (inactive.length) {
+        throw new Error(`Movimientos quedarían antes del saldo inicial vigente de la wallet destino: ${inactive.map((row) => row.id).join(", ")}`);
+    }
+    return {
+        ...split,
+        target: { balanceBefore: targetBefore.balance, balanceAfter: targetAfter.balance },
     };
 }

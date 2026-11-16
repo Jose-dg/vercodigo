@@ -7,8 +7,8 @@ const at = (minute) => new Date(Date.UTC(2026, 9, 1, 12, minute));
 const row = (id, type, amount, balanceAfter, minute, status = "CONFIRMED") => ({
     id, type, status, amount, balanceAfter, occurredAt: at(minute), occurredSequence: 0,
 });
-const purchase = (id, status, active, failed = 0) => ({
-    id, status, totalAmount: 100, activeConsumptions: active, failedConsumptions: failed,
+const purchase = (id, status, active, failed = 0, pending = 0) => ({
+    id, status, totalAmount: 100, activeConsumptions: active, failedConsumptions: failed, pendingConsumptions: pending,
 });
 
 test("a consistent ledger has no findings", () => {
@@ -51,10 +51,23 @@ test("detects double debits and debits on unsettled purchases", () => {
     ]);
 });
 
-test("a completed purchase reclassified out of the active ledger is reported, not alerted", () => {
+test("a completed purchase reclassified out of the active ledger remains an unpaid-delivery finding", () => {
     const { findings, exclusions } = verifyLedger([], [purchase("reclassified", "COMPLETED", 0, 1)]);
-    assert.deepEqual(findings, []);
+    assert.deepEqual(findings.map((finding) => finding.kind), ["COMPLETED_PURCHASE_WITHOUT_ONE_CONSUMPTION"]);
     assert.deepEqual(exclusions, [{ purchaseId: "reclassified", failedConsumptions: 1 }]);
+});
+
+test("a pending movement never proves that a completed delivery was charged", () => {
+    const { findings } = verifyLedger([], [purchase("pending-charge", "COMPLETED", 0, 0, 1)]);
+    assert.deepEqual(findings.map((finding) => finding.kind), [
+        "SETTLED_PURCHASE_WITH_PENDING_CONSUMPTION",
+        "COMPLETED_PURCHASE_WITHOUT_ONE_CONSUMPTION",
+    ]);
+});
+
+test("a reversed delivery also rejects pending consumption evidence", () => {
+    const { findings } = verifyLedger([], [{ ...purchase("reversed-pending", "REVERSED", 1, 0, 1), reversals: 1 }]);
+    assert.deepEqual(findings.map((finding) => finding.kind), ["SETTLED_PURCHASE_WITH_PENDING_CONSUMPTION"]);
 });
 
 test("a purchase cancelled after delivery nets to zero with exactly one refund", () => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planStoreMerge, planStoreSplit } from "../src/lib/wallet/store-split.ts";
+import { auditStoreMergeBilling, planStoreMerge, planStoreSplit } from "../src/lib/wallet/store-split.ts";
 
 const row = (id, type, amount, occurredAt, extra = {}) => ({
     id,
@@ -24,6 +24,70 @@ const labRows = () => [
     row("lab-2", "CONSUMPTION", 500_000, "2026-10-20T10:00:00-05:00", { codePurchaseId: "p-lab-2" }),
     row("act-1", "CONSUMPTION", 60_000, "2026-10-21T10:00:00-05:00", { cardActivationId: "a-192" }),
 ];
+
+const deliveredPurchase = (extra = {}) => ({
+    id: "p-192-a",
+    status: "COMPLETED",
+    count: 1,
+    totalAmount: 324_000,
+    currency: "COP",
+    deliveredCodeCount: 1,
+    diemRequestId: "diem-request-1",
+    ...extra,
+});
+
+test("billing audit proves every delivered unit has one exact confirmed charge", () => {
+    const billing = auditStoreMergeBilling({
+        purchases: [deliveredPurchase()],
+        sourceRows: [row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", {
+            codePurchaseId: "p-192-a",
+            balanceAfter: -324_000,
+        })],
+        walletCurrency: "COP",
+    });
+    assert.equal(billing.netCharge, 324_000);
+    assert.deepEqual(billing.statementChargeMovementIds, ["192-1"]);
+});
+
+test("billing audit rejects pending charges and incomplete delivery evidence", () => {
+    const pending = row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", {
+        codePurchaseId: "p-192-a",
+        status: "PENDING",
+    });
+    assert.throws(() => auditStoreMergeBilling({
+        purchases: [deliveredPurchase()], sourceRows: [pending], walletCurrency: "COP",
+    }), /no tiene un consumo confirmado/);
+    assert.throws(() => auditStoreMergeBilling({
+        purchases: [deliveredPurchase({ deliveredCodeCount: 0 })], sourceRows: [pending], walletCurrency: "COP",
+    }), /códigos entregados/);
+});
+
+test("billing audit rejects a charge that differs from the delivered purchase total", () => {
+    assert.throws(() => auditStoreMergeBilling({
+        purchases: [deliveredPurchase()],
+        sourceRows: [row("192-1", "CONSUMPTION", 300_000, "2026-10-10T21:27:44-05:00", {
+            codePurchaseId: "p-192-a", balanceAfter: -300_000,
+        })],
+        walletCurrency: "COP",
+    }), /compra registra/);
+});
+
+test("a reversed delivery must retain one confirmed refund for the exact charge", () => {
+    const consumption = row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", {
+        codePurchaseId: "p-192-a", balanceAfter: -324_000,
+    });
+    assert.throws(() => auditStoreMergeBilling({
+        purchases: [deliveredPurchase({ status: "REVERSED" })], sourceRows: [consumption], walletCurrency: "COP",
+    }), /exactamente un reembolso/);
+    const billing = auditStoreMergeBilling({
+        purchases: [deliveredPurchase({ status: "REVERSED" })],
+        sourceRows: [consumption, row("refund", "REFUND", 324_000, "2026-10-11T09:00:00-05:00", {
+            reversalOfId: "192-1", balanceAfter: 0,
+        })],
+        walletCurrency: "COP",
+    });
+    assert.equal(billing.netCharge, 0);
+});
 
 test("the store's purchases and activations leave the source wallet without compensation", () => {
     const plan = planStoreSplit({
@@ -155,4 +219,37 @@ test("a merge cannot hide movements behind the target's active opening balance",
         targetRows,
         targetBalance: -1_300_000,
     }), /saldo inicial vigente de la wallet destino/);
+});
+
+test("a merge cannot remove an unlined charge from a closed source statement period", () => {
+    assert.throws(() => planStoreMerge({
+        purchases: [{ id: "p-192-a", status: "COMPLETED" }],
+        activationIds: [],
+        sourceRows: [row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", { codePurchaseId: "p-192-a" })],
+        sourceBalance: -324_000,
+        targetRows: [],
+        targetBalance: 0,
+        sourceClosedPeriods: [{
+            statementNumber: "EC-1",
+            periodStart: new Date("2026-10-01T00:00:00-05:00"),
+            periodEnd: new Date("2026-10-31T23:59:59-05:00"),
+        }],
+    }), /estado cerrado de la wallet origen/);
+});
+
+test("a merge cannot absorb a delivered charge into the target statement opening", () => {
+    assert.throws(() => planStoreMerge({
+        purchases: [{ id: "p-192-a", status: "COMPLETED" }],
+        activationIds: [],
+        sourceRows: [row("192-1", "CONSUMPTION", 324_000, "2026-10-10T21:27:44-05:00", { codePurchaseId: "p-192-a" })],
+        sourceBalance: -324_000,
+        targetRows: [row("recharge", "RECHARGE", 500_000, "2026-10-15T00:00:00-05:00")],
+        targetBalance: 500_000,
+        targetStatementCursor: {
+            id: "recharge",
+            occurredAt: new Date("2026-10-15T00:00:00-05:00"),
+            occurredSequence: 0,
+        },
+        requiredTargetStatementMovementIds: ["192-1"],
+    }), /absorbidas en el saldo inicial/);
 });

@@ -20,8 +20,16 @@ loadEnvConfig(process.cwd());
 
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { planStoreMerge, type StoreMergePlan, type StoreSplitPlan } from "@/lib/wallet/store-split";
-import { assertLedgerConsistent, rebuildWalletLedger } from "@/services/wallet/ledger-write";
+import { summarizeCodeDelivery } from "@/lib/codes/delivery-counts";
+import {
+    auditStoreMergeBilling,
+    planStoreMerge,
+    type LedgerCursor,
+    type StoreMergeBillingAudit,
+    type StoreMergePlan,
+    type StoreSplitPlan,
+} from "@/lib/wallet/store-split";
+import { assertLedgerConsistent, lockWalletAccounting, rebuildWalletLedger } from "@/services/wallet/ledger-write";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 type StoreRename = { name: string | null; address: string | null };
@@ -50,6 +58,7 @@ type MergeReceipt = {
     actorUserId: string;
     storeRename: StoreRename;
     plan: StoreMergePlan;
+    billing: StoreMergeBillingAudit;
     fingerprint: string;
 };
 
@@ -93,6 +102,27 @@ function assertSameIds(label: string, actual: string[], expected: string[]) {
     }
 }
 
+function compareLedgerOrder(a: LedgerCursor, b: LedgerCursor) {
+    return a.occurredAt.getTime() - b.occurredAt.getTime()
+        || a.occurredSequence - b.occurredSequence
+        || a.id.localeCompare(b.id);
+}
+
+function latestTargetStatementCursor(params: {
+    latestStatement: { lines: Array<{ walletTransactionId: string; occurredAt: Date; walletTransaction: { occurredSequence: number } }> } | null;
+    targetRows: Array<{ id: string; type: string; status: string; occurredAt: Date; occurredSequence: number }>;
+}): LedgerCursor | null {
+    if (params.latestStatement) {
+        const last = params.latestStatement.lines[0];
+        if (!last) throw new Error("El último estado de cuenta destino no tiene línea de cierre");
+        return { id: last.walletTransactionId, occurredAt: last.occurredAt, occurredSequence: last.walletTransaction.occurredSequence };
+    }
+    const confirmed = params.targetRows.filter((row) => row.status === "CONFIRMED");
+    const openings = confirmed.filter((row) => row.type === "OPENING_BALANCE");
+    const candidates = openings.length ? openings : confirmed.filter((row) => row.type === "RECHARGE");
+    return candidates.length ? [...candidates].sort(compareLedgerOrder).at(-1)! : null;
+}
+
 async function snapshot(db: Db, storeId: string, targetCompanyId: string, targetWalletId: string) {
     const store = await db.store.findUnique({
         where: { id: storeId },
@@ -115,11 +145,19 @@ async function snapshot(db: Db, storeId: string, targetCompanyId: string, target
     if (!targetCompany || !targetWallet || targetWallet.companyId !== targetCompany.id) {
         throw new Error("La compañía o wallet original del recibo ya no coincide");
     }
-    const [purchases, foreignPurchases, activations, sourceRows, targetRows, latestTargetStatement] = await Promise.all([
+    const [purchaseRows, foreignPurchases, activations, sourceRows, targetRows, sourceStatements, latestTargetStatement] = await Promise.all([
         db.codePurchase.findMany({
             where: { storeId, companyId: store.companyId },
             orderBy: { id: "asc" },
-            select: { id: true, status: true },
+            select: {
+                id: true,
+                status: true,
+                count: true,
+                totalAmount: true,
+                currency: true,
+                deliveredCodes: true,
+                diemRequestId: true,
+            },
         }),
         db.codePurchase.count({ where: { storeId, companyId: { not: store.companyId } } }),
         db.cardActivation.findMany({ where: { storeId }, orderBy: { id: "asc" }, select: { id: true } }),
@@ -138,16 +176,64 @@ async function snapshot(db: Db, storeId: string, targetCompanyId: string, target
             orderBy: [{ occurredAt: "asc" }, { occurredSequence: "asc" }, { id: "asc" }],
             select: { id: true, type: true, status: true, amount: true, balanceAfter: true, occurredAt: true, occurredSequence: true },
         }),
+        db.accountStatement.findMany({
+            where: { walletId: sourceWallet.id },
+            orderBy: [{ periodEnd: "asc" }, { issuedAt: "asc" }],
+            select: { statementNumber: true, periodStart: true, periodEnd: true },
+        }),
         db.accountStatement.findFirst({
             where: { walletId: targetWallet.id },
             orderBy: [{ periodEnd: "desc" }, { issuedAt: "desc" }],
-            select: { statementNumber: true, periodEnd: true },
+            select: {
+                statementNumber: true,
+                periodEnd: true,
+                lines: {
+                    orderBy: { position: "desc" },
+                    take: 1,
+                    select: {
+                        walletTransactionId: true,
+                        occurredAt: true,
+                        walletTransaction: { select: { occurredSequence: true } },
+                    },
+                },
+            },
         }),
     ]);
-    return { store, sourceWallet, targetCompany, targetWallet, purchases, foreignPurchases, activations, sourceRows, targetRows, latestTargetStatement };
+    const purchases = purchaseRows.map((purchase) => ({
+        id: purchase.id,
+        status: purchase.status,
+        count: purchase.count,
+        totalAmount: purchase.totalAmount,
+        currency: purchase.currency,
+        diemRequestId: purchase.diemRequestId,
+        deliveredCodeCount: summarizeCodeDelivery({
+            status: purchase.status,
+            billedCount: purchase.count,
+            deliveredCodes: purchase.deliveredCodes,
+        }).deliveredCodeCount,
+    }));
+    const targetStatementCursor = latestTargetStatementCursor({ latestStatement: latestTargetStatement, targetRows });
+    return {
+        store,
+        sourceWallet,
+        targetCompany,
+        targetWallet,
+        purchases,
+        foreignPurchases,
+        activations,
+        sourceRows,
+        targetRows,
+        sourceStatements,
+        latestTargetStatement,
+        targetStatementCursor,
+    };
 }
 
-function buildPlan(snap: Awaited<ReturnType<typeof snapshot>>, prior: SplitReceipt) {
+function buildPlan(snap: Awaited<ReturnType<typeof snapshot>>, prior: SplitReceipt): {
+    plan: StoreMergePlan;
+    billing: StoreMergeBillingAudit;
+    fingerprint: string;
+} {
     if (prior.version !== 1 || prior.storeId !== snap.store.id) throw new Error("El recibo original no corresponde a esta sede");
     if (snap.store.companyId === prior.sourceCompanyId) throw new Error("La sede ya pertenece a la compañía original");
     if (snap.store.company.taxId !== prior.company.taxId || snap.store.company.name !== prior.company.name) {
@@ -163,6 +249,11 @@ function buildPlan(snap: Awaited<ReturnType<typeof snapshot>>, prior: SplitRecei
     assertSameIds("Las activaciones de la sede", snap.activations.map(({ id }) => id), prior.plan.activationIds);
 
     const sourceRows = snap.sourceRows.map(({ accountStatementLine, ...row }) => ({ ...row, inStatement: accountStatementLine !== null }));
+    const billing = auditStoreMergeBilling({
+        purchases: snap.purchases,
+        sourceRows,
+        walletCurrency: snap.sourceWallet.currency,
+    });
     const plan = planStoreMerge({
         purchases: snap.purchases,
         activationIds: snap.activations.map(({ id }) => id),
@@ -171,6 +262,9 @@ function buildPlan(snap: Awaited<ReturnType<typeof snapshot>>, prior: SplitRecei
         targetRows: snap.targetRows,
         targetBalance: snap.targetWallet.balance,
         targetClosedThrough: snap.latestTargetStatement?.periodEnd,
+        sourceClosedPeriods: snap.sourceStatements,
+        targetStatementCursor: snap.targetStatementCursor,
+        requiredTargetStatementMovementIds: billing.statementChargeMovementIds,
     });
     const moved = new Set(plan.movementIds);
     const missingOriginalMovement = prior.plan.movementIds.find((id) => !moved.has(id));
@@ -184,9 +278,11 @@ function buildPlan(snap: Awaited<ReturnType<typeof snapshot>>, prior: SplitRecei
         activations: snap.activations,
         sourceRows: sourceRows.map(fingerprintRow),
         targetRows: snap.targetRows.map(fingerprintRow),
+        sourceStatements: snap.sourceStatements,
         targetClosedThrough: snap.latestTargetStatement?.periodEnd ?? null,
+        targetStatementCursor: snap.targetStatementCursor,
     }));
-    return { plan, fingerprint };
+    return { plan, billing, fingerprint };
 }
 
 async function plan(values: Map<string, string>) {
@@ -216,6 +312,7 @@ async function plan(values: Map<string, string>) {
             address: values.get("store-address")?.trim() || null,
         },
         plan: current.plan,
+        billing: current.billing,
         fingerprint: current.fingerprint,
     };
     privateJson(join(values.get("out")!, "receipt.json"), receipt);
@@ -229,6 +326,7 @@ async function plan(values: Map<string, string>) {
         activations: receipt.plan.activationIds.length,
         movements: receipt.plan.movementIds.length,
         movedAmount: receipt.plan.movedAmount,
+        billing: receipt.billing,
         currency: snap.sourceWallet.currency,
         sourceBalance: receipt.plan.source,
         targetBalance: receipt.plan.target,
@@ -266,6 +364,7 @@ async function apply(values: Map<string, string>) {
             return { changed: false };
         }
         if (store.companyId !== receipt.sourceCompanyId) throw new Error("La sede ya no pertenece a la empresa del plan");
+        await lockWalletAccounting(tx, [receipt.sourceWalletId, receipt.targetWalletId]);
         for (const walletId of sorted([receipt.sourceWalletId, receipt.targetWalletId])) {
             await tx.$queryRaw`SELECT "id" FROM "Wallet" WHERE "id" = ${walletId} FOR UPDATE`;
         }
@@ -277,7 +376,9 @@ async function apply(values: Map<string, string>) {
         if (!prior) throw new Error("No existe la auditoría de la separación original");
         const snap = await snapshot(tx, receipt.storeId, receipt.targetCompanyId, receipt.targetWalletId);
         const current = buildPlan(snap, receipt.priorSplit);
-        if (current.fingerprint !== receipt.fingerprint || JSON.stringify(current.plan) !== JSON.stringify(receipt.plan)) {
+        if (current.fingerprint !== receipt.fingerprint
+            || JSON.stringify(current.plan) !== JSON.stringify(receipt.plan)
+            || JSON.stringify(current.billing) !== JSON.stringify(receipt.billing)) {
             throw new Error("La sede o alguna wallet cambiaron después del plan; vuelve a correr plan");
         }
 
@@ -334,6 +435,7 @@ async function apply(values: Map<string, string>) {
                     purchaseIds: current.plan.purchaseIds,
                     activationIds: current.plan.activationIds,
                     movementIds: current.plan.movementIds,
+                    billing: current.billing,
                     sourceCompanyRetained: true,
                 },
             },

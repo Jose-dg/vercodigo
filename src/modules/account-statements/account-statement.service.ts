@@ -6,6 +6,7 @@ import { isPrismaWriteConflict, runSerializableTransaction } from "@/lib/prisma-
 import { badRequest, conflict, forbidden, notFound } from "@/lib/errors";
 import { marketingConfig } from "@/lib/marketing/config";
 import { syncCreditedTopUpsBeforeClosing } from "@/services/wallet/gateway-topup.service";
+import { lockWalletAccounting } from "@/services/wallet/ledger-write";
 import {
     buildFinancialSnapshot,
     canIssueAccountStatement,
@@ -316,6 +317,7 @@ export async function issueAccountStatement(params: {
         return await runSerializableTransaction(prisma, async (tx) => {
             const wallet = await tx.wallet.findUnique({ where: { companyId: params.companyId }, select: { id: true } });
             if (!wallet) throw badRequest("La empresa todavía no tiene wallet");
+            await lockWalletAccounting(tx, [wallet.id]);
 
             const preview = await buildPreview(tx, params.companyId, params.cutoffAt);
             if (preview.fingerprint !== params.fingerprint) {

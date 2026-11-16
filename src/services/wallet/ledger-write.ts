@@ -26,6 +26,17 @@ export async function ledgerRows(tx: Prisma.TransactionClient, walletId: string)
 }
 
 /**
+ * Serializes accounting operations that can change statement ownership or
+ * close a wallet period. Multiple wallets are always locked by id to avoid
+ * deadlocks. Transaction-scoped advisory locks release on commit or rollback.
+ */
+export async function lockWalletAccounting(tx: Prisma.TransactionClient, walletIds: string[]) {
+    for (const walletId of [...new Set(walletIds)].sort()) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`wallet-accounting:${walletId}`}))`;
+    }
+}
+
+/**
  * A stored balance that its movements do not explain (drift) must be
  * reconciled explicitly; a rebuild would silently replace it. Checked before
  * any write that rebuilds the ledger.

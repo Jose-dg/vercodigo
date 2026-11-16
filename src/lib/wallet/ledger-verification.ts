@@ -16,8 +16,10 @@ export type VerifiablePurchase = {
     id: string;
     status: string;
     totalAmount: number;
-    /** Wallet movements linked to the purchase that are not FAILED. */
+    /** Confirmed CONSUMPTION movements linked to the purchase. */
     activeConsumptions: number;
+    /** PENDING consumptions never prove that a delivery affected the wallet. */
+    pendingConsumptions?: number;
     /** FAILED movements still linked: kept as audit evidence of a reclassification. */
     failedConsumptions: number;
     /** Active REFUND movements reversing this purchase's consumption. */
@@ -27,8 +29,8 @@ export type VerifiablePurchase = {
 /**
  * The debit path only ever writes CONFIRMED or PENDING movements, so a
  * COMPLETED purchase whose only linked movements are FAILED was excluded from
- * the active ledger on purpose (an audited reconciliation). It is reported,
- * not alerted.
+ * the active ledger on purpose (an audited reconciliation). It remains listed
+ * here for context and is also a finding until a confirmed charge is proven.
  */
 export type LedgerExclusion = { purchaseId: string; failedConsumptions: number };
 
@@ -37,6 +39,7 @@ export type LedgerFinding =
     | { kind: "BALANCE_AFTER_DRIFT"; walletId: string; transactionId: string; stored: number | null; rebuilt: number }
     | { kind: "MOVEMENT_IN_CLOSED_PERIOD"; walletId: string; transactionId: string; occurredAt: string; closedUntil: string }
     | { kind: "COMPLETED_PURCHASE_WITHOUT_ONE_CONSUMPTION"; purchaseId: string; consumptions: number }
+    | { kind: "SETTLED_PURCHASE_WITH_PENDING_CONSUMPTION"; purchaseId: string; status: string; consumptions: number }
     | { kind: "UNSETTLED_PURCHASE_WITH_CONSUMPTION"; purchaseId: string; status: string; consumptions: number }
     | { kind: "REVERSED_PURCHASE_NOT_REFUNDED_ONCE"; purchaseId: string; consumptions: number; reversals: number }
     | { kind: "COMPLETED_PURCHASE_REFUNDED"; purchaseId: string; reversals: number };
@@ -102,6 +105,15 @@ export function verifyLedger(
     }
     for (const purchase of purchases) {
         const reversals = purchase.reversals ?? 0;
+        const pendingConsumptions = purchase.pendingConsumptions ?? 0;
+        if (["COMPLETED", "REVERSED"].includes(purchase.status) && pendingConsumptions > 0) {
+            findings.push({
+                kind: "SETTLED_PURCHASE_WITH_PENDING_CONSUMPTION",
+                purchaseId: purchase.id,
+                status: purchase.status,
+                consumptions: pendingConsumptions,
+            });
+        }
         if (purchase.status === "REVERSED") {
             if (purchase.activeConsumptions !== reversals) {
                 findings.push({
@@ -119,7 +131,8 @@ export function verifyLedger(
         if (purchase.status === "COMPLETED") {
             if (purchase.activeConsumptions === 0 && purchase.failedConsumptions > 0) {
                 exclusions.push({ purchaseId: purchase.id, failedConsumptions: purchase.failedConsumptions });
-            } else if (purchase.totalAmount > 0 && purchase.activeConsumptions !== 1) {
+            }
+            if (purchase.totalAmount > 0 && purchase.activeConsumptions !== 1) {
                 findings.push({
                     kind: "COMPLETED_PURCHASE_WITHOUT_ONE_CONSUMPTION",
                     purchaseId: purchase.id,
